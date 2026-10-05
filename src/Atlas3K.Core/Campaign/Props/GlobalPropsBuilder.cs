@@ -34,9 +34,13 @@ public sealed class GlobalPropsBuilder
         public ulong Id { get; init; }
 
         public string Tags { get; init; } = "";
+
+        /// <summary>Running entity number in layer read order (research trace).</summary>
+        public int Seq { get; init; }
     }
 
     private readonly Templates _t;
+    private int _seq;
     private readonly PackSet _packs;
     private readonly double _worldW, _worldH;
     public List<string> Notes { get; } = [];
@@ -82,11 +86,16 @@ public sealed class GlobalPropsBuilder
                 else byRegion.Add((group.Key, group.ToList()));
             }
         }
+        var cells = new List<(string Region, IGrouping<int, Obj> Cell)>();
         foreach (var (region, objects) in byRegion)
         {
             var outside = objects.Where(o => CellOf(o) < 0).ToList();
             if (outside.Count > 0) Notes.Add($"{outside.Count} objects in {region} reach outside the quadtree root: dropped (as BOB)");
-            foreach (var cell in objects.Where(o => CellOf(o) >= 0).GroupBy(CellOf).OrderBy(g => g.Key))
+            cells.AddRange(objects.Where(o => CellOf(o) >= 0).GroupBy(CellOf).Select(g => (region, g)));
+        }
+        // BOB's entry order: quadtree cells ascending; in a cell, regions in the order their first (lowest-id) object reached it
+        foreach (var (region, cell) in cells.OrderBy(c => c.Cell.Key).ThenBy(c => c.Cell.Min(o => o.Id)))
+        {
             {
                 var cellBody = BmdBody.Dynamic(_t.Framing);
                 // bob_terrain FUN_1800660a0: only ECMesh and ECVFX entities are bucketed by season mask; composite scenes, lights,
@@ -99,7 +108,7 @@ public sealed class GlobalPropsBuilder
                     foreach (var o in bucket.OrderBy(o => KindRank(o.Kind)).ThenBy(o => o.Id))
                     {
                         Add(body, o);
-                        Debug?.Invoke($"{name},{o.Kind},{o.Id:x15},\"{o.SeasonMask}\",\"{o.Tags}\"");
+                        Debug?.Invoke($"{name},{o.Kind},{o.Id:x15},\"{o.SeasonMask}\",\"{o.Tags}\",{o.Seq}");
                     }
                     entries.Add((name, body.ToBytes()));
                     cellBody.Nested.Add(BmdRecords.Nested(_t.Nested, name, 0, region));   // vanilla and BOB: 0 for every bucket
@@ -285,9 +294,10 @@ public sealed class GlobalPropsBuilder
         foreach (var (e, tags) in flat)
         {
             var before = objects.Count;
+            _seq++;
             ReadEntity(e, tags);
             var id = ulong.TryParse((string?)e.Attribute("id"), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var v) ? v : 0;
-            for (var i = before; i < objects.Count; i++) objects[i] = objects[i] with { Id = id, Tags = tags };
+            for (var i = before; i < objects.Count; i++) objects[i] = objects[i] with { Id = id, Tags = tags, Seq = _seq };
         }
         return objects;
 
@@ -387,7 +397,7 @@ public sealed class GlobalPropsBuilder
                 var cloud = e.Element("ECPointCloud");
                 var sphere = e.Element("ECSphere");
                 var pts = cloud is null ? [tr.Position]
-                    : cloud.Descendants("point").Select(p => (tr.Position.X + A3(p, "x"), tr.Position.Y + A3(p, "y"), tr.Position.Z + A3(p, "z"))).ToList();
+                    : cloud.Descendants("point").Select(p => (Pt(tr.Position.X, p, "x"), Pt(tr.Position.Y, p, "y"), Pt(tr.Position.Z, p, "z"))).ToList();
                 // vanilla uses SST_POINT, SST_MULTI_POINT and SST_LINE_LIST (the last doesn't survive in Terry layers)
                 var shape = cloud is not null ? "SST_MULTI_POINT" : "SST_POINT";
                 float? radius = sphere is null ? null : float.Parse((string?)sphere.Attribute("radius") ?? "0", CultureInfo.InvariantCulture);
@@ -458,6 +468,10 @@ public sealed class GlobalPropsBuilder
         s.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries).Select(v => float.Parse(v, CultureInfo.InvariantCulture)).ToArray();
 
     private static double A3(XElement p, string name) => double.Parse((string?)p.Attribute(name) ?? "0", CultureInfo.InvariantCulture);
+
+    /// <summary>A point-cloud point in world space, added in float32.</summary>
+    private static double Pt(double origin, XElement p, string name) =>
+        (float)origin + float.Parse((string?)p.Attribute(name) ?? "0", CultureInfo.InvariantCulture);
 
 
     /// <summary>Ear-clipping triangulation of a simple polygon (x, z outline).</summary>
