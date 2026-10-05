@@ -1,5 +1,5 @@
 import numpy as np, glob, os, sys
-B='Z:/Claude/TerryClone/output/mesh_parity/gmesh_bob_grids/'; N=sys.argv[1] if len(sys.argv)>1 else 'Z:/Claude/TerryClone/output/mesh_parity/gmesh_native_dump2/'
+B=os.environ.get("BOBGRIDS","Z:/Claude/TerryClone/output/mesh_parity/gmesh_bob_grids/"); N=sys.argv[1] if len(sys.argv)>1 else 'Z:/Claude/TerryClone/output/mesh_parity/gmesh_native_dump2/'
 tot=eqv=nv=meq=n=0
 for f in sorted(glob.glob(B+'*.bob.bin')):
     k=os.path.basename(f)[:-8]; b=np.fromfile(f,np.float32); p=N+k+'.y.bin'

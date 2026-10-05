@@ -5,7 +5,7 @@ from grid_cmp import *
 out=sys.argv[1]; os.makedirs(out, exist_ok=True)
 for f in os.listdir(out): os.remove(os.path.join(out,f))
 seq=bob_sequence(); h,mg=bob_dumps()
-G='Z:/Claude/TerryClone/output/bob_runs/frida_gmesh_main190_bob_terrain/global_meshes/'
+G=os.environ.get('GMESH_BOBFILES','Z:/Claude/TerryClone/output/bob_runs/frida_gmesh_main190_bob_terrain/global_meshes/')
 F=np.float32; T=F(595.1)/F(1784); Tp=F(F(F(1)/F(2956))*F(F(2956)*T)); cell=F(F(F(2956)*Tp)/F(5912))
 maps=[]; seen={}
 for (kind,k,name),d,m in zip(seq,h,mg):

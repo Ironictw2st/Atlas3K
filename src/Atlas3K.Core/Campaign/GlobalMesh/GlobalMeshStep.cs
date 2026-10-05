@@ -85,6 +85,7 @@ public sealed class GlobalMeshStep : ICampaignBuildStep
             var index = k % (per * per);
             results[(kind, index)] = builder.Build(index / per, index % per, kind);
         });
+        BobGlobalHeight.FlushTrace();
 
         var outDir = ctx.OutFile("global_meshes");
         Directory.CreateDirectory(outDir);

@@ -3,10 +3,11 @@ builder's (ATLAS3K_GMESH_DUMP). BOB merge order -> (kind, mesh k) from bob.log (
 usage: grid_cmp.py [k-limit]"""
 import json, re, sys, glob, os, numpy as np
 ROOT = 'Z:/Claude/TerryClone'
-LOG = ROOT + '/output/bob_runs/20261005_025700_frida_gmesh_main190/bob.log'
-JL = ROOT + '/research/bob_re/frida_out/frida_gmesh_main190.jsonl'
-BIN = ROOT + '/research/bob_re/frida_out/frida_gmesh_main190_bin/'
-NAT = ROOT + '/output/mesh_parity/gmesh_native_dump/'
+LOG = os.environ.get('GMESH_BOBLOG', ROOT + '/output/bob_runs/20261005_025700_frida_gmesh_main190/bob.log')
+RUN = os.environ.get('GMESH_RUN', 'frida_gmesh_main190')
+JL = ROOT + f'/research/bob_re/frida_out/{RUN}.jsonl'
+BIN = ROOT + f'/research/bob_re/frida_out/{RUN}_bin/'
+NAT = os.environ.get('GMESH_NAT', ROOT + '/output/mesh_parity/gmesh_native_dump/')
 
 
 def bob_sequence():

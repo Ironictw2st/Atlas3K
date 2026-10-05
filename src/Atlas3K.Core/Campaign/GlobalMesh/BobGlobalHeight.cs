@@ -86,6 +86,7 @@ public sealed class BobGlobalHeight
             }
             _hfOfPath[i] = hf;
         }
+        _treeKey = TreeOrder();
         _cells = new List<int>[_tilesW * _tilesH];
         for (var r = 0; r < list.Records.Count; r++)
         {
@@ -97,6 +98,68 @@ public sealed class BobGlobalHeight
                 for (var x = rec.X; x <= Math.Min(rec.X + w, _tilesW - 1); x++)
                     (_cells[y * _tilesW + x] ??= []).Add(r);
         }
+    }
+
+    private readonly ulong[]? _treeKey;
+
+    /// <summary>
+    /// WARSCAPE::TERRAIN_QUAD_TREE order (FUN_18016ae30 asks tiles in intersect_non_empty_nodes_gproj order): a
+    /// STATIC_QUADTREE over (minX − 1, minZ − 1)..(maxX, maxZ), split at midpoints, depth = halvings of the larger side
+    /// until it is ≤ tile size · K; every tile is added to the leaf holding the centre of its rectangle
+    /// (calculate_tile_bounds without the ±tile margin, no campaign z scale: DAT_1807830c0 = 1) in record order; nodes
+    /// are visited depth first, children in order <see cref="ChildOrder"/>. Leaf bounds grow to their tiles'
+    /// rectangles ± one tile, so every tile that can answer at a point (or its ±0.001 probes) is visited: the order is
+    /// the leaf's pre-order position, then the record index. Returns the sort key per record, or null when disabled.
+    /// </summary>
+    private ulong[]? TreeOrder()
+    {
+        if (Environment.GetEnvironmentVariable("ATLAS3K_GMESH_TREE") == "0") return null;
+        var k = float.TryParse(Environment.GetEnvironmentVariable("ATLAS3K_GMESH_TREE_K"), System.Globalization.CultureInfo.InvariantCulture, out var kv) ? kv : 16f;
+        var order = Environment.GetEnvironmentVariable("ATLAS3K_GMESH_TREE_CHILD") ?? "0123";
+        float rx0 = -1f, rz0 = -1f, rx1 = _maxX, rz1 = _maxZ;
+        var size = MathF.Max(rz1 - rz0, rx1 - rx0);
+        var depth = 0;
+        for (; _t * k < size; size *= 0.5f) depth++;
+        if (int.TryParse(Environment.GetEnvironmentVariable("ATLAS3K_GMESH_TREE_DEPTH"), out var dv)) depth = dv;
+        // child c's box: 0 (min x, max z), 1 (max x, max z), 2 (min x, min z), 3 (max x, min z); visiting order from the env
+        var visit = order.Select(ch => ch - '0').ToArray();
+        var rank = new int[4];
+        for (var i = 0; i < 4; i++) rank[visit[i]] = i;
+        var keys = new ulong[_list.Records.Count];
+        for (var r = 0; r < keys.Length; r++)
+        {
+            var rec = _list.Records[r];
+            var tile = _tileOfPath[rec.Path];
+            ulong path = 0;
+            if (tile is not null)
+            {
+                var (w, h) = Size(tile, rec.Orientation);
+                float x0 = rec.X * _t, z0 = rec.Y * _t;
+                float x1 = x0 + w * _t, z1 = z0 + h * _t;
+                float cx = (x0 + x1) * 0.5f, cz = (z0 + z1) * 0.5f;
+                float bx0 = rx0, bz0 = rz0, bx1 = rx1, bz1 = rz1;
+                for (var d = 0; d < depth; d++)
+                {
+                    float mx = (bx1 + bx0) * 0.5f, mz = (bz1 + bz0) * 0.5f;
+                    // first child (in storage order) whose inclusive box holds the centre
+                    int c;
+                    if (bx0 <= cx && cx <= mx && mz <= cz && cz <= bz1) c = 0;
+                    else if (mx <= cx && cx <= bx1 && mz <= cz && cz <= bz1) c = 1;
+                    else if (bx0 <= cx && cx <= mx && bz0 <= cz && cz <= mz) c = 2;
+                    else c = 3;
+                    path = path * 4 + (ulong)rank[c];
+                    switch (c)
+                    {
+                        case 0: bx1 = mx; bz0 = mz; break;
+                        case 1: bx0 = mx; bz0 = mz; break;
+                        case 2: bx1 = mx; bz1 = mz; break;
+                        default: bx0 = mx; bz1 = mz; break;
+                    }
+                }
+            }
+            keys[r] = (path << 20) | (uint)r;
+        }
+        return keys;
     }
 
     private static (int W, int H) Size(TileInfo t, byte orientation) =>
@@ -115,7 +178,8 @@ public sealed class BobGlobalHeight
         }
         if (seen.Count == 0) return Hole;
         var order = seen.ToList();
-        order.Sort();
+        if (_treeKey is { } key) order.Sort((p, q) => key[p].CompareTo(key[q]));
+        else order.Sort();
         foreach (var r in order)
         {
             var path = _list.Records[r].Path;
@@ -183,8 +247,48 @@ public sealed class BobGlobalHeight
         return (bot - top) * (fy - y0) + top;
     }
 
+    // research: ATLAS3K_GMESH_HCALLS=<file>;x0;x1;z0;z1 logs every per-tile call in the box (land only), to diff with
+    // BOB's frida_gheight3 call dump
+    private static readonly (string Path, float X0, float X1, float Z0, float Z1)? CallTrace = ParseTrace();
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<byte[]> TraceRows = new();
+    private static (string, float, float, float, float)? ParseTrace()
+    {
+        var s = Environment.GetEnvironmentVariable("ATLAS3K_GMESH_HCALLS");
+        if (string.IsNullOrEmpty(s)) return null;
+        var p = s.Split(';');
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        return (p[0], float.Parse(p[1], ci), float.Parse(p[2], ci), float.Parse(p[3], ci), float.Parse(p[4], ci));
+    }
+
+    /// <summary>Writes the call trace collected so far (research).</summary>
+    public static void FlushTrace()
+    {
+        if (CallTrace is not { } t) return;
+        using var f = File.Create(t.Path);
+        while (TraceRows.TryDequeue(out var row)) f.Write(row);
+    }
+
     /// <summary>get_height for one tile instance: hf + lf, false when the tile doesn't answer at the point.</summary>
     private bool TileHeight(int r, float x, float z, bool alt, out float height)
+    {
+        var ok = TileHeightCore(r, x, z, alt, out height);
+        if (CallTrace is { } t && !alt && x >= t.X0 && x <= t.X1 && z >= t.Z0 && z <= t.Z1)
+        {
+            var rec = _list.Records[r];
+            var row = new byte[20];
+            BinaryPrimitives.WriteSingleLittleEndian(row.AsSpan(0), x);
+            BinaryPrimitives.WriteSingleLittleEndian(row.AsSpan(4), z);
+            BinaryPrimitives.WriteInt16LittleEndian(row.AsSpan(8), (short)rec.X);
+            BinaryPrimitives.WriteInt16LittleEndian(row.AsSpan(10), (short)rec.Y);
+            BinaryPrimitives.WriteUInt16LittleEndian(row.AsSpan(12), rec.Orientation);
+            row[14] = (byte)(ok ? 1 : 0);
+            BinaryPrimitives.WriteSingleLittleEndian(row.AsSpan(16), height);
+            TraceRows.Enqueue(row);
+        }
+        return ok;
+    }
+
+    private bool TileHeightCore(int r, float x, float z, bool alt, out float height)
     {
         height = 0f;
         if (x < 0f || x > _maxX || z < 0f || z > _maxZ) return false;

@@ -29,7 +29,7 @@ public sealed class GlobalMeshBuilder
     private readonly double _extent;
     private readonly BobGlobalHeight? _bob;
     /// <summary>BOB's grid step (FUN_18016b2f0): (max tiles · T′) / (2 · max tiles) in float32, T′ = the terrain's tile size.</summary>
-    private readonly float _bobCell;
+    private readonly float _bobCell, _bobExtent;
     private readonly int _tilesWForPos, _tilesHForPos;
     private readonly float _bobProbe;
     private static int _gridTotalOf(int tilesW, int tilesH) => 2 * Math.Max(tilesW, tilesH);
@@ -41,7 +41,11 @@ public sealed class GlobalMeshBuilder
     {
         _bob = bob;
         (_tilesWForPos, _tilesHForPos) = (tilesW, tilesH);
-        if (bob is not null) _bobCell = Math.Max(tilesW, tilesH) * bob.TileSize / _gridTotalOf(tilesW, tilesH);
+        if (bob is not null)
+        {
+            _bobExtent = Math.Max(tilesW, tilesH) * bob.TileSize;
+            _bobCell = _bobExtent / _gridTotalOf(tilesW, tilesH);
+        }
         // DAT_1806b2c04: the neighbour probe offset (research: env override until read from BOB)
         _bobProbe = float.TryParse(Environment.GetEnvironmentVariable("ATLAS3K_GMESH_PROBE"), System.Globalization.CultureInfo.InvariantCulture, out var pr) ? pr : _bobCell;
         _coverage = coverage;
@@ -60,6 +64,12 @@ public sealed class GlobalMeshBuilder
         ? (float)(index * (double)(Math.Max(_tilesWForPos, _tilesHForPos) * _bob.TileSize) / _gridTotal) : Coord(index);
 
     private float Coord(int index) => _bob is not null ? index * _bobCell : (float)(index * _extent / _gridTotal);
+
+    /// <summary>BOB's height-query coordinate (FUN_18016b2f0): (i + i0) · (ext / total) with the step in double,
+    /// ext = (float)(max tiles · T′), rounded to float once (fits its frida_gheight3 call dump on every point;
+    /// the float step is 1 ulp off on ~13% of rows).</summary>
+    private float QueryCoord(int local, int origin) => _bob is not null && (BobGlobalHeight.Variant & 4096) == 0
+        ? (float)((double)(local + origin) * ((double)_bobExtent / _gridTotal)) : Coord(origin + local);
 
     public MeshResult? Build(int row, int col, MeshKind kind)
     {
@@ -82,7 +92,7 @@ public sealed class GlobalMeshBuilder
                 int gi = i0 + i, gj = j0 + j;
                 if (_bob is not null)
                 {
-                    var h = _bob.Height(Coord(gi), Coord(gj), kind == MeshKind.Sea);
+                    var h = _bob.Height(QueryCoord(i, i0), QueryCoord(j, j0), kind == MeshKind.Sea);
                     bobHeight![(j + 1) * m + i + 1] = h;
                     validGrid[(j + 1) * m + i + 1] = h != Hole;
                     continue;
@@ -126,8 +136,8 @@ public sealed class GlobalMeshBuilder
             y[k] = bobGrid is not null ? bobGrid[k] : bobHeight is not null ? bobHeight[(j + 1) * m + i + 1] : sampler.Height(x[k], z[k]);
             byte f = 2;
             // BOB (FUN_18016b2f0 / FUN_1801471b0) probes the 8 points at ±d around the vertex's query position
-            var qx = Coord(gi);
-            var qz = Coord(gj);
+            var qx = QueryCoord(i, i0);
+            var qz = QueryCoord(j, j0);
             var sea = kind == MeshKind.Sea;
             bool Probe(float px, float pz) => _bob!.Height(px, pz, sea) != Hole;
             if (_bob is not null && (BobGlobalHeight.Variant & 512) == 0)
