@@ -357,7 +357,8 @@ def _header_matches(header: str, action_name: str, short: str, parts: list[str])
     return _norm(short) in h and parts[-1].lower() in h
 
 
-def _run_gui(tree, parts, action_name, directories, processors, timeout, capture_label, close_after):
+def _run_gui(tree, parts, action_name, directories, processors, timeout, capture_label, close_after,
+             allow_helpers=()):
     g = _g()
     gui = _ensure_gui(tree, parts, directories, processors)
     items = _open_popup(gui, tree, parts)
@@ -411,10 +412,18 @@ def _run_gui(tree, parts, action_name, directories, processors, timeout, capture
             m = re.search(r"(\d+) action\(s\) were selected for execution", _read(log))
             if m:
                 guard = "ok" if int(m.group(1)) == 1 else f"{m.group(1)} actions selected - BOB killed"
-                if guard != "ok":
+                if guard != "ok" and allow_helpers:
+                    guard = "helpers"                       # opt-in: BOB adds helper actions (Initialise warscape ...)
+                if guard != "ok" and guard != "helpers":
                     g.kill_all()
                     verdict = "aborted"
                     break
+        if guard == "helpers" and os.path.exists(log):     # every action BOB starts must be the target or an allowed helper
+            want = _norm(action_name)
+            for hdr in re.findall(r"^=== (.+?) ===$", _read(log), re.M):
+                if _norm(hdr) != want and not any(h.lower() in hdr.lower() for h in allow_helpers):
+                    g.kill_all(); verdict = f"aborted: unexpected action {hdr!r}"; break
+            if verdict: break
         if "Done" in title or not alive:
             break
         if time.time() - t0 > timeout:
@@ -440,7 +449,7 @@ def _run_gui(tree, parts, action_name, directories, processors, timeout, capture
 def bob_run_action(path: str, action_name: str, timeout: int = 3600, mode: str = "headless",
                    directories: list[str] | None = None, processors: list[str] | None = None,
                    capture_label: str | None = None, close_after: bool = True,
-                   file_filter: bool = True) -> dict:
+                   file_filter: bool = True, allow_helpers: list[str] | None = None) -> dict:
     """Run exactly ONE BOB action and wait for it to finish.
 
     path: the file/folder the action belongs to (as used in bob_list_actions), e.g.
@@ -457,6 +466,8 @@ def bob_run_action(path: str, action_name: str, timeout: int = 3600, mode: str =
           actions reading or writing `path` (folder: '<path>/...'). If that yields not_found for an action
           you know exists, retry with file_filter=False (scope validation still applies).
     capture_label: if given, bob*.log are copied to output/bob_runs/<timestamp>_<label>/.
+    allow_helpers (gui mode): action-name substrings BOB may run alongside the target (it adds e.g.
+          'Initialise warscape' to Generate Camera Height Map); any other action started still kills BOB.
     Returns result (success/failed/aborted/timeout/not_found/refused), the bob.log tail, the number of
     'Failed to find tile' lines, error-line counts and the contents of bob_error.log.
     """
@@ -466,7 +477,8 @@ def bob_run_action(path: str, action_name: str, timeout: int = 3600, mode: str =
         if mode == "gui":
             if _other_bob_running():
                 return {"result": "refused", "reason": f"another BOB is running: {_other_bob_running()}"}
-            return _run_gui(tree, parts, action_name, directories, processors, timeout, capture_label, close_after)
+            return _run_gui(tree, parts, action_name, directories, processors, timeout, capture_label, close_after,
+                            tuple(allow_helpers or ()))
         if g.bob_pids():
             return {"result": "refused", "reason": f"BOB is already running (pids {g.bob_pids()}); call bob_close "
                                                    "first - only one BOB may run at a time"}

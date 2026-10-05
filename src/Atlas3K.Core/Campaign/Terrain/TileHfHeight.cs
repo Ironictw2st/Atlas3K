@@ -143,40 +143,72 @@ public sealed class TileHfHeight
         var cell = _cells[cy * _tilesW + cx];
         if (cell is null) return (0f, 0f);
         foreach (var r in cell)
-        {
-            var rec = _list.Records[r];
-            var tile = _tileOfPath[rec.Path]!;
-            var rot = rec.Orientation & 0xF0;
-            var (w, h) = Size(tile, rec.Orientation);
-            float x0 = rec.X, y0 = rec.Y, x1 = rec.X + w, y1 = rec.Y + h;
-            if (tx < x0 || x1 < tx || ty < y0 || y1 < ty) continue;
-            int ix = (int)(tx - x0), iy = (int)(ty - y0), col = ix, row = iy;
-            switch (rot)
+            if (TileHeight(r, x, z, tx, ty, lf, out var hf))
             {
-                case 0x20: col = tile.Width - iy - 1; row = ix; break;
-                case 0x40: col = tile.Width - ix - 1; row = tile.Height - iy - 1; break;
-                case 0x80: col = iy; row = tile.Height - ix - 1; break;
+                var total = hf + lf;
+                return (total - lf, lf);
             }
-            var valid = tile.SubtileValid(col, tile.Height - row - 1);
-            if (tile.Mask.Length > 0 && !valid) continue;
-            if (x < 0f || x > _maxX || z < 0f || z > _maxZ) continue;
-            var a = (tx - x0) / (x1 - x0);
-            var b = (ty - y0) / (y1 - y0);
-            float u = a, v = b;
-            switch (rot)
-            {
-                case 0x10: break;
-                case 0x20: u = 1f - b; v = a; break;
-                case 0x40: u = 1f - a; v = 1f - b; break;
-                case 0x80: u = b; v = 1f - a; break;
-                default: u = 0f; v = 0f; break;
-            }
-            var hfMap = _hfOfPath[rec.Path];
-            var hf = hfMap is null ? 0f : Sample(hfMap, u, v) * _f;
-            if (!valid && hf == 0f) continue;
-            var total = hf + lf;
-            return (total - lf, lf);
-        }
         return (0f, 0f);
+    }
+
+    /// <summary>
+    /// The camera height map's terrain fallback (warscape FUN_180350820): the highest get_height (hf + lf) over the
+    /// tiles under the point that answer, only the record indices <paramref name="include"/> accepts (BOB: instance
+    /// flag 0x100); 0 when none answers. Tile-space point as <see cref="Split"/>.
+    /// </summary>
+    public float MaxHeight(float x, float z, Func<int, bool> include)
+    {
+        if (x < 0f || x > _maxX || z < 0f || z > _maxZ) return 0f;
+        var tx = _invT * x;
+        var ty = _invT * z;
+        int cx = (int)tx, cy = (int)ty;
+        if (cx < 0 || cy < 0 || cx >= _tilesW || cy >= _tilesH || _cells[cy * _tilesW + cx] is not { } cell) return 0f;
+        var lf = Lf(x, z);
+        var best = float.MinValue;
+        var any = false;
+        foreach (var r in cell)
+        {
+            if (!include(r) || !TileHeight(r, x, z, tx, ty, lf, out var hf)) continue;
+            var h = hf + lf;
+            if (best < h) best = h;
+            any = true;
+        }
+        return any ? best : 0f;
+    }
+
+    /// <summary>get_height_worker for one tile record: false when the tile doesn't answer at the point.</summary>
+    private bool TileHeight(int r, float x, float z, float tx, float ty, float lf, out float hf)
+    {
+        hf = 0f;
+        var rec = _list.Records[r];
+        var tile = _tileOfPath[rec.Path]!;
+        var rot = rec.Orientation & 0xF0;
+        var (w, h) = Size(tile, rec.Orientation);
+        float x0 = rec.X, y0 = rec.Y, x1 = rec.X + w, y1 = rec.Y + h;
+        if (tx < x0 || x1 < tx || ty < y0 || y1 < ty) return false;
+        int ix = (int)(tx - x0), iy = (int)(ty - y0), col = ix, row = iy;
+        switch (rot)
+        {
+            case 0x20: col = tile.Width - iy - 1; row = ix; break;
+            case 0x40: col = tile.Width - ix - 1; row = tile.Height - iy - 1; break;
+            case 0x80: col = iy; row = tile.Height - ix - 1; break;
+        }
+        var valid = tile.SubtileValid(col, tile.Height - row - 1);
+        if (tile.Mask.Length > 0 && !valid) return false;
+        if (x < 0f || x > _maxX || z < 0f || z > _maxZ) return false;
+        var a = (tx - x0) / (x1 - x0);
+        var b = (ty - y0) / (y1 - y0);
+        float u = a, v = b;
+        switch (rot)
+        {
+            case 0x10: break;
+            case 0x20: u = 1f - b; v = a; break;
+            case 0x40: u = 1f - a; v = 1f - b; break;
+            case 0x80: u = b; v = 1f - a; break;
+            default: u = 0f; v = 0f; break;
+        }
+        var hfMap = _hfOfPath[rec.Path];
+        hf = hfMap is null ? 0f : Sample(hfMap, u, v) * _f;
+        return valid || hf != 0f;
     }
 }

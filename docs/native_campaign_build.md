@@ -41,7 +41,7 @@ The `terry` MCP server also edits the props in the kit's region layers (`<map>.<
 | `global_mesh` | Global Mesh (`land_mesh_N`, `sea_mesh_N`) | native (game-valid) | same mesh count and positions (170 land, 125 sea); holes identical (coverage IoU 1.0); land triangles 1.06× vanilla, sea 1.00×; surface-to-lf error equal to vanilla's (p99 ≈ 0.1–0.25); compressed-map holes agree on 97–99.7% of grid points |
 | `rivers` | Terry file (river models, height patches) | native (game-valid) | same 24 rivers and numbering as vanilla (checked by shape); land-mesh river holes left uncovered: 78 px map-wide (vanilla 0, BOB 732). vs BOB main190 (prototype): spline, lengths and sample lists bit-exact, index lists identical on 21/24, exact vertex positions 90.4%, 0/24 whole files; see *Rivers vs BOB* |
 | `global_props` | Terry file (`global_props.bin`) | native (byte-identical to BOB) | main190 against BOB (2026-10-05): the whole file is byte-identical (24,778,485 bytes, 12,465 entries); see "global_props.bin vs BOB" below. main190 checked in game 2026-10-04 |
-| `camera_heightmap` | Generate Camera Height Map | native (close, not byte-identical) | correlation 0.94, 73% of pixels within 0.1 units |
+| `camera_heightmap` | Generate Camera Height Map | native (byte-identical to BOB) | vanilla 3k_dlc07 against BOB (2026-10-05): the PNG is byte-identical (same scene inputs: CA's packed meshes, tile list, lf; global_props from the kit layers); every one of the 2,506,520 float cells bit-exact; see *camera_heightmap.png* |
 | `trees` | Campaign Trees (`trees.campaign_tree_list`) | native | byte-identical when the CampaignTree map is the one decoded from vanilla (`trees-decode`) and heights are reused; heights computed from scratch (`TileHfHeight`): 205,765 of 205,767 vanilla trees bit-exact |
 | `lookup` | Texture / Convert lookup texture | native | byte-identical to BOB (vanilla's minimap differs in 304 bytes because of CA's own file) |
 
@@ -82,7 +82,7 @@ After the fix both render in game. Other findings from the comparison:
 | global_props | 66,271 vs 66,268 objects; model + position 100%. Region: 100% (331 regions, same set as BOB) since the fix below. It was 67.7% while the step used layer names. River models are numbered as BOB (see the regions note) |
 | lookup | `.dds` and `.tga` byte-identical; `_minimap.tga` differs in 6,959 of 3.88M bytes |
 | rasters, climate | byte-identical to the kit's copies, but those were built natively too, so there is no BOB reference |
-| camera_heightmap, trees | no BOB output in the kit to compare against |
+| camera_heightmap, trees | no BOB output in the kit to compare against (camera: byte-identical to BOB on vanilla since 2026-10-05) |
 
 ## Guandu check (2026-09-29)
 
@@ -316,7 +316,7 @@ Decompiled from `QTU::CampaignTreeGenerator` / `generate_campaign_tree_list_for`
   - Version-2 hf maps (lo/hi only: river/roads_tracks junction6_c, junction7_c, junction7_d) are read like version 3. Tiles with only `hf_height_map.data` take BOB's mesh path (`get_tile_space_high_frequency_positions`), not ported: no vanilla tree lands on one (every answering tile of every vanilla tree sampled a compressed hf map in BOB's dump).
   - **Run it:** `Atlas3K.Cli build-campaign --ak <kit> --map <map> --steps rasters,tile_list,trees [--fresh-trees] --out <dir>`. Inputs: the kit's `.terry` with a CampaignTree map (for vanilla the decoded TIF from `trees-decode`), the raw height layer (-> rasters -> lf), a tile list (the tile_list step's output, the compiled one under `--root`, or the kit's working copy), the game packs (tile database + hf maps, `GameDataDir`) and the campaign_tree_ids / variants / seasons TSVs (`DbTsvRoot`). `--fresh-trees` computes every height (no reuse of the reference list). Vanilla check: `--steps rasters,trees --fresh-trees` against the shipped list = 5 bytes different (the 2 trees above), against BOB's = 4.
   - How it was found: BOB's "Campaign Trees" action (`ACTION_PROCESS_CAMPAIGN_TREES`, bob_terrain; it calls `QTU::generate_campaign_tree_list_for`) instrumented with Frida - `research/bob_re/frida_bob.py frida_trees3.js <vanilla kit> raw_data/terrain/campaigns/3k_dlc07_main_map "Campaign Trees" <label>` (headless, ~10 s; back up and restore the kit's working tree list). frida_trees.js logs each height_split (x, z) -> (hf, lf); frida_trees2/3.js add warscape's sampler calls (map, u, v, l via an Interceptor.replace wrapper) and the TERRAIN_RENDER_SETUP fields. Analysis: `research/trees/hs_dump_analyze.py`, `uv_analyze.py`, `l_check.py`. A fresh BOB run on the vanilla kit differs from CA's shipped list in 1 byte.
-  - The reference list's y is still reused where a tree's (x, z) is unchanged (`ReuseReferenceHeights`). camera_heightmap could take the same `TileHfHeight.Height` for its terrain term instead of lf block-max.
+  - The reference list's y is still reused where a tree's (x, z) is unchanged (`ReuseReferenceHeights`).
 - **Seasons:** each variant row sets its season's model (later rows win; no/unknown season = default model). Written: the `seasons_tables.index` of each season with a model, ascending, then 0xFFFFFFFF if the default model is set. Flag byte is always 1.
 - **Type order:** a CA_STD hash map keyed by `CA::murmur_hash` (= MurmurHash3 x86_32, seed 0x4A545EED). Starts at 1 bucket, grows to 2b + 1 when count + 1 > b; new keys are appended to their bucket; a rehash re-buckets in list order. The file lists types in that list order, inserted in row-major first appearance (`CaHash.HashMapOrder`).
 - **Header:** version 5, world bounds (0, 0, width, height), type count.
@@ -326,13 +326,19 @@ Decompiled from `QTU::CampaignTreeGenerator` / `generate_campaign_tree_list_for`
 ### camera_heightmap.png
 
 - **What the game needs:** `empirecampaign.dll` loads `campaign_maps\<map>\camera_heightmap.png` and requires the tEXt `height_scale`.
-- **Format:** 16-bit greyscale at tile-map resolution. Values are normalised to the highest sampled height; `height_scale` = highest / 65535, written with 6 decimals.
-- **BOB's generator:** `TOOLDATABUILDER::generate_camera_height_map`. Its settings are samples per world unit, resolution relative to the tile map, and an optional blur (kernel size, sigma).
-- **Native version:**
-  - Terrain is taken as max(lf height, 0) in world units (u16 × 0.000218712 − 3.12725).
-  - Every non-decal prop's LOD0 mesh from the game packs is rasterised at lf resolution, including `.wsmodel` → geometry.
-  - The result is reduced by a 4×4 maximum, with no blur.
-- **Remaining gap:** vanilla is up to about 10 units higher over the mountain ranges than the current props explain. This is still open; a BOB run on dlc07 with the same inputs is needed to tell whether the gap comes from CA's shipped file.
+- **Status:** byte-identical to BOB on vanilla 3k_dlc07 (2026-10-05; 2,195,093 bytes, MD5 `6c6353e4…`), every float cell of BOB's sample buffer bit-exact. Before this work the native step rasterised props (correlation 0.94); a BOB-faithful Python prototype reached 95.6% bit-exact cells.
+- **Settings:** `raw_data	errain\campaignsules.bob` [Terrain] `cam_hmap_resolution_scale`, `cam_hmap_samples_per_wu`, `cam_hmap_apply_blur`, `cam_hmap_blur_kernel`, `cam_hmap_standard_drv`. Without them BOB's settings are 0 and it writes no usable map; the native step then uses 1 / 4 / no blur (the values the parity run used). BOB's blur is not ported (a note says so when it is on).
+- **Grid and samples** (`TOOLDATABUILDER::generate_camera_height_map`, FUN_18006bf20): (tiles W × res) × (tiles H × res) cells over x 0..W·T, z 0..(H·128·(T/128))·1.15476. Cell (u, v) is centred at (u·step, v·step), half extents step·0.5. n = ceil(extent × samples per unit) per axis; the samples are accumulated from the min corner and BOB's inner loop also runs the z count; plus one sample at the centre. The cell keeps the max, starting from −1.
+- **Pixels:** highest = max cell; pixel = ceil(max(h / highest, 0) · 65535), PNG row 0 = the north edge (BOB's buffer row 0 is south); `height_scale` = "%f" of highest · (1/65535).
+- **PNG encoding** (`PngLib`, `ZlibDeflate`): IHDR, tEXt, IDAT in 8192-byte chunks, IEND; each row takes libpng's adaptive filter (lowest sum of |signed byte|, ties to the earlier filter); zlib level 6 with Z_FILTERED, ported from zlib 1.2.x deflate_slow + trees.c (.NET's ZLibStream is zlib-ng and differs). BOB's IDAT reproduced byte for byte.
+- **Scene height** (warscape FUN_18034cf20, `CameraHeightField`): max(P, G).
+  - P, height patches (FUN_180350320): river patches (`height_patchesivers.height_patch_collection`, identity transform), the props of every placed tile's `bmd_data.bin` with `has_height_patch`, and the global props with `has_height_patch`. Each needs `<geometry>.rigid_model_v2.compressed_map`; local bounds = LOD0 first mesh bounds (x, z). Value = |column 1| · sample + translation y, sample = max of corners (x0, y−1), (x1, y−1), (x1, y) (FUN_18039f140), −50 = none. Patches whose AABB leaves the quadtree build box (−1, −1)..(scene W, scene D) are never stored (18 on vanilla).
+  - Patch matrices, bit-exact on all 11,670 vanilla objects: tile props = get_tile_transform (s = T/128, scale (s, s, s·1.15476), z translation (p·s)·1.15476) times 5 (bmd units) then the stored prop matrix, element (t·5)·p, then y lifted by the tile terrain height at (x, z / 1.15476); global props = the stored 4x3 from global_props.bin (it must be the one built from the kit layers, as BOB's scene is: CA's shipped file differs in the last bits). AABB over the model box's 8 corners; inverse = warscape's inlined adjugate / determinant (FUN_18034a210).
+  - G, global mesh (FUN_180350620): the first land_mesh block in file-name order whose bounds (the RMV2 bounds at 0xC0) contain (x, z / 1.15476); bilinear with invalid corners filled (FUN_18039f3e0). Invalid (−50) or no block: the tile fallback (FUN_180350820) = the highest get_height (hf + lf) over the tiles the scene quadtree reaches at (x, z'·1.15476), else 0.
+  - Scene quadtree (`TileQuadtree`, from a Frida dump of the whole tree): 7 levels of midpoint splits of (−1, −1)..(scene W, scene D); it holds the `global_map	ile_list.bin` records with flag bit 0 (instance flag 0x100), each in the leaf holding the centre of its extent; a leaf's bounds grow to its tiles' extents, inner nodes to their children's. Extent: x = X·128·s + w·128·s, z = (Y·128·s + h·128·s)·1.15476, widened for blockout cliffs by the custom mesh bounds without the tile's turn (a over x, b over −z; for 90° turns a over x min..−z min and b over −z max..x max). A tile answers only inside its leaf's bounds: sample points on a tile edge can miss it by an ulp.
+- **Inputs a native build uses:** the build output first (loose files under the target root), else the game packs: tile_list.bin, global_map	ile_list.bin, lf_height_map, global_meshes, height_patches, global_props.bin, the tile database and tile bmd/hf/custom meshes.
+- **Open:** BOB's blur; the single-precision epsilon of the singular-matrix test; vanilla only so far (main190 needs a BOB run with the same inputs to confirm).
+- **Research and tools:** `research/bob_re/frida_camera.js` (pass buffer, probes, quadtree nodes with tile lists, tile instances), `frida_campatch.js` (patch objects), `frida_camera.py` / `cam_run.sh` (GUI run with helper actions), `research/camera/` (Python prototype, PNG and patch matching, the CamProbe console used for the fits).
 
 ### lf_normal.dds
 
@@ -344,8 +350,8 @@ Not needed for campaign maps. dlc07 ships none, and the game uses the file as th
   - `Models/RigidModelV2.cs`: terrain-tile and river RMV2 writer.
   - `Models/RigidModelGeometry.cs`: any RMV2, positions and indices for one LOD.
   - `Models/WsModel.cs`
-  - `Maps/TileList.cs`, `Maps/LookupTexture.cs`, `Maps/HeightPatchCollection.cs`, `Maps/Png16.cs`
+  - `Maps/TileList.cs`, `Maps/LookupTexture.cs`, `Maps/HeightPatchCollection.cs`, `Maps/Png16.cs`, `Maps/PngLib.cs` + `Maps/ZlibDeflate.cs` (libpng/zlib-exact PNG)
   - `TerrainDds.WriteBlend`
-- **Core** (`src/Atlas3K.Core/Campaign/`): `CampaignBuildPipeline`, `BuildSteps` (rasters, global_map, lookup, pending steps), `CameraHeightmapStep`, `Parity`.
+- **Core** (`src/Atlas3K.Core/Campaign/`): `CampaignBuildPipeline`, `BuildSteps` (rasters, global_map, lookup, pending steps), `CameraHeightmapStep` (+ `Camera/CameraHeightField`, `Camera/TileQuadtree`), `Parity`.
 - **Tests:** `src/Atlas3K.Tests/CampaignBuildTests.cs`.
 - **Research:** `research/derived_maps/` holds the camera heightmap and lf_normal analysis and the mesh study. Ghidra decompiles of the kit DLLs are in `research/bob_re/`. Ghidra and JDK 21 are installed portably in `Z:\Claude\Tools`.

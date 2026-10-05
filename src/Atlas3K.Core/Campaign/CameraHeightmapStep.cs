@@ -1,6 +1,8 @@
-using System.Collections.Concurrent;
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Globalization;
+using Atlas3K.Core.Campaign.Camera;
+using Atlas3K.Core.Campaign.Terrain;
 using Atlas3K.Formats.Maps;
 using Atlas3K.Formats.Models;
 using Atlas3K.Formats.Packs;
@@ -9,16 +11,15 @@ using Atlas3K.Formats.Props;
 namespace Atlas3K.Core.Campaign;
 
 /// <summary>
-/// campaign_maps\&lt;map&gt;\camera_heightmap.png (BOB "Generate Camera Height Map", TOOLDATABUILDER::generate_camera_height_map):
-/// the highest point of the scene — terrain clamped at sea level plus every prop model — sampled at lf resolution and
-/// reduced by a 4x4 maximum to the tile-map grid. Written as 16-bit greyscale normalised to the highest sample, with
-/// tEXt height_scale = highest / 65535 (the game refuses the file without it).
-/// BOB (decompiled): per cell, the max of scene height queries over a one-cell rectangle, floored at -1 then 0, pixel =
-/// ceil(h / highest * 65535), height_scale = highest / 65535. Terrain height there is lf plus the tile's hf map (zero
-/// for all but road/river tiles); campaign relief like mountains comes from props, so props are rasterised here.
-/// On prop-free vanilla 3k_dlc07 terrain this matches BOB within 0.05 units on 80% of cells. Over mountains the shipped
-/// vanilla file follows an older prop layout (it omits current mountain props and has ones that no longer exist), so
-/// it cannot be matched exactly; the output here follows the current props.
+/// campaign_maps\&lt;map&gt;\camera_heightmap.png (BOB "Generate Camera Height Map", TOOLDATABUILDER::generate_camera_height_map),
+/// reproduced from the decompiled tool and Frida dumps of BOB's own sample buffer:
+///  - settings from raw_data\terrain\campaigns\rules.bob [Terrain]: cam_hmap_resolution_scale, cam_hmap_samples_per_wu,
+///    cam_hmap_apply_blur, cam_hmap_blur_kernel, cam_hmap_standard_drv (BOB writes nothing useful without them);
+///  - a (tiles W · res) × (tiles H · res) grid over the scene (x 0..W·T, z 0..H·T·1.15476); each cell is the max of the
+///    scene height (<see cref="CameraHeightField"/>) over n × n points from the cell's min corner (n = ceil(extent ·
+///    samples per unit); BOB runs the z count for x too) plus the cell centre, starting from −1;
+///  - pixel = ceil(max(h / highest, 0) · 65535), PNG row 0 = the north edge; tEXt height_scale = "%f" of highest / 65535;
+///    written as libpng does (<see cref="PngLib"/>).
 /// </summary>
 public sealed class CameraHeightmapStep : ICampaignBuildStep
 {
@@ -29,16 +30,14 @@ public sealed class CameraHeightmapStep : ICampaignBuildStep
 
     public string Name => "camera_heightmap";
     public string ReplacesBobAction => "Terrain / Generate Camera Height Map";
-    public IReadOnlyList<string> DependsOn => ["rasters", "global_props"];
+    public IReadOnlyList<string> DependsOn => ["global_mesh", "global_props", "rivers", "tile_list"];
 
-    /// <summary>Gaussian blur sigma in tile-map pixels (0 = off, as vanilla appears to be).</summary>
-    public double BlurSigma { get; init; }
+    /// <summary>BOB's CAMERA_HEIGHT_MAP_SETTINGS (rules.bob [Terrain] cam_hmap_*).</summary>
+    public sealed record Settings(float ResolutionScale, int SamplesPerUnit, bool ApplyBlur, int BlurKernel, float StandardDeviation, bool FromRules);
 
     public IReadOnlyList<string> CheckInputs(CampaignBuildContext ctx)
     {
         var missing = new List<string>();
-        if (!File.Exists(ctx.OutFile("lf_height_map.compressed_map"))) missing.Add("missing lf_height_map.compressed_map (run step 'rasters')");
-        if (GlobalPropsSource(ctx) is null) missing.Add("no global_props.bin (output, working_data or vanilla root)");
         if (!Directory.Exists(ctx.Paths.GameDataDir)) missing.Add($"missing game data folder {ctx.Paths.GameDataDir}");
         return missing;
     }
@@ -47,108 +46,104 @@ public sealed class CameraHeightmapStep : ICampaignBuildStep
     {
         var sw = Stopwatch.StartNew();
         var notes = new List<string>();
+        var settings = ReadSettings(Path.Combine(ctx.Paths.AssemblyKitRoot, "raw_data", "terrain", "campaigns", "rules.bob"));
+        if (!settings.FromRules)
+            notes.Add("rules.bob has no cam_hmap_* settings (BOB then writes no usable map): using resolution 1, 4 samples per unit, no blur");
+        if (settings.ApplyBlur) notes.Add("cam_hmap_apply_blur is on: BOB's blur is not ported, the map is written unblurred");
 
-        ctx.Log("terrain...");
-        var lf = CompressedMap.Read(ctx.OutFile("lf_height_map.compressed_map"));
-        var (w, h) = (lf.Raster.Width, lf.Raster.Height);
-        var lo = lf.Header[1] * 65535.0;
-        var range = (lf.Header[4] - lf.Header[1]) * 65535.0;
-        var top = new float[w * h];
-        for (var i = 0; i < top.Length; i++)
-            top[i] = (float)Math.Max(0, (lo + lf.Raster.Data[i] / 65535.0 * range) * HeightStep + HeightOffset);
+        ctx.Log("scene...");
+        var field = BuildField(ctx, new GameFiles(ctx), notes, out var tilesW, out var tilesH);
 
-        var propsPath = GlobalPropsSource(ctx)!;
-        ctx.Log($"props from {propsPath}...");
-        var props = GlobalProps.Load(propsPath).ReadRegions(ctx.MapName).SelectMany(r => r.Props).Where(p => !p.IsDecal).ToList();
-        var packs = PackSet.OpenVanilla(ctx.Paths.GameDataDir);
-        var models = new ConcurrentDictionary<string, RigidModelGeometry?>(StringComparer.OrdinalIgnoreCase);
-        var missing = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        long triangles = 0;
-        var worldH = h * PixelSizeZ;
+        var w = (int)MathF.Ceiling(tilesW * settings.ResolutionScale);
+        var h = (int)MathF.Ceiling(tilesH * settings.ResolutionScale);
+        ctx.Log($"sampling {w}x{h}...");
+        var cells = Sample(field, w, h, SceneWidth(tilesW), SceneDepth(tilesH), settings.SamplesPerUnit);
 
-        Parallel.ForEach(props, prop =>
-        {
-            var geometry = models.GetOrAdd(prop.Path, p => LoadModel(packs, p, ctx.TargetRoot));
-            if (geometry is null) { missing.AddOrUpdate(prop.Path, 1, (_, n) => n + 1); return; }
-            var m = Matrix(prop.Transform);
-            var pos = geometry.Positions;
-            var world = new float[pos.Length];
-            for (var v = 0; v < pos.Length; v += 3)
-            {
-                double x = pos[v], y = pos[v + 1], z = pos[v + 2];
-                world[v] = (float)((m[0] * x + m[1] * y + m[2] * z + prop.Transform.X) / PixelSizeX);                 // column
-                world[v + 1] = (float)(m[3] * x + m[4] * y + m[5] * z + prop.Transform.Y);                           // height
-                world[v + 2] = (float)((worldH - (m[6] * x + m[7] * y + m[8] * z + prop.Transform.Z)) / PixelSizeZ); // row
-                Splat(top, w, h, world[v], world[v + 2], world[v + 1]);
-            }
-            var idx = geometry.Indices;
-            for (var t = 0; t < idx.Length; t += 3)
-                RasteriseTriangle(top, w, h, world, idx[t] * 3, idx[t + 1] * 3, idx[t + 2] * 3);
-            Interlocked.Add(ref triangles, idx.Length / 3);
-        });
-        notes.Add($"{props.Count:N0} props, {models.Count(kv => kv.Value != null):N0} models, {triangles:N0} triangles rasterised");
-        if (!missing.IsEmpty)
-            notes.Add($"{missing.Values.Sum():N0} props skipped, model not readable: " +
-                      string.Join(", ", missing.OrderByDescending(kv => kv.Value).Take(8).Select(kv => $"{kv.Key} ({kv.Value})")));
-
-        ctx.Log("tile-map grid...");
-        var (cw, ch) = (w / 4, h / 4);
-        var cells = new float[cw * ch];
-        Parallel.For(0, ch, cy =>
-        {
-            for (var cx = 0; cx < cw; cx++)
-            {
-                var max = 0f;
-                for (var dy = 0; dy < 4; dy++)
-                for (var dx = 0; dx < 4; dx++)
-                    max = Math.Max(max, top[(cy * 4 + dy) * w + cx * 4 + dx]);
-                cells[cy * cw + cx] = max;
-            }
-        });
-        if (BlurSigma > 0) cells = Blur(cells, cw, ch, BlurSigma);
-
-        var highest = cells.Max();
-        var raster = new Raster<ushort>(cw, ch);
-        for (var i = 0; i < cells.Length; i++)
-            raster.Data[i] = highest > 0 ? (ushort)Math.Ceiling(Math.Max(0f, cells[i] / highest) * 65535f) : (ushort)0; // BOB: ceil
-        var scale = (highest / 65535.0).ToString("F6", CultureInfo.InvariantCulture);
+        var highest = float.MinValue;
+        foreach (var c in cells) if (highest < c) highest = c;
+        var (raster, scale) = Encode(cells, w, h, highest);
         Directory.CreateDirectory(ctx.CampaignMapOutDir);
         var outPath = Path.Combine(ctx.CampaignMapOutDir, "camera_heightmap.png");
-        Png16.Write(outPath, raster, new Dictionary<string, string> { ["height_scale"] = scale });
-        notes.Add($"{cw}x{ch}, highest sampled height {highest:F3} (height_scale {scale})");
+        File.WriteAllBytes(outPath, PngLib.Encode16(raster, new Dictionary<string, string> { ["height_scale"] = scale }));
+        notes.Add($"{w}x{h}, highest sampled height {highest:F6} (height_scale {scale})");
         return new StepResult(Name, [outPath], notes, sw.Elapsed);
     }
 
-    private static string? GlobalPropsSource(CampaignBuildContext ctx) =>
-        new[] { ctx.OutFile("global_props.bin"),
-                Path.Combine(ctx.Paths.AkWorkingDir, "terrain", "campaigns", ctx.MapName, "global_props.bin"),
-                ctx.Paths.GlobalPropsBin }
-            .FirstOrDefault(File.Exists);
+    /// <summary>Scene extents: x 0..tiles W · T, z 0..tiles H · T · 1.15476.</summary>
+    public static float SceneWidth(int tilesW) => tilesW * 128f * (GlobalMesh.GlobalMeshStep.TileSize / 128f);
+    public static float SceneDepth(int tilesH) => tilesH * 128f * (GlobalMesh.GlobalMeshStep.TileSize / 128f) * CameraHeightField.ZScale;
 
-    /// <summary>A model from the build output (e.g. the native river models) or the game packs.</summary>
-    private static RigidModelGeometry? LoadModel(PackSet packs, string path, string targetRoot)
+    public static Settings ReadSettings(string rulesBob)
     {
-        byte[]? Read(string p)
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (File.Exists(rulesBob))
+            foreach (var line in File.ReadAllLines(rulesBob))
+                if (line.Split('=', 2) is [var k, var v] && k.Trim().StartsWith("cam_hmap_", StringComparison.OrdinalIgnoreCase))
+                    values[k.Trim()] = v.Trim();
+        float F(string k, float d) => values.TryGetValue(k, out var v) && float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f) ? f : d;
+        bool B(string k) => values.TryGetValue(k, out var v) && (v.Equals("true", StringComparison.OrdinalIgnoreCase) || v == "1");
+        var fromRules = values.ContainsKey("cam_hmap_resolution_scale") && values.ContainsKey("cam_hmap_samples_per_wu");
+        return new Settings(F("cam_hmap_resolution_scale", 1f), (int)F("cam_hmap_samples_per_wu", 4f), B("cam_hmap_apply_blur"),
+            (int)F("cam_hmap_blur_kernel", 0f), F("cam_hmap_standard_drv", 0f), fromRules);
+    }
+
+    /// <summary>The per-cell maxima in BOB's order (row j = z index, south first).</summary>
+    public static float[] Sample(CameraHeightField field, int w, int h, float sceneW, float sceneD, int samplesPerUnit)
+    {
+        var stepX = sceneW / w;
+        var stepZ = sceneD / h;
+        var halfX = stepX * 0.5f;
+        var halfZ = stepZ * 0.5f;
+        var cells = new float[w * h];
+        Parallel.For(0, h, j =>
         {
-            var loose = Path.Combine(targetRoot, p.Replace('/', Path.DirectorySeparatorChar));
-            return File.Exists(loose) ? File.ReadAllBytes(loose) : packs.TryRead(p);
-        }
-        try
-        {
-            var bytes = Read(path);
-            if (bytes is null) return null;
-            if (path.EndsWith(".wsmodel", StringComparison.OrdinalIgnoreCase))
+            var cz = j * stepZ;
+            var minZ = cz - halfZ;
+            var maxZ = cz + halfZ;
+            var dz = maxZ - minZ;
+            var nz = (int)MathF.Ceiling(dz * samplesPerUnit);
+            var sz = dz / nz;
+            for (var u = 0; u < w; u++)
             {
-                var geometry = RigidModelGeometry.WsModelGeometryPath(bytes);
-                bytes = geometry is null ? null : Read(geometry);
-                if (bytes is null) return null;
+                var cx = u * stepX;
+                var minX = cx - halfX;
+                var maxX = cx + halfX;
+                var dx = maxX - minX;
+                var nx = (int)MathF.Ceiling(dx * samplesPerUnit);
+                var sx = dx / nx;
+                var best = -1f;
+                var z = minZ;
+                for (var a = 0; a < nz; a++)
+                {
+                    var x = minX;
+                    for (var b = 0; b < nz; b++)                // BOB: the inner loop also runs the z count
+                    {
+                        var v = field.Height(x, z);
+                        if (best < v) best = v;
+                        x += sx;
+                    }
+                    z += sz;
+                }
+                var centre = field.Height((maxX - minX) * 0.5f + minX, (maxZ - minZ) * 0.5f + minZ);
+                if (best < centre) best = centre;
+                cells[j * w + u] = best;
             }
-            return RigidModelGeometry.Read(bytes);
-        }
-        catch (Exception e) when (e is InvalidDataException or NotSupportedException or ArgumentOutOfRangeException or IndexOutOfRangeException)
-        {
-            return null;
-        }
+        });
+        return cells;
+    }
+
+    /// <summary>16-bit pixels (row 0 = north) and the height_scale text.</summary>
+    public static (Raster<ushort> Raster, string Scale) Encode(float[] cells, int w, int h, float highest)
+    {
+        var raster = new Raster<ushort>(w, h);
+        for (var j = 0; j < h; j++)
+            for (var u = 0; u < w; u++)
+            {
+                var r = cells[j * w + u] / highest;
+                raster.Data[(h - 1 - j) * w + u] = (ushort)MathF.Ceiling(MathF.Max(r, 0f) * 65535f);
+            }
+        var scale = ((double)(highest * (1f / 65535f))).ToString("F6", CultureInfo.InvariantCulture);
+        return (raster, scale);
     }
 
     /// <summary>Row-major 3x3 rotation * scale from the stored Blender-style XYZ Euler angles (degrees) and scale:
@@ -175,75 +170,169 @@ public sealed class CameraHeightmapStep : ICampaignBuildStep
         return m;
     }
 
-    private static void Splat(float[] top, int w, int h, float col, float row, float y)
+    /// <summary>What BOB's scene loads: the build output (loose files under the target root) first, then the game packs.</summary>
+    private sealed class GameFiles(CampaignBuildContext ctx)
     {
-        int x = (int)Math.Floor(col), r = (int)Math.Floor(row);
-        if ((uint)x < (uint)w && (uint)r < (uint)h) AtomicMax(ref top[r * w + x], y);
-    }
+        public PackSet Packs { get; } = PackSet.OpenVanilla(ctx.Paths.GameDataDir);
 
-    /// <summary>Samples the triangle's height at every lf pixel centre it covers (xz projection).</summary>
-    private static void RasteriseTriangle(float[] top, int w, int h, float[] p, int a, int b, int c)
-    {
-        double ax = p[a], ay = p[a + 1], az = p[a + 2];
-        double bx = p[b], by = p[b + 1], bz = p[b + 2];
-        double cx = p[c], cy = p[c + 1], cz = p[c + 2];
-        var area = (bx - ax) * (cz - az) - (cx - ax) * (bz - az);
-        if (Math.Abs(area) < 1e-12) return;
-        var x0 = Math.Max(0, (int)Math.Floor(Math.Min(ax, Math.Min(bx, cx)) - 0.5));
-        var x1 = Math.Min(w - 1, (int)Math.Ceiling(Math.Max(ax, Math.Max(bx, cx)) - 0.5));
-        var z0 = Math.Max(0, (int)Math.Floor(Math.Min(az, Math.Min(bz, cz)) - 0.5));
-        var z1 = Math.Min(h - 1, (int)Math.Ceiling(Math.Max(az, Math.Max(bz, cz)) - 0.5));
-        for (var r = z0; r <= z1; r++)
+        private string Loose(string internalPath) =>
+            Path.Combine(ctx.TargetRoot, internalPath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
+
+        public byte[]? Read(string internalPath) =>
+            File.Exists(Loose(internalPath)) ? File.ReadAllBytes(Loose(internalPath)) : Packs.TryRead(internalPath);
+
+        /// <summary>File names in a folder of the build output, else of the packs.</summary>
+        public List<string> List(string folder)
         {
-            var pz = r + 0.5;
-            for (var x = x0; x <= x1; x++)
-            {
-                var px = x + 0.5;
-                var u = ((bx - px) * (cz - pz) - (cx - px) * (bz - pz)) / area;
-                var v = ((cx - px) * (az - pz) - (ax - px) * (cz - pz)) / area;
-                var t = 1 - u - v;
-                if (u < 0 || v < 0 || t < 0) continue;
-                AtomicMax(ref top[r * w + x], (float)(u * ay + v * by + t * cy));
-            }
+            var loose = Loose(folder);
+            if (Directory.Exists(loose)) return Directory.EnumerateFiles(loose).Select(Path.GetFileName).OfType<string>().ToList();
+            var prefix = PackFile.Normalize(folder.TrimEnd('/') + "/");
+            return Packs.Packs.SelectMany(p => p.Entries.Keys)
+                .Where(k => k.StartsWith(prefix, StringComparison.Ordinal) && k.IndexOf('\\', prefix.Length) < 0)
+                .Select(k => k[prefix.Length..]).Distinct().ToList();
         }
     }
 
-    private static void AtomicMax(ref float target, float value)
-    {
-        var current = Volatile.Read(ref target);
-        while (value > current)
-        {
-            var seen = Interlocked.CompareExchange(ref target, value, current);
-            if (seen == current) return;
-            current = seen;
-        }
-    }
+    /// <summary>The scene's height objects: global mesh blocks, height patches (rivers, tile props, global props) and the
+    /// tile terrain for the fallback.</summary>
+    public static CameraHeightField BuildField(CampaignBuildContext ctx, List<string> notes, out int tilesW, out int tilesH) =>
+        BuildField(ctx, new GameFiles(ctx), notes, out tilesW, out tilesH);
 
-    private static float[] Blur(float[] src, int w, int h, double sigma)
+    private static CameraHeightField BuildField(CampaignBuildContext ctx, GameFiles fs, List<string> notes, out int tilesW, out int tilesH)
     {
-        var r = Math.Max(1, (int)Math.Ceiling(3 * sigma));
-        var k = Enumerable.Range(-r, 2 * r + 1).Select(i => Math.Exp(-0.5 * i * i / (sigma * sigma))).ToArray();
-        var sum = k.Sum();
-        var tmp = new float[src.Length];
-        var dst = new float[src.Length];
-        Parallel.For(0, h, y =>
+        var dir = $"terrain/campaigns/{ctx.MapName}/";
+        var maps = new Dictionary<string, CameraHeightField.HeightMap?>(StringComparer.OrdinalIgnoreCase);
+        CameraHeightField.HeightMap? Map(string path)
         {
-            for (var x = 0; x < w; x++)
-            {
-                double acc = 0;
-                for (var i = -r; i <= r; i++) acc += k[i + r] * src[y * w + Math.Clamp(x + i, 0, w - 1)];
-                tmp[y * w + x] = (float)(acc / sum);
-            }
-        });
-        Parallel.For(0, h, y =>
+            if (maps.TryGetValue(path, out var m)) return m;
+            try { m = fs.Read(path) is { } b ? CameraHeightField.HeightMap.From(CompressedMap.Decode(b)) : null; }
+            catch (InvalidDataException) { m = null; }
+            return maps[path] = m;
+        }
+
+        // tiles: the fallback terrain and the tile props
+        var tl = TileList.Read(fs.Read(dir + "tile_list.bin") ?? throw new InvalidOperationException("no tile_list.bin in the build output or the packs"));
+        tilesW = tl.Ints[1];
+        tilesH = tl.Ints[2];
+        var tileSize = GlobalMesh.GlobalMeshStep.TileSize;
+        var prefix = PackFile.Normalize(TileDatabase.Folder);
+        var db = TileDatabase.Load(fs.Packs.Packs.SelectMany(p => p.Entries.Keys).Where(k => k.StartsWith(prefix, StringComparison.Ordinal))
+            .Distinct().Select(k => fs.Packs.TryRead(k)).OfType<byte[]>());
+        var lf = fs.Read(dir + "lf_height_map.compressed_map") ?? throw new InvalidOperationException("no lf_height_map.compressed_map");
+        var tiles = new TileHfHeight(tl, db, fs.Packs.TryRead, CompressedMap.Decode(lf), tileSize);
+
+        // global mesh blocks
+        var blocks = new List<CameraHeightField.Block>();
+        foreach (var name in fs.List(dir + "global_meshes").Where(n => n.StartsWith("land_mesh_", StringComparison.OrdinalIgnoreCase)
+                                                                      && n.EndsWith(".rigid_model_v2", StringComparison.OrdinalIgnoreCase)))
         {
-            for (var x = 0; x < w; x++)
+            var stem = name[..^".rigid_model_v2".Length];
+            var model = fs.Read(dir + "global_meshes/" + name);
+            if (model is null || Map(dir + "global_meshes/" + stem + ".compressed_map") is not { } map) continue;
+            float B(int i) => BinaryPrimitives.ReadSingleLittleEndian(model.AsSpan(0xC0 + 4 * i));
+            blocks.Add(new CameraHeightField.Block(stem, B(0), B(2), B(3), B(5), map));
+        }
+
+        // height patches
+        var patches = new List<CameraHeightField.Patch>();
+        var models = new Dictionary<string, (float[] Bounds, CameraHeightField.HeightMap Map)?>(StringComparer.OrdinalIgnoreCase);
+        (float[] Bounds, CameraHeightField.HeightMap Map)? Model(string path)
+        {
+            if (models.TryGetValue(path, out var r)) return r;
+            r = null;
+            var geometry = path;
+            if (path.EndsWith(".wsmodel", StringComparison.OrdinalIgnoreCase))
+                geometry = fs.Read(path) is { } ws ? RigidModelGeometry.WsModelGeometryPath(ws) ?? "" : "";
+            if (geometry.Length > 0 && Map(geometry + ".compressed_map") is { } map && fs.Read(geometry) is { } rm)
+                r = (CameraHeightField.ModelBounds(rm), map);
+            return models[path] = r;
+        }
+
+        var rivers = 0;
+        if (fs.Read(dir + "height_patches/rivers.height_patch_collection") is { } hpc)
+            foreach (var p in HeightPatchCollection.Read(hpc).Patches)
+                if (Map(p.Path.Replace("//", "/")) is { } map)
+                {
+                    patches.Add(CameraHeightField.RiverPatch(p.Path, p.MinX, p.MinZ, p.MaxX, p.MaxZ, map));
+                    rivers++;
+                }
+
+        // the props of each placed tile's bmd_data.bin, lifted onto the terrain under them
+        var tileProps = 0;
+        var bmds = new Dictionary<string, List<(string Path, float[] Raw)>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rec in tl.Records)
+        {
+            var key = TileDatabase.NormalisePath(tl.Paths[(int)rec.Path]);
+            if (!db.TryGetValue(key, out var tile)) continue;
+            if (!bmds.TryGetValue(key, out var props))
             {
-                double acc = 0;
-                for (var i = -r; i <= r; i++) acc += k[i + r] * tmp[Math.Clamp(y + i, 0, h - 1) * w + x];
-                dst[y * w + x] = (float)(acc / sum);
+                props = [];
+                if (fs.Packs.TryRead(key.Replace('\\', '/') + "bmd_data.bin") is { } b)
+                {
+                    var ro = GlobalProps.ReadBody(b);
+                    for (var i = 0; i < ro.Props.Count && i < ro.PropMatrices.Count; i++)
+                        if (ro.Props[i].HasHeightPatch && Model(ro.Props[i].Path) is not null) props.Add((ro.Props[i].Path, ro.PropMatrices[i]));
+                }
+                bmds[key] = props;
             }
-        });
-        return dst;
+            foreach (var (path, raw) in props)
+            {
+                var (bounds, map) = Model(path)!.Value;
+                var m = CameraHeightField.TileProp(rec, tile.Width, tile.Height, tileSize, raw);
+                m[7] += tiles.Height(m[3], m[11] / CameraHeightField.ZScale);
+                patches.Add(CameraHeightField.MakePatch(path, m, bounds, map));
+                tileProps++;
+            }
+        }
+
+        var globalProps = 0;
+        if (fs.Read(dir + "global_props.bin") is { } gpb)
+            foreach (var region in GlobalProps.Read(gpb).ReadRegions(ctx.MapName))
+                for (var i = 0; i < region.Props.Count && i < region.PropMatrices.Count; i++)
+                {
+                    var p = region.Props[i];
+                    if (!p.HasHeightPatch || Model(p.Path) is not { } md) continue;
+                    patches.Add(CameraHeightField.MakePatch(p.Path, CameraHeightField.FromStored(region.PropMatrices[i]), md.Bounds, md.Map));
+                    globalProps++;
+                }
+
+        // the scene quadtree is built over (−1, −1)..(scene width, scene depth); a patch whose AABB leaves that box is
+        // never stored (18 giant mountain patches on vanilla). The root's final bounds grow with the tiles (595.18524 on
+        // vanilla, read from BOB's memory)
+        float[] root = [-1f, -1f, SceneWidth(tilesW), SceneDepth(tilesH)];
+        // fallback tiles: the quadtree holds the global_map\tile_list.bin records with flag bit 0 (instance flag 0x100)
+        var flags = fs.Read(dir + "global_map/tile_list.bin") is { } gml && TileList.Read(gml) is { } g && g.Records.Count == tl.Records.Count ? g : tl;
+        (int, int)? Size(int r)
+        {
+            var rec = tl.Records[r];
+            if (!db.TryGetValue(TileDatabase.NormalisePath(tl.Paths[(int)rec.Path]), out var t)) return null;
+            return (t.Width, t.Height);
+        }
+        var customs = new Dictionary<uint, float[]?>();
+        float[]? Custom(int r)
+        {
+            var path = tl.Records[r].Path;
+            if (customs.TryGetValue(path, out var c)) return c;
+            c = null;
+            var folder = TileDatabase.NormalisePath(tl.Paths[(int)path]).Replace('\\', '/');
+            if (fs.Packs.TryRead(folder + "custom_mesh.wsmodel") is { } ws && RigidModelGeometry.WsModelGeometryPath(ws) is { } geo
+                && fs.Packs.TryRead(geo) is { } rm)
+            {
+                try
+                {
+                    float[] b = [float.MaxValue, float.MaxValue, float.MaxValue, float.MinValue, float.MinValue, float.MinValue];
+                    foreach (var m in RigidModel.Read(rm).Lods[0].Meshes)
+                        for (var i = 0; i < 3; i++) { b[i] = MathF.Min(b[i], m.BoundsMin[i]); b[3 + i] = MathF.Max(b[3 + i], m.BoundsMax[i]); }
+                    c = b;
+                }
+                catch (Exception e) when (e is InvalidDataException or NotSupportedException or ArgumentOutOfRangeException) { }
+            }
+            return customs[path] = c;
+        }
+        var tree = new TileQuadtree(tl, Size, r => (flags.Records[r].Flag & 1) != 0, Custom, tileSize, SceneWidth(tilesW), SceneDepth(tilesH));
+        var field = new CameraHeightField(blocks, patches, root, tiles, tree.Reaches);
+        notes.Add($"{blocks.Count} global mesh blocks; height patches: {rivers} river, {tileProps} tile prop, {globalProps} global prop " +
+                  $"({field.DroppedPatches} outside the scene, ignored as BOB does)");
+        return field;
     }
 }

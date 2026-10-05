@@ -82,6 +82,9 @@ public sealed class RegionObjects(string region)
     public List<PropRecord> Props { get; } = new();
     /// <summary>The bmd entry each prop was read from (parallel to <see cref="Props"/>; filled by ReadBmdsSeparately).</summary>
     public List<string> PropSources { get; } = new();
+    /// <summary>Each prop's stored 4x3 transform as read (3 columns of the 3x3, then the position; parallel to
+    /// <see cref="Props"/>): the exact floats, which the Euler form in <see cref="PropRecord.Transform"/> rounds.</summary>
+    public List<float[]> PropMatrices { get; } = new();
     public List<VfxRecord> Vfx { get; } = new();
     public List<LightProbeRecord> LightProbes { get; } = new();
     public List<PointLightRecord> PointLights { get; } = new();
@@ -95,6 +98,7 @@ public sealed class RegionObjects(string region)
     internal void Add(RegionObjects other)
     {
         Props.AddRange(other.Props);
+        PropMatrices.AddRange(other.PropMatrices);
         Vfx.AddRange(other.Vfx);
         LightProbes.AddRange(other.LightProbes);
         PointLights.AddRange(other.PointLights);
@@ -369,7 +373,9 @@ public sealed class GlobalProps
             r.Skip(2);
             var path = paths[r.U32()];
             var tags = ReadTags(ref r, enums);
-            var t = ReadTransform(ref r);
+            var raw = new float[12];
+            for (var k = 0; k < 12; k++) raw[k] = r.F32();
+            var t = PropTransform.FromColumns(raw[..9], raw[9], raw[10], raw[11]);
             var isDecal = r.Bool();
             r.Skip(2); // logical decal, fauna
             var inSnow = r.Bool();
@@ -391,6 +397,7 @@ public sealed class GlobalProps
             var applyHeightPatch = r.Bool();
             into.Props.Add(new PropRecord(path, t, tags, seasons, isDecal, applyToTerrain, applyToObjects, hasHeightPatch,
                 applyHeightPatch, inSnow, outSnow, inDestruction, outDestruction, unseenShroud, seenShroud, heightMode));
+            into.PropMatrices.Add(raw);
             into.PropSources.Add(entryName);
         }
 
@@ -545,7 +552,14 @@ public sealed class GlobalProps
     private static RegionObjects Deduplicate(RegionObjects o)
     {
         var result = new RegionObjects(o.Region);
-        result.Props.AddRange(Distinct(o.Props, p => (p.Path, p.Tags, p.Seasons), p => p.Transform));
+        if (o.PropMatrices.Count == o.Props.Count)
+        {
+            var props = Distinct(o.Props.Zip(o.PropMatrices), p => (p.First.Path, p.First.Tags, p.First.Seasons), p => p.First.Transform);
+            result.Props.AddRange(props.Select(p => p.First));
+            result.PropMatrices.AddRange(props.Select(p => p.Second));
+        }
+        else
+            result.Props.AddRange(Distinct(o.Props, p => (p.Path, p.Tags, p.Seasons), p => p.Transform));
         result.Vfx.AddRange(Distinct(o.Vfx, v => (v.Name, v.Tags, v.Seasons), v => v.Transform));
         result.LightProbes.AddRange(o.LightProbes);
         result.PointLights.AddRange(Distinct(o.PointLights, l => (l.R, l.G, l.B, l.Tags, l.Seasons), l => l.Transform));
