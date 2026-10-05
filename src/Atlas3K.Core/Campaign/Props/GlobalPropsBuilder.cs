@@ -347,7 +347,7 @@ public sealed class GlobalPropsBuilder
                 objects.Add(new Obj("light", tr.Position.X, tr.Position.Z, 0, seasons, b =>
                 {
                     var (f, m) = b.EncodeTags(tags);
-                    return BmdRecords.PointLight(_t.Light, tr.Position, A("radius", 1), (c[0] / 255f, c[1] / 255f, c[2] / 255f),
+                    return BmdRecords.PointLight(_t.Light, tr.Position, A("radius", 1), (c[0] * (1f / 255f), c[1] * (1f / 255f), c[2] * (1f / 255f)),
                         A("colour_scale", 1), anim, speed.ElementAtOrDefault(0), speed.ElementAtOrDefault(1), A("colour_min", 0),
                         A("random_offset", 0), falloff, probesOnly, f, m, b.EncodeSeasons(seasons));
                 }, null) { Box = [lx - lr, lz - lr, lx + lr, lz + lr] });

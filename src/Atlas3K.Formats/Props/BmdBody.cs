@@ -313,12 +313,43 @@ public sealed class BmdBody
         return body;
     }
 
+    /// <summary>empireutility BMD_META_TAG_COLLECTION::add_available_meta_data: every enum value, in preamble order,
+    /// mixed into a u32 (0 without enum types). Matches all 20 distinct type lists in BOB's main190 global_props.</summary>
+    private uint MetaTagChecksum()
+    {
+        uint h = 0;
+        foreach (var (_, first, count) in EnumTypes)
+            for (var k = first; k < first + count; k++) h = Mix(h, StringHash(EnumValues[k]));
+        return h;
+    }
+
+    private static uint Mix(uint h, uint v)
+    {
+        var b = (int)(((v ^ h) + 13) & 0x1f);
+        return ((h << (b ^ 31)) | (h >> b)) ^ v;
+    }
+
+    /// <summary>empireutility FUN_180f35730: big-endian 4-byte chunks mixed in turn.</summary>
+    private static uint StringHash(string s)
+    {
+        var d = System.Text.Encoding.ASCII.GetBytes(s);
+        uint h = 0;
+        for (var i = 0; i < d.Length; i += 4)
+        {
+            uint v = 0;
+            for (var j = i; j < Math.Min(i + 4, d.Length); j++) v = v * 256 + d[j];
+            h = Mix(h, v);
+        }
+        return h;
+    }
+
     private byte[] DynamicPreamble()
     {
         var t = _template ?? Preamble;
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
-        w.Write(t, 0, 16);                                    // FASTBIN0, u16 version, 6 bytes
+        w.Write(t, 0, 12);                                    // FASTBIN0, u16 version, u16
+        w.Write(MetaTagChecksum());                           // BMD_META_TAG_COLLECTION::checksum
         w.Write(EnumTypes.Count);
         foreach (var (name, first, count) in EnumTypes)
         {
