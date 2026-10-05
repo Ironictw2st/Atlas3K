@@ -60,7 +60,7 @@ public sealed class GlobalPropsBuilder
     {
         var prefix = $"terrain/campaigns/{mapName}/bmd_objects";
         var entries = new List<(string, byte[])>();
-        var root = BmdBody.EmptyLike(_t.Framing);
+        var root = BmdBody.Dynamic(_t.Framing);
         // several layers can end up in one region (e.g. every layer the map has no region for)
         var byRegion = new List<(string Region, List<Obj> Objects)>();
         foreach (var (region, layerPath) in layers)
@@ -79,10 +79,12 @@ public sealed class GlobalPropsBuilder
             if (outside.Count > 0) Notes.Add($"{outside.Count} objects in {region} reach outside the quadtree root: dropped (as BOB)");
             foreach (var cell in objects.Where(o => CellOf(o) >= 0).GroupBy(CellOf).OrderBy(g => g.Key))
             {
-                var cellBody = BmdBody.EmptyLike(_t.Framing);
-                foreach (var bucket in cell.GroupBy(o => o.Bucket ?? Bucket(o.SeasonMask)).OrderBy(g => g.Key))
+                var cellBody = BmdBody.Dynamic(_t.Framing);
+                // bob_terrain FUN_1800660a0: only ECMesh and ECVFX entities are bucketed by season mask; composite scenes, lights,
+                // sounds, probes and polygon meshes go to bucket 0 (file suffix 16) (checked against BOB 2026-10-04)
+                foreach (var bucket in cell.GroupBy(o => o.Bucket ?? (o.Kind is "prop" or "vfx" ? Bucket(o.SeasonMask) : 16)).OrderBy(g => g.Key))
                 {
-                    var body = BmdBody.EmptyLike(_t.Framing);
+                    var body = BmdBody.Dynamic(_t.Framing);
                     foreach (var o in bucket) Add(body, o);
                     var name = $"{prefix}.{region}.{cell.Key}.{bucket.Key}.bin";
                     entries.Add((name, body.ToBytes()));

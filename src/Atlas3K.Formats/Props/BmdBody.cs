@@ -19,6 +19,14 @@ public sealed class BmdBody
     public List<(string Name, int First, int Count)> EnumTypes { get; } = [];
     public List<string> Seasons { get; } = [];
 
+    /// <summary>BOB's per-body tables (bob_terrain bmd export, checked against BOB 2026-10-04): the preamble lists only
+    /// the enum types and season codes this body's objects use, in first-appearance order (a type with all its values;
+    /// an empty season mask adds every season code in catalog order). When set, EncodeTags / EncodeSeasons grow the tables
+    /// from these catalogs and ToBytes writes the preamble from them.</summary>
+    public IReadOnlyList<(string Name, IReadOnlyList<string> Values)>? TypeCatalog { get; set; }
+    public IReadOnlyList<string>? SeasonCatalog { get; set; }
+    private byte[]? _template;
+
     public ushort NestedVersion { get; set; } = 1;
     public List<byte[]> Nested { get; } = [];
     public byte[] AfterNested { get; set; } = new byte[28];
@@ -177,7 +185,7 @@ public sealed class BmdBody
     {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
-        w.Write(Preamble);
+        w.Write(TypeCatalog is null ? Preamble : DynamicPreamble());
         List(w, NestedVersion, Nested);
         w.Write(AfterNested);
         w.Write(PropsVersion);
@@ -251,6 +259,12 @@ public sealed class BmdBody
         ulong flags = 0, mask = 0;
         foreach (var tag in tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
+            if (TypeCatalog is not null && !EnumValues.Contains(tag) &&
+                TypeCatalog.FirstOrDefault(t => t.Values.Contains(tag)) is { Name: not null } type)
+            {
+                EnumTypes.Add((type.Name, EnumValues.Count, type.Values.Count));
+                EnumValues.AddRange(type.Values);
+            }
             var i = EnumValues.IndexOf(tag);
             if (i < 0 || i >= 64) { unknown?.Add(tag); continue; }
             flags |= 1UL << i;
@@ -264,6 +278,9 @@ public sealed class BmdBody
     public uint EncodeSeasons(string seasonMask)
     {
         var names = seasonMask.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (SeasonCatalog is not null)
+            foreach (var code in names.Length == 0 ? SeasonCatalog : names.Select(n => SeasonCatalog.FirstOrDefault(c => SeasonName(c) == n)))
+                if (code is not null && !Seasons.Contains(code)) Seasons.Add(code);
         uint bits = 0;
         for (var i = 0; i < Seasons.Count; i++)
             if (names.Length == 0 || names.Contains(SeasonName(Seasons[i]))) bits |= 1u << i;
@@ -281,6 +298,59 @@ public sealed class BmdBody
         w.Write(version);
         w.Write(records.Count);
         foreach (var r in records) w.Write(r);
+    }
+
+    /// <summary>An empty body with BOB's per-body preamble: no enum types or seasons until objects use them (catalogs and
+    /// the framing bytes from <paramref name="template"/>).</summary>
+    public static BmdBody Dynamic(BmdBody template)
+    {
+        var body = EmptyFraming(template);
+        var types = new List<(string, IReadOnlyList<string>)>();
+        foreach (var (name, first, count) in template.EnumTypes) types.Add((name, template.EnumValues.GetRange(first, count)));
+        body.TypeCatalog = types;
+        body.SeasonCatalog = template.Seasons.ToList();
+        body._template = template.Preamble;
+        return body;
+    }
+
+    private byte[] DynamicPreamble()
+    {
+        var t = _template ?? Preamble;
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(t, 0, 16);                                    // FASTBIN0, u16 version, 6 bytes
+        w.Write(EnumTypes.Count);
+        foreach (var (name, first, count) in EnumTypes)
+        {
+            w.Write((ushort)1);
+            BmdRecords.WriteStr(w, name);
+            w.Write(count);
+            for (var k = first; k < first + count; k++) BmdRecords.WriteStr(w, EnumValues[k]);
+        }
+        // season list: the template's u16 before it, then this body's codes, then the 47 closing bytes
+        var so = SeasonsOffsetOf(t);
+        w.Write(t, so, 2);
+        w.Write(Seasons.Count);
+        foreach (var c in Seasons) BmdRecords.WriteStr(w, c);
+        w.Write(t, t.Length - 47, 47);
+        w.Flush();
+        return ms.ToArray();
+    }
+
+    /// <summary>Offset of the u16 that precedes the season count in a preamble.</summary>
+    private static int SeasonsOffsetOf(byte[] p)
+    {
+        var span = p.AsSpan();
+        var types = BinaryPrimitives.ReadUInt32LittleEndian(span[16..]);
+        var o = 20;
+        for (var i = 0; i < types; i++)
+        {
+            o += 2;
+            o += 2 + BinaryPrimitives.ReadUInt16LittleEndian(span[o..]);
+            var n = BinaryPrimitives.ReadUInt32LittleEndian(span[o..]); o += 4;
+            for (var v = 0; v < n; v++) o += 2 + BinaryPrimitives.ReadUInt16LittleEndian(span[o..]);
+        }
+        return o;
     }
 
     /// <summary>An empty body with the same preamble and section framing as <paramref name="template"/>.</summary>

@@ -51,6 +51,9 @@ switch (command)
     case "props-cells":
         PropsCells(paths, args.Skip(1).ToArray());
         break;
+    case "gp-bodies":
+        GpBodies(args.Skip(1).ToArray());
+        break;
     case "bmd-stats":
         BmdStats(paths);
         break;
@@ -277,6 +280,21 @@ static void PropsDump(ProjectPaths paths, string[] a)
     Console.WriteLine(target);
 }
 
+// Per-body record counts of a global_props.bin: entry, bytes, nested, props, vfx, probes, lights, polys, sounds, scenes.
+static void GpBodies(string[] a)
+{
+    var gp = Atlas3K.Formats.Props.GlobalProps.Load(a[0]);
+    using var w = new StreamWriter(a[1]);
+    w.WriteLine("entry,bytes,nested,props,vfx,probes,lights,polys,sounds,scenes,types,seasons");
+    foreach (var (name, body) in gp.Bodies())
+    {
+        var b = Atlas3K.Formats.Props.BmdBody.Parse(body);
+        w.WriteLine(string.Join(",", name, body.Length, b.Nested.Count, b.Props.Count, b.Vfx.Count, b.LightProbes.Count, b.PointLights.Count,
+            b.PolyMeshes.Count, b.Sounds.Count, b.CompositeScenes.Count, "\"" + string.Join(" ", b.EnumTypes.Select(t => t.Name)) + "\"", "\"" + string.Join(" ", b.Seasons) + "\""));
+    }
+    Console.WriteLine(a[1]);
+}
+
 // Every prop with the bmd it sits in (for working out BOB's cell / bucket assignment).
 static void PropsCells(ProjectPaths paths, string[] a)
 {
@@ -296,6 +314,19 @@ static void PropsCells(ProjectPaths paths, string[] a)
                 p.VisibleInsideDestruction ? 1 : 0, p.VisibleOutsideDestruction ? 1 : 0, "\"" + p.Seasons + "\"", "\"" + p.Tags + "\"",
                 p.VisibleInUnseenShroud ? 1 : 0, p.VisibleInSeenShroud ? 1 : 0));
         }
+    // the other object kinds, same columns (path = vfx / scene / sound name, empty flags), for cell and bucket comparisons
+    using var o = new StreamWriter(Path.ChangeExtension(target, ".other.csv"));
+    o.WriteLine("kind,region,bmd,path,x,y,z,seasons,tags");
+    string R(float v) => v.ToString("R", ci);
+    foreach (var (region, bmd, objects) in gp.ReadBmdsSeparately(paths.MapName))
+    {
+        foreach (var v in objects.Vfx) o.WriteLine(string.Join(",", "vfx", region, bmd, v.Name, R(v.Transform.X), R(v.Transform.Y), R(v.Transform.Z), "\"" + v.Seasons + "\"", "\"" + v.Tags + "\""));
+        foreach (var c in objects.CompositeScenes) o.WriteLine(string.Join(",", "scene", region, bmd, c.Path, R(c.Transform.X), R(c.Transform.Y), R(c.Transform.Z), "\"" + c.Seasons + "\"", "\"" + c.Tags + "\""));
+        foreach (var l in objects.PointLights) o.WriteLine(string.Join(",", "light", region, bmd, "light", R(l.Transform.X), R(l.Transform.Y), R(l.Transform.Z), "\"" + l.Seasons + "\"", "\"" + l.Tags + "\""));
+        foreach (var s in objects.Sounds) o.WriteLine(string.Join(",", "sound", region, bmd, s.Name, R(s.Transform.X), R(s.Transform.Y), R(s.Transform.Z), "\"\"", "\"\""));
+        foreach (var pr in objects.LightProbes) o.WriteLine(string.Join(",", "probe", region, bmd, "probe", R(pr.Transform.X), R(pr.Transform.Y), R(pr.Transform.Z), "\"\"", "\"\""));
+        foreach (var pm in objects.PolyMeshes) o.WriteLine(string.Join(",", "poly", region, bmd, pm.Material, R(pm.Transform.X), R(pm.Transform.Y), R(pm.Transform.Z), "\"\"", "\"\""));
+    }
     Console.WriteLine(target);
 }
 
