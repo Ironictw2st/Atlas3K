@@ -67,6 +67,7 @@ public partial class App : Application
             : tiles >= 0 ? new CampaignTileWindow(paths, Value(tiles) is { } t ? Path.GetFullPath(t) : null)
             : tileErrors >= 0 ? new CampaignTileWindow(paths, Value(tileErrors) is { } te ? Path.GetFullPath(te) : null, errorMode: true)
             : painter >= 0 ? new MainWindow(paths)
+            : Flag("--campaign-battles") >= 0 ? new CampaignBattlesWindow(paths)
             : new StartWindow(paths);
         if (shotDir is not null)
         {

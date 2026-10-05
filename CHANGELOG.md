@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Campaign battles (battle editor, phase 1)
+- **New window** (start page tile *Campaign battles*, or `Atlas3K.exe --campaign-battles`): the campaign-battle terrain's catchment areas (`battle_locations_map.bin`) on a map, a status per settlement, and fixes. Ported from the BattleMaps `blm` / `blm-ui` tool.
+- **Sources, read only:** the catchments come from the linked packs, then the game's packs (or a loose `.bin`). The campaign regions come from the map's `map_data.esf`. Names and suggested kinds come from an RPFM extract of the mod (*File › Mod data folder…*).
+- **Catchment editor:** select, move and resize areas, draw new ones, or delete them. Every edit is one Ctrl+Z.
+  - The area tab edits the name, redirect, defending faction, box, centre and approaches.
+  - The map shows coverage gaps for the active list on the battle landmass, and settlement dots coloured by status.
+- **Regions tab:** each settlement is *OK*, *No catchment*, *Half covered*, *Wrong type*, *Redirect missing*, *Redirect invalid* or *Off the battle grid*.
+  - **Fix** covers the settlement in both siege lists and redirects new regions to the city, port or resource map their layout or primary building calls for. *Fix all listed* does the same for every listed region.
+  - Redirect targets without an embedded centre prefab are refused, because they load with a hole in the middle.
+  - A campaign map that is not the battle grid's size is reported, not "fixed": every region is marked off the grid. This is the case for the 1478×1133 `3k_190e_expanded_map`.
+- **Redirects and battles_tables:** pick any battle-map folder from the packs. The window checks the battle type against the existing `battles_tables` rows: it reads every pack's binary table without a schema, plus RPFM TSVs.
+  - Rows for redirect folders without one are written as an RPFM TSV, with both `specification` and `map_path` set to `terrain\battles\<folder>\`.
+  - *Its pack ships the battles_tables row* turns the row off for maps that bring their own.
+- **Saving never writes the packs:**
+  - *Save* writes `battle_locations_map.bin` and the row TSV under `output\campaign_battles`.
+  - *Export mod pack…* writes a new `.pack`.
+  - *Write to kit* copies the file to the kit's `working_data`, after a backup.
+  - Writing into the game's `data` folder or into a linked pack is refused. The title shows `*` while there are unsaved changes, and closing asks *Save / Don't save / Cancel*.
+- Info cards on every control and a walkthrough. See `docs/battle_map_editor.md`. The plan for the later phases is in `docs/battle_editor_plan.md`.
+
 ### Walkthroughs
 - **First-run tours:** the first time each window opens (start page, Settings, Scene editor, Tile map, Terrain painter, Build), a guided tour dims the window, rings one panel at a time and explains it in 1-2 sentences. Back / Next / Skip tour; Esc skips, Enter or → goes on. A step whose panel is hidden (a developer-only menu, the Build window's empty state once a project is open) is left out.
   - The start page tour opens with a welcome card on the very first start.

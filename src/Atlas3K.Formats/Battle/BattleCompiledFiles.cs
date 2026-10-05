@@ -84,12 +84,15 @@ public sealed class BattleTileMapFile
     public uint[] W1 { get; init; } = [];
     public uint[] W2 { get; init; } = [];
 
-    public static BattleTileMapFile Read(string dir)
+    public static BattleTileMapFile Read(string dir) =>
+        Read(File.ReadAllBytes(Path.Combine(dir, "tile_map.index")), File.ReadAllBytes(Path.Combine(dir, "tile_map.tiles")));
+
+    /// <summary>From the bytes of tile_map.index and tile_map.tiles (e.g. read from a pack).</summary>
+    public static BattleTileMapFile Read(byte[] idx, byte[] tiles)
     {
-        var idx = File.ReadAllBytes(Path.Combine(dir, "tile_map.index"));
         var w = BinaryPrimitives.ReadInt32LittleEndian(idx.AsSpan(4));
         var h = BinaryPrimitives.ReadInt32LittleEndian(idx.AsSpan(8));
-        var data = File.ReadAllBytes(Path.Combine(dir, "tile_map.tiles")).AsSpan();
+        var data = tiles.AsSpan();
         var n = w * h;
         var w0 = new int[n];
         var w1 = new uint[n];

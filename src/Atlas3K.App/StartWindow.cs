@@ -93,6 +93,8 @@ public sealed class StartWindow : Window
                                 () => new MainWindow(_paths).Show()).Spot("start.painter"));
         tiles.Children.Add(Tile(Theme.Glyph.Build, "Build", "Compile the map natively, run custom steps, pack and install.",
                                 () => BuildWindow.Show(this, _paths)).Spot("start.build"));
+        tiles.Children.Add(Tile(Theme.Glyph.Battle, "Campaign battles", "Where battles start, settlement battle maps and redirects.",
+                                () => CampaignBattlesWindow.Open(this, _paths)).Card("start.battles"));
         tiles.Children.Add(Tile(Theme.Glyph.Settings, "Settings", "Folders, linked mod packs, tile map source and game data.",
                                 OpenSettings).Card("start.settings").Spot("start.settingsTile"));
         left.Children.Add(tiles);
