@@ -40,7 +40,7 @@ The `terry` MCP server also edits the props in the kit's region layers (`<map>.<
 | `global_map` | Global Mesh (`global_map\` part) | native | `global_blend.dds`, `texture_arrays.xml`, `global_map\tile_list.bin` byte-identical |
 | `global_mesh` | Global Mesh (`land_mesh_N`, `sea_mesh_N`) | native (game-valid) | same mesh count and positions (170 land, 125 sea); holes identical (coverage IoU 1.0); land triangles 1.06× vanilla, sea 1.00×; surface-to-lf error equal to vanilla's (p99 ≈ 0.1–0.25); compressed-map holes agree on 97–99.7% of grid points |
 | `rivers` | Terry file (river models, height patches) | native (game-valid) | same 24 rivers and numbering as vanilla (checked by shape); land-mesh river holes left uncovered: 78 px map-wide (vanilla 0, BOB 732) |
-| `global_props` | Terry file (`global_props.bin`) | native (game-valid) | every vanilla prop present; tags, decal, snow/destruction/shroud flags 100%, seasons 99.9%, season bucket 99.9%, quadtree cell 92.8% (with model radius; since 2026-10-04 cells use position only, see below); 8,420 bodies (vanilla 8,891). main190 checked in game 2026-10-04 |
+| `global_props` | Terry file (`global_props.bin`) | native (near byte-identical to BOB) | main190 against BOB (2026-10-05): 12,429 of 12,461 common bodies byte-identical; BOB has 4 more entries (12,465). Remaining differences are listed under "global_props.bin vs BOB" below. main190 checked in game 2026-10-04 |
 | `camera_heightmap` | Generate Camera Height Map | native (close, not byte-identical) | correlation 0.94, 73% of pixels within 0.1 units |
 | `trees` | Campaign Trees (`trees.campaign_tree_list`) | native | byte-identical when the CampaignTree map is the one decoded from vanilla (`trees-decode`) and heights are reused; heights computed from scratch (`TileHfHeight`): 205,765 of 205,767 vanilla trees bit-exact |
 | `lookup` | Texture / Convert lookup texture | native | byte-identical to BOB (vanilla's minimap differs in 304 bytes because of CA's own file) |
@@ -189,6 +189,46 @@ The decompiled algorithm is written up in `docs/bob_re_global_mesh.md`. Native v
   - Entry order: each cell's buckets, then the cell; the root comes last.
 
 **Round trip:** `BmdBody` parses every section into raw records, and all 8,891 vanilla bodies re-encode byte for byte.
+
+#### global_props.bin vs BOB (main190, 2026-10-05)
+
+Reference: `output/bob_runs/20261004_230523_frida_trees_main190/bob_terrain_out/global_props.bin`. Re-run with
+`research/props/run_parity.sh` (frozen kit in `output/props_parity/ak`; `gp-diff` / `gp-body` / `gp-props-raw` CLI).
+BOB's rules, from the decompiled bob_terrain / qttoolutility / empireutility / calibs code and checked on the reference:
+- **Quadtree cell:** the deepest of 7 levels (first child NW, NE, SW, SE) holding the object's box.
+  - Root: the map bounds' x range by the hex grid's z extent ((rows + 0.5) × row step).
+  - Boxes: ECMesh entities use the model AABB through the world matrix, with [-1, 1]^3 for .wsmodel. Point lights use radius × mean column length × 0.5. Everything else is a point.
+  - Boxes outside the root are dropped.
+- **Buckets:** only ECMesh and ECVFX entities are season-bucketed. Decals, scenes, lights, sounds, probes and polygon meshes use 16.
+- **Record order:** ascending entity id in every section (BOB iterates the scene by id).
+- **Preamble:** only the enum types and season codes that are used.
+  - They're registered in first-use order with composite scenes first, then lights, props and VFX (each by id).
+  - An empty season mask registers every code in catalog order.
+  - Header u32 at offset 12 = `BMD_META_TAG_COLLECTION::checksum`: every enum value's `FUN_180f35730` hash mixed in preamble order, 0 without types.
+- **World matrix:** `QTU::ECTransform` bit for bit (`QtuTransform.cs`).
+  - Euler degrees × π × (1/180) → half angles → a quaternion. The sine is qttoolutility's own vector sine, and cos = sin(|x| + π/2).
+  - Then `update_transform`'s float formula. A -0 position component is written +0.
+  - Exact on 94,347 of 94,348 prop matrices.
+- **Record fields:**
+  - Light colour = byte × (1/255); light radius = radius × mean column length.
+  - Prop byte 79 (animated) = 1 when the model path has `_anim`.
+  - Decal: bytes 80..83 = parallax_scale, 102 = apply_to_terrain, 103 = render_above_snow, 104 = apply_to_objects.
+  - Composite scene last byte = autoplay.
+  - Sound cloud points = float(position) + float(offset).
+- **Entry order:** cells ascending. Inside a cell, BOB's region order isn't matched; native uses the lowest entity id.
+  - Region bodies hang off a CA hash map keyed by region name (`CA::murmur_hash` = MurmurHash3 x86_32, seed 0x4a545eed; buckets h % (n − 1)). That ordering theory didn't reproduce the order (`research/props/region_hash_order.py`).
+
+**Remaining differences:**
+
+| Difference | Bodies | Cause |
+|---|---|---|
+| Entry order | 3,475 of 12,461 common entries | region order inside a cell (above) |
+| River model numbers in prop paths | 25 | BOB numbers `river_N` by ECRiver entity id descending; the native rivers step numbers by entity name (vanilla's numbering). Changing it means changing the rivers step too |
+| Entries only in BOB | 4: `3k_main_sea_lake.3396(.31)`, `3k_main_reg_non_playable.5397(.16)` | 2 water lilies BOB puts one level deeper (cell level 6 vs 5): model AABB differs slightly from BOB's `WarscapeModelData::aabb` |
+| Prop counts | 4 | the same two water lilies and their neighbour cells |
+| Props differ / paths reordered | 3 / 2 | a decal inside a prefab: BOB orders it by a different id than the expanded inner entity |
+| Polygon mesh | 1 (`3k_main_reg_non_playable.0.16`) | body 2,375 bytes in BOB vs 2,658 native: triangulation / vertex set differs |
+| Root `bmd_objects.bin` | 1 | follows the 4 BOB-only entries |
 
 **Record templates:** new records start from vanilla's most common record of each type (read from `global_props.bin` in the game packs), with the layer's fields replaced:
 - path, transform, meta tags (flags plus a mask covering whole enum types) and season mask
