@@ -10,10 +10,10 @@ SCRIPT, AK, KPATH, ACTION, LABEL = sys.argv[1:6]
 OUT = HERE / "frida_out"; OUT.mkdir(exist_ok=True)
 log = open(OUT / f"{LABEL}.jsonl", "w", encoding="utf-8")
 pre = {p.pid for p in psutil.process_iter(["name"]) if (p.info["name"] or "").lower().startswith("bob")}
-import os
+import os  # FRIDA_ALLOW_HELPERS='a;b': gui-mode helper actions BOB may add (bob_run_action allow_helpers)
 if "--gui" in sys.argv[6:]:                      # GUI mode (Terry file is only found there), like the build scripts
     code = ("import sys, json; sys.path.insert(0, '.'); import server; f = getattr(server.bob_run_action, 'fn', server.bob_run_action); "
-            f"print(json.dumps(f({KPATH!r}, {ACTION!r}, timeout=3400, mode='gui', capture_label={LABEL!r}), indent=1, default=str))")
+            f"print(json.dumps(f({KPATH!r}, {ACTION!r}, timeout=3400, mode='gui', capture_label={LABEL!r}, allow_helpers={[h for h in os.environ.get('FRIDA_ALLOW_HELPERS','').split(';') if h]!r}), indent=1, default=str))")
     proc = subprocess.Popen([sys.executable, "-c", code], cwd=r"Z:/Claude/TerryClone/tools/bob_mcp", env={**os.environ, "BOB_AK": AK},
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 else:
