@@ -1,6 +1,6 @@
 # Battle map editor (campaign-battle terrain)
 
-TerryClone's battle mode edits the **BOB sources** of a campaign-battle terrain: the land that campaign battles are
+Atlas3K's battle mode edits the **BOB sources** of a campaign-battle terrain: the land that campaign battles are
 composed from, picked by `campaign_map_playable_areas.terrain_folder` (vanilla: `terrain/battles/3k_main_map/`).
 CA ships only the compiled files. The sources were reverse-engineered in the BattleMaps project; the formats are in
 `Z:\Claude\BattleMaps\docs\bob-battle-terrain-sources.md`, and a ready-made source package for vanilla `3k_main_map`
@@ -10,7 +10,7 @@ is in `Z:\Claude\BattleMaps\out\share\3k_main_map_bob_sources`.
 
 | Way | How |
 |---|---|
-| Directly | `TerryClone.App.exe --battle "<kit>\raw_data\terrain\battles\<map>"` (only the battle editor opens) |
+| Directly | `Atlas3K.App.exe --battle "<kit>\raw_data\terrain\battles\<map>"` (only the battle editor opens) |
 | From the campaign editor | *File → Open battle project…*, then pick the folder holding the `.terry` |
 
 A project folder holds:
@@ -70,19 +70,19 @@ choice within mixed groups.
 
 ## Code
 
-- `TerryClone.Formats/Battle/`
+- `Atlas3K.Formats/Battle/`
   - `BattleTileDatabase` (sets, climates, tiles, masks)
   - `BattlePalette`
   - `ExplicitTilesFile`
   - `BattleCatchmentLayer` (read/write layer entities)
   - `BattleCompiledFiles` (compiled `battle_locations_map.bin`, `tile_map.tiles` — the path index is **1-based**)
-- `TerryClone.Core/Battle/`
+- `Atlas3K.Core/Battle/`
   - `BattleProject` (load / changed parts / save)
   - `BattleTools` (paint, fill, height adapter)
   - `BattleObjects` (explicit-tile footprints and conflicts, list undo)
   - `BattleRenderer`
   - `BobBattleBuild` (rules, headless BOB, compare)
-- `TerryClone.App/`
+- `Atlas3K.App/`
   - `BattleWindow` (+ `.Objects.cs`)
   - `BattleMapView`
   - `BattleInteractions`

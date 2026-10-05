@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Compiled-data root for 3k_guandu_map so TerryClone can open it (--map 3k_guandu_map --root <this root>).
+"""Compiled-data root for 3k_guandu_map so Atlas3K can open it (--map 3k_guandu_map --root <this root>).
 
-  terrain/campaigns/3k_guandu_map/lf_height_map.*, lf_sea_height_map.*, climate_map.cm  <- TerryClone.Cli compile-map
+  terrain/campaigns/3k_guandu_map/lf_height_map.*, lf_sea_height_map.*, climate_map.cm  <- Atlas3K.Cli compile-map
   terrain/campaigns/3k_guandu_map/global_map/global_blend.dds   vanilla blend, nearest crop/scale (same mapping)
   terrain/campaigns/3k_guandu_map/global_map/texture_arrays.xml vanilla copy (same texture groups)
   campaign_maps/3k_guandu_map/display/trees/trees.campaign_tree_list  trees mapped into the new world, outside dropped
@@ -51,7 +51,7 @@ def trees():
 
 def vanilla_ranges():
     """compile-map normalises each map to its own min-max (as BOB does; the .compressed_map header carries the range).
-    TerryClone reads the .dds values directly, so rewrite the two .dds in VANILLA's ranges instead
+    Atlas3K reads the .dds values directly, so rewrite the two .dds in VANILLA's ranges instead
     (land 0..65535 = identity, sea source 0..44217), which keeps land/sea comparable exactly as on the vanilla map."""
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = None
@@ -66,6 +66,6 @@ def vanilla_ranges():
 
 if __name__ == "__main__":
     blend(); trees()
-    cli = r"Z:/Claude/TerryClone/src/TerryClone.Cli/bin/Debug/net9.0/TerryClone.Cli.exe"
+    cli = r"Z:/Claude/TerryClone/src/Atlas3K.Cli/bin/Debug/net9.0/Atlas3K.Cli.exe"
     subprocess.run([cli, "--map", NAME, "compile-map", "--out", ROOT], check=True)
     vanilla_ranges()

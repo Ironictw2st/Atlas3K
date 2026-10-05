@@ -10,7 +10,7 @@ generalised to the warp). Output: research/main190/map_extras/campaign_maps/3k_d
    nomad regions are drawn in the painted border colour
  3k_main_lookup.{tga,dds}, 3k_main_lookup_minimap.tga: BOB's conversion of CAIME's lookup, renamed to the names
    campaign_map_playable_areas references
- camera_heightmap.png: TerryClone build-campaign camera_heightmap (tile-map size, height_scale tEXt)
+ camera_heightmap.png: Atlas3K build-campaign camera_heightmap (tile-map size, height_scale tEXt)
  display/trees/trees.campaign_tree_list: 190E's tree instances moved with the warp (heights unchanged: the
    terrain was warped the same way)
 """
@@ -189,9 +189,9 @@ def warp_painted(src_img, size, names, f, shade, hn, is_palette=False):
 
 def trees():
     """2026-10-02: the tree list is built natively from the decoded-vanilla CampaignTree raster (trees_x15.py writes it
-    into terrain/ and the kit) - `TerryClone.Cli build-campaign --steps rasters,trees`; trees_190e_moved() is the old way."""
+    into terrain/ and the kit) - `Atlas3K.Cli build-campaign --steps rasters,trees`; trees_190e_moved() is the old way."""
     import subprocess, shutil
-    cli = r"Z:/Claude/TerryClone/src/TerryClone.Cli/bin/Release/net9.0/TerryClone.Cli.exe"
+    cli = r"Z:/Claude/TerryClone/src/Atlas3K.Cli/bin/Release/net9.0/Atlas3K.Cli.exe"
     ak = r"C:/Program Files (x86)/Steam/steamapps/common/Total War THREE KINGDOMS/assembly_kit_190E"
     outw = HERE / "build_newmap"
     r = subprocess.run([cli, "build-campaign", "--steps", "rasters,trees", "--ak", ak, "--map", "3k_190e_expanded_map", "--out", str(outw)],

@@ -54,11 +54,14 @@ KOREA_FIR_TO_KATSURA = 0.5
 FIR = {4: 7, 6: 14}
 # V2 quilting (see the docstring)
 QUILT = True
-QP, QOV = 12, 4                            # window / overlap (hexes)
-QK, QTOL, QSEED = 48, 0.06, 20261004
-QW_OV, QW_G, QW_D, QW_RE = 1.0, 1.0, 0.4, 0.03
-KOREA_NE_COVER = 0.55                      # Manchurian / north Korean woods stay dense (current 57.8%, vanilla 43%)
+QP, QOV = 16, 6                            # window / overlap (hexes)
+QK, QTOL, QSEED = 128, 0.05, 20261004
+QW_OV, QW_G, QW_D, QW_RE = 1.5, 1.0, 0.4, 0.03
+REF_TREE = "tree_190e_backup_20261002.tif"  # frozen 190E-era raster (terrain/): how much wood each area should have
+REF_SIGMA = 6.0                            # hexes: the reference cover is smoothed, the placement comes from the terrain
 NPOLD_ROW = 830                            # = blend_v2.NPOLD_ROW
+SPG = np.full(256, 3, np.int64)            # species group: 0 conifer, 1 broadleaf, 2 poplar, 3 decor (rock / flower / farm)
+SPG[[4, 6]] = 0; SPG[[0, 1, 2, 3, 5, 7, 8, 10, 14, 15]] = 1; SPG[[9, 16]] = 2
 
 
 def hash01(w, h, salt):
@@ -218,7 +221,24 @@ def quilt_forests(out, f, names, w, h, cut, log=print):
         if not p.exists(): continue
         for r, runs in json.load(open(p, encoding="utf-8"))["zone_rle"].items():
             for s0, n, z in runs: Z[int(r), s0:s0 + n] = z
-    E = suit.copy()
+    # outside the plan zones: as much wood as the frozen 190E-era raster had around (REF_SIGMA hexes), placed by terrain
+    lw = ndi.gaussian_filter(land.astype(np.float32), REF_SIGMA) + 1e-6
+    ls = ndi.gaussian_filter(suit * land, REF_SIGMA) / lw
+    ref_p = HERE / "terrain" / REF_TREE
+    ref = None
+    if ref_p.exists():
+        ra = np.array(Image.open(ref_p))
+        if ra.shape == (2 * h + 1, 2 * w):
+            from trees_x15 import hexvals
+            ref = hexvals(ra, w, h)
+    if ref is not None:
+        rcov = ndi.gaussian_filter(((ref != NO_TREE) & land).astype(np.float32), REF_SIGMA) / lw
+        E = suit * rcov / np.maximum(ls, 0.05)
+        rsp = np.stack([ndi.gaussian_filter(((SPG[ref] == k) & (ref != NO_TREE) & land).astype(np.float32), REF_SIGMA) for k in range(4)])
+        rsp = rsp / np.maximum(rsp.sum(0, keepdims=True), 1e-6)
+    else:
+        log("trees_polish Q2: no reference raster", ref_p, "- vanilla terrain rates instead")
+        E = suit.copy(); rsp = np.full((4, h, w), 0.25, np.float32)
     A = (code == BV.NOMAD) & land & (f["climate"] == 0)
     for z in set(Z[dom].tolist()) - {""}:
         for cl in np.unique(f["climate"][dom & (Z == z)]):
@@ -226,7 +246,6 @@ def quilt_forests(out, f, names, w, h, cut, log=print):
             tgt = NOMAD_ARID_TARGET * 1.15 if (m & A).sum() > m.sum() / 2 else ZONE_TARGET.get(z, None)
             if tgt is None or m.sum() < 20: continue
             E[m] = suit[m] * tgt / max(float(suit[m].mean()), 1e-3)
-    m = dom & (code == BV.KNE); E[m] = suit[m] * KOREA_NE_COVER / max(float(suit[m].mean()), 1e-3) if m.any() else E[m]
     E = np.clip(E, 0, 0.95).astype(np.float32)
     src = out.copy(); canvas = out
     pres = (src != NO_TREE)
@@ -235,17 +254,20 @@ def quilt_forests(out, f, names, w, h, cut, log=print):
     wat = ~land
     chans = [(van & pres).astype(np.float32), van.astype(np.float32), wat.astype(np.float32),
              (Tf["dr"] <= 1.5).astype(np.float32), (Tf["dw"] <= 1.6).astype(np.float32)] + [(sb == b).astype(np.float32) for b in range(5)]
+    chans += [(van & pres & (SPG[src] == k)).astype(np.float32) for k in range(4)]                       # 10-13 species
     ys = np.arange(0, h - n, 2); xs = np.arange(0, w - n, 2)
     gy, gx = np.meshgrid(ys, xs, indexing="ij"); gy, gx = gy.ravel(), gx.ravel()
     S = np.stack([ndi.uniform_filter(ch, n, mode="constant", origin=-(n // 2))[gy, gx] for ch in chans], 1)
     ok = (S[:, 1] >= 0.8) & (S[:, 1] + S[:, 2] >= 0.97)
     cy, cx, S = gy[ok], gx[ok], S[ok]
     ccov = S[:, 0] / np.maximum(S[:, 1], 1e-3); cslope = S[:, 5:10]; criv, cwat = S[:, 3], S[:, 4]
+    csp = S[:, 10:14] / np.maximum(S[:, 10:14].sum(1, keepdims=True), 1e-6)
     crow = (cy + n // 2).astype(np.float32); ccl = f["climate"][cy + n // 2, cx + n // 2]
     creg = f["region"][cy + n // 2, cx + n // 2]
     used = np.zeros(len(cy), np.float32)
     rng = np.random.default_rng(QSEED)
-    nz = (0.6 + 0.4 * (smooth_noise((h + n, w + n), 3, QSEED + 1) + 1) / 2).astype(np.float32)
+    v = smooth_noise((h + n, w + n), 3, QSEED + 1) + 0.5 * smooth_noise((h + n, w + n), 8, QSEED + 2)
+    nz = np.exp(1.2 * v / v.std()).clip(0.15, 4.0).astype(np.float32)          # wide range: irregular seams
     filled = np.zeros((h, w), bool)
     rr_, cc_ = np.nonzero(dom)
     wins = []
@@ -264,8 +286,10 @@ def quilt_forests(out, f, names, w, h, cut, log=print):
         tc = float(E[sl][dm].mean()); tsl = np.bincount(sb[sl][dm], minlength=5)[:5] / cnt
         triv = float((Tf["dr"][sl][dm] <= 1.5).mean()); twat = float((Tf["dw"][sl][dm] <= 1.6).mean())
         trow = float(r0 + n // 2); tcl = int(np.bincount(f["climate"][sl][dm]).argmax())
+        tsp = rsp[:, sl[0], sl[1]][:, dm].mean(1)
         dc = (3.0 * np.abs(ccov - tc) + np.abs(cslope - tsl).sum(1) + 0.5 * np.abs(criv - triv) + 0.5 * np.abs(cwat - twat)
-              + 1.5 * np.clip((np.abs(crow - trow) - 120) / 300, 0, 1) + 0.3 * (ccl != tcl))
+              + 1.5 * np.clip((np.abs(crow - trow) - 120) / 300, 0, 1) + 0.3 * (ccl != tcl)
+              + 1.0 * np.minimum(tc * 4, 1) * np.abs(csp - tsp).sum(1))
         k = min(QK, len(dc) - 1); idx = np.argpartition(dc, k)[:k]
         blocks = np.stack([src[a:a + n, b:b + n] for a, b in zip(cy[idx], cx[idx])])
         dsuit = np.stack([suit[a:a + n, b:b + n] for a, b in zip(cy[idx], cx[idx])])
@@ -281,7 +305,8 @@ def quilt_forests(out, f, names, w, h, cut, log=print):
         border = np.zeros((n, n), bool); border[0, :] = border[-1, :] = border[:, 0] = border[:, -1] = True
         must_old = ~dm | (border & fil)
         wpx = np.where(wat[sl], 0.2, 1.0).astype(np.float32)
-        take = graph_cut(np.where(op, old, 255), np.where(bp[j], new, 255), must_old, must_new, nz[sl], wpx)
+        # seam cost: tree / no tree mismatch (1) + species (0.3); seams prefer existing wood edges
+        take = graph_cut(op, bp[j], must_old, must_new, nz[sl], wpx, d=mis[j])
         wr = take & dm
         old[wr] = new[wr]; fil |= dm
         used[idx[j]] += 1; info["Q2_windows"] += 1
@@ -529,8 +554,14 @@ def report(B0, B1, chain, base, out_dir):
     rerun_base = dif(base[0], base[1]); Mlast = metrics(chain[-1], G)
     res = dict(before=M0, after=M1, after_build4=Mlast, hexes_changed_by_group=changed, rerun_changes_by_group=rerun,
                rerun_changes_unpolished_pipeline=rerun_base, polish=B1["polish"], rerun_polish=[c["polish"] for c in chain[1:]])
-    json.dump(res, open(out_dir / "metrics.json", "w"), indent=1)
-    res["current_file"] = Mc; json.dump(res, open(out_dir / "metrics.json", "w"), indent=1, default=str)
+    # vanilla by climate (the fair reference for arid steppe / cold mountains / temperate woods)
+    Gv = G.copy(); cn = {0: "arid", 1: "cold", 4: "temperate"}
+    for cl, nm in cn.items(): Gv[(G == "vanilla") & (f["climate"] == cl)] = "vanilla_" + nm
+    global REPORT_GROUPS
+    rg0 = REPORT_GROUPS; REPORT_GROUPS = tuple("vanilla_" + nm for nm in cn.values())
+    Mv = metrics(B1, Gv); REPORT_GROUPS = rg0
+    res["current_file"] = Mc; res["vanilla_by_climate"] = Mv
+    json.dump(res, open(out_dir / "metrics.json", "w"), indent=1, default=str)
     keys = ("cover", "cover_arid", "cover_cold", "cover_temperate", "subtrop_share_row700", "mean_patch", "patch_area_weighted",
             "edge_share", "open_edge_share", "roundness_median", "fir_share")
     lines = ["group      metric                 unpolished  current(game)    after  after 4 builds   vanilla"]
@@ -543,6 +574,9 @@ def report(B0, B1, chain, base, out_dir):
             if k in M0[g]:
                 lines.append(f"{g:10s} {k:22s} {fm(k, M0[g][k])}    {fm(k, Mc[g].get(k))} {fm(k, M1[g][k])} {fm(k, Mlast[g][k])}"
                              f"        {fm(k, M1['vanilla'].get(k))}")
+    for g, d in Mv.items():
+        lines.append(f"{g:18s} " + "  ".join(f"{k} {fm(k, d.get(k)).strip()}" for k in ("cover", "mean_patch", "patch_area_weighted",
+                                                                                    "edge_share", "open_edge_share", "roundness_median")))
     lines.append(f"hexes changed by polish per group: {changed}")
     for i, r in enumerate(rerun): lines.append(f"build {i + 2} vs build {i + 1} (input = previous output) changes: {r}")
     lines.append(f"unpolished pipeline, build 2 vs 1 changes (pre-existing top-up ratchet): {rerun_base}")
@@ -558,7 +592,7 @@ def report(B0, B1, chain, base, out_dir):
     else:
         # vanilla reference | current (game) | after, same scale (3 px / hex), north up, hillshade under the woods
         hx = lambda x, z: (int(round(h - 1 - (874.18 - z) / 0.0964 / 8)), int(x / 0.0834 / 8))     # world -> (row, col)
-        van_arid, van_temp = hx(375, 790), hx(560, 600)
+        van_arid, van_temp = hx(362.5, 695.0), hx(560, 600)      # vanilla Shuofang, vanilla Hebei
         hr, hc = np.nonzero(G == "hexi")
         crops = {"ordos_430_705": (hx(430, 705), van_arid), "north_480_760": (hx(480, 760), van_arid),
                  "steppe_north_band": ((h - 1 - 80, 900), van_temp), "korea_ne": ((1000, 1300), (930, 1100)),

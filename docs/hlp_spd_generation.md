@@ -15,7 +15,7 @@ both Guandu and 190E). Today the only generator is the game itself, driven by RP
 - It is launched through the game, so it can't be parallelised, split or resumed, and it prints nothing while it
   runs. Its intermediate results can't be inspected either.
 
-A native generator (TerryClone, C#) could build these files in parallel in seconds, and would slot in as another
+A native generator (Atlas3K, C#) could build these files in parallel in seconds, and would slot in as another
 `build-campaign` step next to rasters / global_map / camera_heightmap (see `native_campaign_build.md`).
 
 ## What the files are (observed)
@@ -55,7 +55,7 @@ is embarrassingly parallel: 16 cores would give about 16× on its own, before an
 
 ## Plan
 
-**Phase 1 — ESF (ABCA) reader/writer in `TerryClone.Formats`.**
+**Phase 1 — ESF (ABCA) reader/writer in `Atlas3K.Formats`.**
 Round-trip byte-exact on all four files we have (vanilla + 190E HLP/SPD) and on `map_data.esf`. Needed anyway;
 the repo has no ESF code yet.
 

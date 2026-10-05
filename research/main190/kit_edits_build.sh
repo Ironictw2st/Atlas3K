@@ -1,5 +1,5 @@
 #!/bin/bash
-# Native rebuild from the kit AS IT IS (2026-10-04): for edits made directly in the kit with TerryClone (entity-edit,
+# Native rebuild from the kit AS IT IS (2026-10-04): for edits made directly in the kit with Atlas3K (entity-edit,
 # lake-build, sea-carve, map-audit batches). Unlike relief_build.sh / props_only.sh it does NOT run ranges_relief /
 # ak_main or copy layers + height into the kit, which would overwrite those edits.
 # native rasters, tile list, global map + meshes, rivers, global_props, camera_heightmap, trees -> tree filter ->
@@ -13,7 +13,7 @@ K="/c/Program Files (x86)/Steam/steamapps/common/Total War THREE KINGDOMS/assemb
 NEW=3k_190e_expanded_map; WT="$K/working_data/terrain/campaigns/$NEW"; RT="$K/raw_data/terrain/campaigns/$NEW"
 PN='!!190_expanded_region_test_main190_native.pack'
 P="C:\\Program Files (x86)\\Steam\\steamapps\\common\\Total War THREE KINGDOMS\\data\\$PN"
-CLI=/z/Claude/TerryClone/src/TerryClone.Cli/bin/Release/net9.0/TerryClone.Cli.exe
+CLI=/z/Claude/TerryClone/src/Atlas3K.Cli/bin/Release/net9.0/Atlas3K.Cli.exe
 LAKES=/z/Claude/TerryClone/output/lake_assets/$NEW/rigidmodels/campaign/props/lakes
 add() { for i in 1 2 3 4 5; do /z/RPFM/rpfm_cli.exe --game three_kingdoms pack add -p "$P" "$@" >/tmp/kb_add.log 2>&1 && { echo "  added ${2##*;}"; return 0; }; sleep 20; done; echo "  FAILED $2"; tail -3 /tmp/kb_add.log; exit 1; }
 KW="$(cygpath -w "$K/working_data")"; WC="$K/working_data/campaign_maps/$NEW"

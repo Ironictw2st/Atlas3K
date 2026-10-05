@@ -409,13 +409,14 @@ def mismatch(a, b):
     return (a != b) * (1.0 - 0.65 * (FAMX[a] == FAMX[b]))
 
 
-def graph_cut(old, new, must_old, must_new, noise, wpx):
-    """Kwatra min-cut on a (P, P) window: True = take new. Edge cost = mismatch of old vs new at both px (x noise)."""
+def graph_cut(old, new, must_old, must_new, noise, wpx, d=None):
+    """Kwatra min-cut on a (P, P) window: True = take new. Edge cost = mismatch of old vs new at both px (x noise),
+    lowered along existing label edges of old / new. d: optional precomputed per-px mismatch (other label sets)."""
     from scipy.sparse import csr_matrix
     from scipy.sparse.csgraph import maximum_flow, breadth_first_order
     ph, pw = old.shape; nn = ph * pw; S, T = nn, nn + 1
     if not must_old.any(): return np.ones(old.shape, bool)
-    d = mismatch(old, new).astype(np.float32) * wpx
+    d = (mismatch(old, new) if d is None else d).astype(np.float32) * wpx
     idx = np.arange(nn).reshape(ph, pw)
     a, b, c = [], [], []
     for sa, sb in (((slice(None), slice(0, -1)), (slice(None), slice(1, None))),

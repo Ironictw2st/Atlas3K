@@ -1,15 +1,15 @@
 # Native campaign build (BOB replacement)
 
-TerryClone rebuilds BOB's campaign-map outputs itself, straight from the assembly-kit sources. Intermediate files are
+Atlas3K rebuilds BOB's campaign-map outputs itself, straight from the assembly-kit sources. Intermediate files are
 read from disk, so no pack import is needed between steps. Plan: `~/.claude/plans/we-have-a-bob-snazzy-valiant.md`.
 
 ## Running it
 
 | Way | Command |
 |---|---|
-| CLI | `TerryClone.Cli build-campaign [--map <map>] [--steps a,b] [--out <dir>] [--json]` |
-| CLI | `TerryClone.Cli diagnose-campaign [--map <map>]`: per-step readiness |
-| CLI | `TerryClone.Cli parity <builtDir> <referenceDir> [--mask-junk]`: byte comparison |
+| CLI | `Atlas3K.Cli build-campaign [--map <map>] [--steps a,b] [--out <dir>] [--json]` |
+| CLI | `Atlas3K.Cli diagnose-campaign [--map <map>]`: per-step readiness |
+| CLI | `Atlas3K.Cli parity <builtDir> <referenceDir> [--mask-junk]`: byte comparison |
 | MCP | `terry` server (`tools/terry_mcp/server.py`): `build_campaign`, `build_step`, `diagnose`, `parity_check`, `list_outputs`, `rebuild_tool` (prop tools below) |
 
 - **Output location:** by default the output goes to `output/compiled/<map>/`, laid out like `working_data`: `terrain/campaigns/<map>/…` and `campaign_maps/<map>/…`.
@@ -229,7 +229,7 @@ Decompiled from `QTU::CampaignTreeGenerator` / `generate_campaign_tree_list_for`
 - **Seasons:** each variant row sets its season's model (later rows win; no/unknown season = default model). Written: the `seasons_tables.index` of each season with a model, ascending, then 0xFFFFFFFF if the default model is set. Flag byte is always 1.
 - **Type order:** a CA_STD hash map keyed by `CA::murmur_hash` (= MurmurHash3 x86_32, seed 0x4A545EED). Starts at 1 bucket, grows to 2b + 1 when count + 1 > b; new keys are appended to their bucket; a rehash re-buckets in list order. The file lists types in that list order, inserted in row-major first appearance (`CaHash.HashMapOrder`).
 - **Header:** version 5, world bounds (0, 0, width, height), type count.
-- **Reverse:** `TerryClone.Cli trees-decode [--list] [--out]` maps a compiled list back to hex colours and heights, checks that regenerating is byte-identical, and writes the AK CampaignTree TIF (1784 × 1405, 2×2 px per hex, palette = sorted DB colours, 19 = no tree).
+- **Reverse:** `Atlas3K.Cli trees-decode [--list] [--out]` maps a compiled list back to hex colours and heights, checks that regenerating is byte-identical, and writes the AK CampaignTree TIF (1784 × 1405, 2×2 px per hex, palette = sorted DB colours, 19 = no tree).
 - **Vanilla AK caveat:** neither the kit's `3k_dlc07_main_map.tree.*.tif` (no trees) nor `tree_new` (90% of hexes) reproduces the shipped list. Use the decoded TIF.
 
 ### camera_heightmap.png
@@ -249,12 +249,12 @@ Not needed for campaign maps. dlc07 ships none, and the game uses the file as th
 
 ## Code
 
-- **Formats** (`src/TerryClone.Formats/`):
+- **Formats** (`src/Atlas3K.Formats/`):
   - `Models/RigidModelV2.cs`: terrain-tile and river RMV2 writer.
   - `Models/RigidModelGeometry.cs`: any RMV2, positions and indices for one LOD.
   - `Models/WsModel.cs`
   - `Maps/TileList.cs`, `Maps/LookupTexture.cs`, `Maps/HeightPatchCollection.cs`, `Maps/Png16.cs`
   - `TerrainDds.WriteBlend`
-- **Core** (`src/TerryClone.Core/Campaign/`): `CampaignBuildPipeline`, `BuildSteps` (rasters, global_map, lookup, pending steps), `CameraHeightmapStep`, `Parity`.
-- **Tests:** `src/TerryClone.Tests/CampaignBuildTests.cs`.
+- **Core** (`src/Atlas3K.Core/Campaign/`): `CampaignBuildPipeline`, `BuildSteps` (rasters, global_map, lookup, pending steps), `CameraHeightmapStep`, `Parity`.
+- **Tests:** `src/Atlas3K.Tests/CampaignBuildTests.cs`.
 - **Research:** `research/derived_maps/` holds the camera heightmap and lf_normal analysis and the mesh study. Ghidra decompiles of the kit DLLs are in `research/bob_re/`. Ghidra and JDK 21 are installed portably in `Z:\Claude\Tools`.

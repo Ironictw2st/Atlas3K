@@ -264,7 +264,7 @@ the game: use `Z:\Claude\Headless\HOLD` plus messages. 3K TWeak locks Movie pack
      second monitor; can be delegated via uiclick.ps1).
    - The CLI detaches, so wait for CAIME.exe to exit. Check output timestamps, because stale pathfinding.ppd and
      lookup files have shipped before.
-8. **lf maps:** `dotnet run --project src/TerryClone.Cli -- build-campaign --steps rasters` (+`camera_heightmap`).
+8. **lf maps:** `dotnet run --project src/Atlas3K.Cli -- build-campaign --steps rasters` (+`camera_heightmap`).
    Copy `lf_height_map.*` / `lf_sea_height_map.*` into the **kit's** `working_data/terrain/campaigns/<map>/` before
    Tilemap.
 9. **BOB** (one action at a time; `BOB_AK` / `run_bob.py`; close any leftover BOB window):

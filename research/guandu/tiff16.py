@@ -1,4 +1,4 @@
-"""16-bit greyscale TIFF writer matching TerryClone's TiffMap.WriteGray16 (the layout Terry reads correctly):
+"""16-bit greyscale TIFF writer matching Atlas3K's TiffMap.WriteGray16 (the layout Terry reads correctly):
 little-endian, uncompressed, one row per strip, SamplesPerPixel=1, SampleFormat=UINT, PlanarConfig=contig.
 PIL's writer (one big strip, no SampleFormat/SamplesPerPixel) made Terry read the heights wrongly."""
 import struct

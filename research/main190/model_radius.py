@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Horizontal footprint radius (max |xz| of LOD0 vertices, the same as TerryClone GlobalPropsBuilder.Radius) of every
+"""Horizontal footprint radius (max |xz| of LOD0 vertices, the same as Atlas3K GlobalPropsBuilder.Radius) of every
 campaign mountain / rock / vegetation / area-of-interest model extracted from the vanilla models.pack into
 korea_ref/models/ -> korea_ref/model_radius.json (key: lower-case pack path; .wsmodel keys map to their geometry)."""
 import glob, json, os, re, sys

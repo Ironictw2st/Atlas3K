@@ -106,7 +106,7 @@ python research\bob_compare.py output\bob_runs\<ts>_<step>\terrain Vanilla\Map\t
 
 `report.md` lists every file as *match*, *differs* (decoded rasters show pixel counts and value fits) or *only in one side*. Files from steps you haven't run show as *only in vanilla*.
 
-To check what's actually in a pack (e.g. whether a file is yours or vanilla's), read the pack index. The PFH5 layout is in `src\TerryClone.Formats\Packs\PackFile.cs`. Then compare hashes against `output\bob_runs\…` and `Vanilla\Map\…`.
+To check what's actually in a pack (e.g. whether a file is yours or vanilla's), read the pack index. The PFH5 layout is in `src\Atlas3K.Formats\Packs\PackFile.cs`. Then compare hashes against `output\bob_runs\…` and `Vanilla\Map\…`.
 
 ---
 

@@ -1,4 +1,4 @@
-"""[TerryClone main190, map-only] Copy of the other session's hexi_x15.py mask code: builds the Hexi /
+"""[Atlas3K main190, map-only] Copy of the other session's hexi_x15.py mask code: builds the Hexi /
 Xiping west-zone masks and the Guzang projection on the padded grid and saves them for the terrain build
 (dem_fill / class_fill via hexi_geo.py). No region data is written.
 

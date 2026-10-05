@@ -1,4 +1,4 @@
-param([string]$ProcessName = "TerryClone.App", [string]$Out = "Z:\Claude\TerryClone\output\previews\app.png")
+param([string]$ProcessName = "Atlas3K.App", [string]$Out = "Z:\Claude\TerryClone\output\previews\app.png")
 # Captures the main window of a process to a PNG (brings it to front first).
 Add-Type -AssemblyName System.Drawing
 Add-Type @"

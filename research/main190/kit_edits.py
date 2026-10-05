@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Replay the hand / audit edits made directly in the kit with TerryClone (2026-10-04) after a pipeline install.
+"""Replay the hand / audit edits made directly in the kit with Atlas3K (2026-10-04) after a pipeline install.
 
 relief_build.sh / props_only.sh / hexi_build.sh regenerate the kit's layers (ak_main.py) and height map
 (terrain/<map>.height.*.tif) from the research sources, which drops anything edited in the kit itself. Each build
 script runs this right after it installs layers + height into the kit and before the native build, so the edits come
-back every time. All steps go through the TerryClone CLI (journaled, entity-undo works as usual).
+back every time. All steps go through the Atlas3K CLI (journaled, entity-undo works as usual).
 
 EDITS, in order:
  1. kit_edits/01_sink_floating_mountains.json - 50 LF-offset mountains that floated in game (y only: x, z stay
@@ -26,7 +26,7 @@ import json, os, re, subprocess, sys, tempfile
 from pathlib import Path
 
 HERE = Path(__file__).parent
-CLI = r"Z:/Claude/TerryClone/src/TerryClone.Cli/bin/Release/net9.0/TerryClone.Cli.exe"
+CLI = r"Z:/Claude/TerryClone/src/Atlas3K.Cli/bin/Release/net9.0/Atlas3K.Cli.exe"
 AK = os.environ.get("KIT_EDITS_AK", r"C:/Program Files (x86)/Steam/steamapps/common/Total War THREE KINGDOMS/assembly_kit_190E")  # sandbox tests
 PACK = r"C:/Program Files (x86)/Steam/steamapps/common/Total War THREE KINGDOMS/data/!!190_expanded_region_test_main190_native.pack"
 MAP = "3k_190e_expanded_map"

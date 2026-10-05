@@ -116,7 +116,7 @@ def _scl(s):
 
 def _euler(X, Y):
     """Euler (x, y, z) degrees whose rotation maps local +x to X and local +y to (Y made orthogonal to X), in the
-    convention of TerryClone's TerryTransform.RotationMatrix (Blender eul_to_mat3)."""
+    convention of Atlas3K's TerryTransform.RotationMatrix (Blender eul_to_mat3)."""
     X = np.asarray(X, float); X = X / np.linalg.norm(X)
     Y = np.asarray(Y, float); Y = Y - X * (Y @ X); Y = Y / np.linalg.norm(Y)
     Z = np.cross(X, Y)

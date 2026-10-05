@@ -16,7 +16,7 @@ S="$(cygpath -w "$APPDATA")\\FrodoWazEre\\rpfm\\config\\schemas\\schema_3k.ron"
 EXE='Z:\Claude\TerryClone\output\caime_upscaler\CAIME\bin\CAIME.exe'; CDIR='Z:\Claude\TerryClone\output\caime_upscaler\CAIME\bin'
 MAP="$(cygpath -w "$K/raw_data/EmpireDesignData/campaign_maps/$NEW/map.hex")"
 L=/z/Claude/TerryClone/output/caime_upscaler/CAIME/bin/tool.log
-CLI=/z/Claude/TerryClone/src/TerryClone.Cli/bin/Release/net9.0/TerryClone.Cli.exe
+CLI=/z/Claude/TerryClone/src/Atlas3K.Cli/bin/Release/net9.0/Atlas3K.Cli.exe
 OUTW='Z:\Claude\TerryClone\research\main190\build_newmap'
 
 mode() { (cd "$DD" && python - "$1" "$2" <<'PY'

@@ -2,7 +2,7 @@
 """Open ground around towns that sit in tree-heavy tile variants (2026-10-04, user: "repaint Yingtao").
 
 Yingtao (ironic_central_yanmen_resource_1) sits on generic tiles of the TEMPERATE climate, whose tile meshes carry their
-own broad-leaved trees (no props / tree-list trees there: checked in game and in the TerryClone viewer); the clear
+own broad-leaved trees (no props / tree-list trees there: checked in game and in the Atlas3K viewer); the clear
 northern towns (Wuquan, Chengle) sit on generic tiles of the COLD climate. This paints a disc of cold climate around the
 listed towns in climate_map.png (tile-map size, picks the tile climate) and climate_map_g.png (full size), in the
 research terrain/ AND the kit, so the tile matcher picks the open cold variants there. The ground texture (blend map)

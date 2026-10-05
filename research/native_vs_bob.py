@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CLI = os.path.join(HERE, "..", "src", "TerryClone.Cli", "bin", "Release", "net9.0", "TerryClone.Cli.exe")
+CLI = os.path.join(HERE, "..", "src", "Atlas3K.Cli", "bin", "Release", "net9.0", "Atlas3K.Cli.exe")
 BS = chr(92)
 
 

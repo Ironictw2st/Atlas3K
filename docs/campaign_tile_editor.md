@@ -2,15 +2,15 @@
 
 This is validated hand-editing of a campaign `tile_map.png`, the source BOB's Terrain / Tilemap turns into `tile_list.bin`. You can add tiles (paint a tile set) and remove them (erase back to the surrounding land or sea) hex by hex. Each edit is checked before it is written, so you can adjust the map quickly without a BOB round trip per try.
 
-There are three front ends, all on the same core (`src/TerryClone.Core/Campaign/TileMapCheck/`):
+There are three front ends, all on the same core (`src/Atlas3K.Core/Campaign/TileMapCheck/`):
 
 | Front end | Where |
 |---|---|
-| GUI | TerryClone app, **File > Edit campaign tile map...** (`CampaignTileWindow.cs`, `CampaignTileView.cs`) |
-| CLI | `TerryClone.Cli tiles-*` (`src/TerryClone.Cli/TileCommands.cs`) |
+| GUI | Atlas3K app, **File > Edit campaign tile map...** (`CampaignTileWindow.cs`, `CampaignTileView.cs`) |
+| CLI | `Atlas3K.Cli tiles-*` (`src/Atlas3K.Cli/TileCommands.cs`) |
 | terry MCP | `list_tile_sets`, `get_tiles`, `edit_tiles`, `paint_tiles`, `erase_tiles`, `draw_tile_line`, `fill_tiles`, `validate_tiles`, `preview_tiles`, `tile_checkpoint` / `tile_rollback` / `tile_undo` / `tile_history`, `replay_tiles`, `check_tile_holes` |
 
-There is also a **web editor** for the iPad and Apple Pencil (`src/TerryClone.Web`), covering the tile map and the ground textures. See [Web editor](#web-editor-ipad--apple-pencil) below.
+There is also a **web editor** for the iPad and Apple Pencil (`src/Atlas3K.Web`), covering the tile map and the ground textures. See [Web editor](#web-editor-ipad--apple-pencil) below.
 
 All of them share one undo journal per tile map: `output/tile_edits/<map>/` (snapshots, `journal.jsonl`, `checkpoints.json` and `ops.jsonl`). A GUI save and an MCP edit therefore show up in the same history.
 
@@ -102,5 +102,5 @@ Climate stays as it is: it lives in climate_map.png.
 - `TileMapEditor.cs`: load, apply, before/after validation, journaled write, ops log, undo/rollback, replay, hex ↔ world.
 - `TileMapPreview.cs`: PNG of a hex area (`preview_tiles`, `--preview`).
 - `TileHoles.cs`: post-Tilemap coverage check.
-- `src/TerryClone.Core/Editing/FileJournal.cs`: the undo journal, shared with `PropEditor`.
-- Tests: `src/TerryClone.Tests/TileMapEditTests.cs`.
+- `src/Atlas3K.Core/Editing/FileJournal.cs`: the undo journal, shared with `PropEditor`.
+- Tests: `src/Atlas3K.Tests/TileMapEditTests.cs`.

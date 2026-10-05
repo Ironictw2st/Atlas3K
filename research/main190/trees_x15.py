@@ -13,7 +13,7 @@ sorted campaign_tree_ids colours, 19 = no tree; BOB samples one pixel per hex at
     thinned (stable per-hex hash) on the ring around roads and rivers (keep 30%) and land next to the coast (25%)
  3. written as the AK CampaignTree raster (terrain/<TREE> + the kit's raw terrain copy, tree_new too), 2x2 px per hex
 `python trees_x15.py --dry` writes before/after metrics + previews to output/polish/trees only.
-Then `TerryClone.Cli build-campaign --steps rasters,trees` builds trees.campaign_tree_list (extras_main.trees())."""
+Then `Atlas3K.Cli build-campaign --steps rasters,trees` builds trees.campaign_tree_list (extras_main.trees())."""
 import sys
 from pathlib import Path
 import numpy as np

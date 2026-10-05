@@ -10,7 +10,7 @@ AK='C:\Program Files (x86)\Steam\steamapps\common\Total War THREE KINGDOMS\assem
 K="/c/Program Files (x86)/Steam/steamapps/common/Total War THREE KINGDOMS/assembly_kit_190E"
 NEW=3k_190e_expanded_map; OLD=3k_dlc07_main_map; WT="$K/working_data/terrain/campaigns/$NEW"; RT="$K/raw_data/terrain/campaigns/$NEW"
 P='C:\Program Files (x86)\Steam\steamapps\common\Total War THREE KINGDOMS\data\!!190_expanded_region_test_main190.pack'
-CLI=/z/Claude/TerryClone/src/TerryClone.Cli/bin/Release/net9.0/TerryClone.Cli.exe
+CLI=/z/Claude/TerryClone/src/Atlas3K.Cli/bin/Release/net9.0/Atlas3K.Cli.exe
 OUTW='Z:\Claude\TerryClone\research\main190\build_newmap'
 mode() { (cd "$DD" && python - "$1" "$2" <<'PY'
 import struct, sys

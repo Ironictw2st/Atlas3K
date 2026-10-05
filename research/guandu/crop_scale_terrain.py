@@ -70,7 +70,7 @@ def do(name, out_size, cubic, out_name=None):
         arr = resample_nearest(np.array(im), xs, ys)
         res = Image.fromarray(arr, im.mode)
         if im.mode == "P": res.putpalette(im.getpalette())
-        # palette TIFFs in TerryClone's TiffMap.WritePalette8 layout (what Terry reads): LZW, 2 rows per strip,
+        # palette TIFFs in Atlas3K's TiffMap.WritePalette8 layout (what Terry reads): LZW, 2 rows per strip,
         # SamplesPerPixel=1, SampleFormat=UINT, PlanarConfig=contig
         tif = {"compression": "tiff_lzw", "strip_size": res.size[0] * 2, "tiffinfo": {277: 1, 339: 1, 284: 1}}
         res.save(os.path.join(OUT, out_name or name), **(tif if name.endswith(".tif") else {}))

@@ -4,7 +4,7 @@ BOB's *Terrain / Tilemap* action turns `tile_map.png` into `tile_list.bin`. It i
 `WARSCAPE::EDITOR_TILE_MAP::build_tile_map` in `warscape.modder.x64.dll`, called from `QTU::process_tile_map`
 (qttoolutility).
 - Decompiles: `research/bob_re/editor_tile_map/`, `tilematch/`, `tilematch2..5/`, `process_tile_map/`.
-- Port: `src/TerryClone.Core/Campaign/TileMapCheck/TileMatchSimulator.cs`.
+- Port: `src/Atlas3K.Core/Campaign/TileMapCheck/TileMatchSimulator.cs`.
 - Run it with `validate-tilemap --simulate`, or with the terry MCP tool `validate_tilemap(simulate=True)`.
 
 ## How well the port matches BOB

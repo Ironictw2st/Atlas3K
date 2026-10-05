@@ -1,6 +1,6 @@
 # Generic Terry entity editing
 
-This is step 1 of the 1:1 Terry plan. TerryClone can now read and edit **any** entity, component and field in **any** Terry project: the campaign map, battle prefabs (`raw_data/art/prefabs/**.terry`) and battle tile maps. Before this, only props could be edited.
+This is step 1 of the 1:1 Terry plan. Atlas3K can now read and edit **any** entity, component and field in **any** Terry project: the campaign map, battle prefabs (`raw_data/art/prefabs/**.terry`) and battle tile maps. Before this, only props could be edited.
 
 ## Where the schema comes from
 
@@ -9,7 +9,7 @@ Almost nothing here needed reverse engineering.
 | Source | Gives | Code |
 |---|---|---|
 | `assembly_kit/working_data/Terry/entity_configuration.xml`, embedded as `Formats/Terry/Data/entity_configuration.xml` | The 55 entity types and their 86 component types, conditional components (`parameter="shape"` groups), `readonly` flags, and where each type is allowed (`allow_if`) | `EntityConfiguration` |
-| Every `.layer` / `.terry` in the kit's `raw_data`: 3,864 files and 317,813 entities | Each component's fields in Terry's order, an inferred type (bool, int, float, vec2/3/4, colour, enum, id, path, string), defaults and known values, and the component layout of each entity type | `ComponentSchema`, generated into `Formats/Terry/Data/component_schema.json` by `TerryClone.Cli terry-schema` |
+| Every `.layer` / `.terry` in the kit's `raw_data`: 3,864 files and 317,813 entities | Each component's fields in Terry's order, an inferred type (bool, int, float, vec2/3/4, colour, enum, id, path, string), defaults and known values, and the component layout of each entity type | `ComponentSchema`, generated into `Formats/Terry/Data/component_schema.json` by `Atlas3K.Cli terry-schema` |
 
 Defaults:
 - When a field has only a few distinct values in the kit, the default is the most common one (e.g. campaign lights use `colour_scale` 100000).
@@ -73,11 +73,11 @@ Terry's rules are enforced. For example, `create Building` in a campaign tile_ma
 
 ## Scene editor (step 2)
 
-The scene editor is a Terry-style window for any `.terry` project. It is in `src/TerryClone.App/Scene/`.
+The scene editor is a Terry-style window for any `.terry` project. It is in `src/Atlas3K.App/Scene/`.
 
 To open it:
 - In the main window: **File → Open Terry scene editor (campaign map)** or **File → Open Terry project (.terry)…**
-- From the command line: `TerryClone.App --scene [project.terry]`
+- From the command line: `Atlas3K.App --scene [project.terry]`
 
 ### Layout
 
@@ -142,7 +142,7 @@ Every change is an `EntityEditor` op batch. It is validated, written to disk at 
 
 ### Self-test
 
-`TerryClone.App --scene <copy>.terry --selftest <out dir>` drives the window in-process. It does not send mouse or keyboard input to the desktop.
+`Atlas3K.App --scene <copy>.terry --selftest <out dir>` drives the window in-process. It does not send mouse or keyboard input to the desktop.
 
 It runs search, select, a scalar edit, a single-component vector edit, a refused invalid value, drag-move, duplicate, create, rename, a new folder layer plus dropping entities into it, multi-select, hiding a layer, and selecting a whole layer. It then undoes everything and checks that the project files are byte-identical. It writes screenshots and `selftest.json`.
 
@@ -285,7 +285,7 @@ MCP: `find_assets`, `inspect_asset`, `preview_asset` (returns the image), `check
 
 ## 3D viewport (step 5)
 
-The scene editor's centre is now two tabs: **Top (2D)** and **3D** (Ctrl+1 and Ctrl+2). Both share the selection and the edit ops. The code is in `src/TerryClone.App/Viewport3D/`, using Vortice.Windows 3.8.3 (Direct3D11, DXGI, D3DCompiler).
+The scene editor's centre is now two tabs: **Top (2D)** and **3D** (Ctrl+1 and Ctrl+2). Both share the selection and the edit ops. The code is in `src/Atlas3K.App/Viewport3D/`, using Vortice.Windows 3.8.3 (Direct3D11, DXGI, D3DCompiler).
 
 ### Code
 
@@ -586,4 +586,4 @@ Also checked on 190E:
 - 26 are cold peaks in the dense north-west ranges (x < 100, z 530–585), floating 1.5–5.1;
 - 24 are elsewhere. These include `0e657e9f7621a92` (+3.18) and `0ea3ba16cb6301a` (+0.93), both reported floating in game and both visibly floating in the 3D view.
 
-**Shots mode.** `TerryClone.App ... --shots <csv with id,x,z[,footprint_radius]> <outdir>` saves a 3D close-up per row and exits without editing. Close-ups are in `output/previews/floating`, with contact sheets `_sheet1.png` and `_sheet2.png`.
+**Shots mode.** `Atlas3K.App ... --shots <csv with id,x,z[,footprint_radius]> <outdir>` saves a 3D close-up per row and exits without editing. Close-ups are in `output/previews/floating`, with contact sheets `_sheet1.png` and `_sheet2.png`.

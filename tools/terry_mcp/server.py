@@ -1,6 +1,6 @@
-"""terry-mcp: stdio MCP server for TerryClone's native campaign-map build (the BOB replacement).
+"""terry-mcp: stdio MCP server for Atlas3K's native campaign-map build (the BOB replacement).
 
-Every tool shells out to the TerryClone CLI (src/TerryClone.Cli), which rebuilds BOB's campaign outputs straight
+Every tool shells out to the Atlas3K CLI (src/Atlas3K.Cli), which rebuilds BOB's campaign outputs straight
 from the assembly-kit sources, reading intermediate files from disk -- no BOB, no pack import between steps.
 
 Steps (in BOB's order): rasters, tile_list, global_map, global_mesh, rivers, global_props, camera_heightmap, trees, lookup.
@@ -24,7 +24,7 @@ Tile-map editing (the *_tiles* / tile_* tools) paints the kit's campaign tile_ma
 [col, row], row 0 = south; tile sets are names from list_tile_sets (or "#rrggbb"). Each batch is validated on the
 changed hexes: an edit that introduces a blocking issue is NOT written (allow_warnings / force override).
 - Recommended order: tile_checkpoint -> paint/erase/draw/fill (dry_run first if unsure) -> preview_tiles ->
-  simulate_tiles (BOB tile matching, ~2 min: holes in the edits?) -> BOB Terrain / Tilemap (bob MCP) ->
+  simulate_tiles (BOB tile matching, ~2 min: holes in the edits?) -> build_step tile_list ->
   check_tile_holes -> build_step global_map, global_mesh.
 - Recorded edits can be replayed with replay_tiles after a builder (caime_tilemap.py) regenerates the tile map.
 
@@ -58,9 +58,9 @@ import tempfile
 
 from mcp.server.fastmcp import FastMCP, Image
 
-PROJECT = r"Z:\Claude\TerryClone"
-CLI_PROJECT = os.path.join(PROJECT, "src", "TerryClone.Cli", "TerryClone.Cli.csproj")
-CLI_EXE = os.path.join(PROJECT, "src", "TerryClone.Cli", "bin", "Release", "net9.0", "TerryClone.Cli.exe")
+PROJECT = os.environ.get("ATLAS3K_ROOT") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CLI_PROJECT = os.path.join(PROJECT, "src", "Atlas3K.Cli", "Atlas3K.Cli.csproj")
+CLI_EXE = os.path.join(PROJECT, "src", "Atlas3K.Cli", "bin", "Release", "net9.0", "Atlas3K.Cli.exe")
 KIT = r"C:\Program Files (x86)\Steam\steamapps\common\Total War THREE KINGDOMS\assembly_kit"
 
 mcp = FastMCP("terry")
@@ -70,7 +70,7 @@ def _run(args: list[str], timeout: int = 3600) -> dict:
     if not os.path.exists(CLI_EXE):
         built = _build_cli()
         if built["exit_code"] != 0:
-            return {"error": "TerryClone CLI does not build", **built}
+            return {"error": "Atlas3K CLI does not build", **built}
     proc = subprocess.run([CLI_EXE, *args], cwd=PROJECT, capture_output=True, text=True, timeout=timeout)
     result: dict = {"exit_code": proc.returncode}
     try:
@@ -206,7 +206,7 @@ def list_outputs(map_name: str = "3k_dlc07_main_map", out_dir: str | None = None
 
 @mcp.tool()
 def rebuild_tool() -> dict:
-    """Recompile the TerryClone CLI (Release) after source changes."""
+    """Recompile the Atlas3K CLI (Release) after source changes."""
     return _build_cli()
 
 

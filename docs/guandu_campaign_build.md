@@ -18,7 +18,7 @@ Companion documents:
 
 > **v2 update (2026-09-29):** the map is now **1,328 × 784** hexes. The west edge is column 120 (Jincheng and Wuwei); Baxi, Bajun, Chengdu and Jiangyang are dropped.
 > - **Width rule:** the map width **must be a multiple of 4 hexes**. BOB lays the global meshes on 16 columns of tile-map width ÷ 16. At 1,094 hexes (2,188 px) it built a 17th column, which produced see-through notches beside every road tile in game.
-> - **Heights and climate** come from TerryClone `compile-map`; the other BOB steps run headless through `tools/bob_mcp`.
+> - **Heights and climate** come from Atlas3K `compile-map`; the other BOB steps run headless through `tools/bob_mcp`.
 > - **GuanDu.pack type:** **Movie** for BOB generation, **Mod** for the RPFM startpos and for play.
 > - **EmpireDesignData:** BOB reads its DB from `raw_data/EmpireDesignData`, so run `mirror_empiredesign.py`. This is chained in `build_startpos_all.py`.
 
@@ -134,7 +134,7 @@ Block-scaling the records (repeating each hex 2.25×) broke every line layer and
 
 **Real Terry** (`Tweak.retail.x64.exe /standalone TerrainMetadataEditor`; open a project by dragging the `.terry` onto it):
 - It **crashes** if `working_data\terrain\campaigns\<map>\tile_list.bin` is missing, so run BOB's tile step first.
-- It reads display heights **only** from raw `lf_heights.tif` / `lf_sea_heights.tif`. They must use TerryClone's TIFF layout: RowsPerStrip=1 (2 for LZW palette images), SampleFormat=1, SamplesPerPixel=1. Write them with `tiff16.py`. PIL's single-strip TIFFs showed flat terrain with spikes.
+- It reads display heights **only** from raw `lf_heights.tif` / `lf_sea_heights.tif`. They must use Atlas3K's TIFF layout: RowsPerStrip=1 (2 for LZW palette images), SampleFormat=1, SamplesPerPixel=1. Write them with `tiff16.py`. PIL's single-strip TIFFs showed flat terrain with spikes.
 - Its **world scale comes from the game-pack table `campaign_map_playable_areas.maxx`**, not from the AK XML. With no row it uses 1 unit per tile-map pixel, so the terrain came out 3× too big for the layers. Put the row in a pack that's **loaded** before judging a new map in Terry. GuanDu.pack is now **Mod** type (§7); if Terry loses the scale again, set it back to Movie while working in Terry.
 - It locks every data pack while open, so close it before writing packs.
 
@@ -264,9 +264,9 @@ The game's own `crash_report\*.mdmp` has **no heap memory**, and the exe has no 
 
 ---
 
-## 11. Notes for TerryClone
+## 11. Notes for Atlas3K
 
-What this build taught us that TerryClone should know or could automate:
+What this build taught us that Atlas3K should know or could automate:
 
 - **Formats confirmed here:**
   - map.hex's 16-byte record, header lists and colour tables, with a CRC32 footer (`rebuild_hex.py`, `hexfields.py`, `hexgrid.py`).
@@ -274,15 +274,15 @@ What this build taught us that TerryClone should know or could automate:
   - The lookup `.dds` is DXGI 56 (R16_UNORM) with one mip level.
   - `map_data.esf` stores the playable-area index as text.
   - Pack header type nibble: 3 = mod, 4 = movie.
-- **TIFF layout:** Terry-compatible 16-bit TIFFs follow TerryClone's `TiffMap.WriteGray16` layout. `tiff16.py` is the Python port, so use it for any raster Terry must display.
-- **World scale:** it comes from the loaded game-pack `campaign_map_playable_areas.maxx`. TerryClone's `TerrainData.CoordsFor` reads the world size from the tree-list header instead. That's safer, but both have to agree. `ProjectPaths.FromArgs` (`--map/--root/--ak`) lets TerryClone open non-vanilla maps. Run it with `TerryClone.App.exe --map 3k_guandu_map --root research\guandu\compiled\Map`.
-- **Compiled root for TerryClone** (`build_compiled.py`): its `.dds` files use **vanilla's** value ranges (sea ÷44217). TerryClone compares raw DDS land against sea, and BOB-style per-map normalisation flooded the plain.
+- **TIFF layout:** Terry-compatible 16-bit TIFFs follow Atlas3K's `TiffMap.WriteGray16` layout. `tiff16.py` is the Python port, so use it for any raster Terry must display.
+- **World scale:** it comes from the loaded game-pack `campaign_map_playable_areas.maxx`. Atlas3K's `TerrainData.CoordsFor` reads the world size from the tree-list header instead. That's safer, but both have to agree. `ProjectPaths.FromArgs` (`--map/--root/--ak`) lets Atlas3K open non-vanilla maps. Run it with `Atlas3K.App.exe --map 3k_guandu_map --root research\guandu\compiled\Map`.
+- **Compiled root for Atlas3K** (`build_compiled.py`): its `.dds` files use **vanilla's** value ranges (sea ÷44217). Atlas3K compares raw DDS land against sea, and BOB-style per-map normalisation flooded the plain.
 - **Candidates for a BOB/CAIME-free exporter**, following on from the compile-map work in `bob_campaign_build.md`:
   - camera heightmap (BOB crashes on it);
   - lookup `.bmp` → `.tga` / `.dds` / minimap (currently needs BOB's GUI);
   - borders export (currently needs CAIME's GUI);
   - the per-map image set (`build_map_extras.py` already does it by cropping).
-- **Validation TerryClone could run before any export:**
+- **Validation Atlas3K could run before any export:**
   - every region's slot footprint matches its source;
   - every province on the map keeps its capital;
   - no empty header regions;
@@ -306,7 +306,7 @@ What this build taught us that TerryClone should know or could automate:
 | `hexgrid.py`, `hexfields.py` | hex grid and record helpers (CAIME conventions) |
 | `rebuild_hex.py` | map.hex builder (§3); `CLIPPED` list |
 | `crop_scale_terrain.py`, `tiff16.py` | raster crop/scale; Terry-compatible TIFFs |
-| `build_ak_project.py`, `build_compiled.py` | AK terrain project; TerryClone compiled root |
+| `build_ak_project.py`, `build_compiled.py` | AK terrain project; Atlas3K compiled root |
 | `build_tilemap.py`, `tilemap_hex.py` | tile map from the user's vanilla tile map |
 | `ak_db_add_guandu.py`, `ak_db_add_startpos.py` | AK DB XML records |
 | `build_startpos_tables.py`, `build_startpos_extra.py`, `build_frontend.py` | pack TSVs, frontend, loc |

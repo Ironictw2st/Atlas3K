@@ -3,7 +3,7 @@
 
 Every tile-map cell (quarter-lf pixel, 2x2 per hex) must be covered by a placed tile: base tiles (generic,
 mountains, sea, coast) or line tiles (rivers, roads, canals - these carry their own geometry). Coverage follows
-BOB's height query (src/TerryClone.Core/Campaign/GlobalMesh/TileCoverage.cs): a record covers w x h cells from
+BOB's height query (src/Atlas3K.Core/Campaign/GlobalMesh/TileCoverage.cs): a record covers w x h cells from
 (x, y) (w/h swapped for orientation 0x20/0x80), and the sub-tile, rotated by the orientation, must be set in the
 tile database mask. y = 0 is the south row.
 
