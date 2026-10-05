@@ -207,7 +207,9 @@ def quilt_forests(out, f, names, w, h, cut, NA, log=print):
     dom, code = quilt_domain(f, names, w, h)
     land = f["terr"] == 0
     van = (code == BV.VAN) & land
-    key = hashlib.md5(out[~dom].tobytes() + dom.tobytes() + np.ascontiguousarray(out.shape).tobytes()).hexdigest()
+    stable0 = (code == BV.VAN) | (code == BV.NPOLD) | ~land
+    # the result depends only on the stable hexes (vanilla / kept np_old / water), the clean-up mask and fixed inputs
+    key = hashlib.md5(np.where(stable0, out, 255).tobytes() + dom.tobytes() + cut.tobytes()).hexdigest()
     if key in _QCACHE:
         res, suit, info = _QCACHE[key]; out[dom] = res[dom]; return dom, suit, dict(info)
     Tf = terrain_features(f, w, h)
@@ -236,6 +238,13 @@ def quilt_forests(out, f, names, w, h, cut, NA, log=print):
         E = suit * rcov / np.maximum(ls, 0.05)
         rsp = np.stack([ndi.gaussian_filter(((SPG[ref] == k) & (ref != NO_TREE) & land).astype(np.float32), REF_SIGMA) for k in range(4)])
         rsp = rsp / np.maximum(rsp.sum(0, keepdims=True), 1e-6)
+        # suit / local-mean-suit does not average to 1, and smoothing leaks cover across climate edges (wooded
+        # mountain strips next to bare flats): renormalise per group x climate to the RAW reference cover there
+        rt = (ref != NO_TREE) & land
+        for g in (BV.HEXI, BV.NOMAD, BV.KNE, BV.NPNEW, BV.NPOLDF):
+            for cl in np.unique(f["climate"][dom & (code == g)]):
+                m = dom & (code == g) & (f["climate"] == cl)
+                if m.sum() >= 200: E[m] *= float(rt[m].mean()) / max(float(E[m].mean()), 1e-3)
     else:
         log("trees_polish Q2: no reference raster", ref_p, "- vanilla terrain rates instead")
         E = suit.copy(); rsp = np.full((4, h, w), 0.25, np.float32)
@@ -259,7 +268,7 @@ def quilt_forests(out, f, names, w, h, cut, NA, log=print):
     ys = np.arange(0, h - n, 2); xs = np.arange(0, w - n, 2)
     gy, gx = np.meshgrid(ys, xs, indexing="ij"); gy, gx = gy.ravel(), gx.ravel()
     S = np.stack([ndi.uniform_filter(ch, n, mode="constant", origin=-(n // 2))[gy, gx] for ch in chans], 1)
-    ok = (S[:, 1] >= 0.8) & (S[:, 1] + S[:, 2] >= 0.97)
+    ok = (S[:, 1] >= 0.8) & (S[:, 1] + S[:, 2] >= 0.999)              # vanilla land + water only (stable donors)
     cy, cx, S = gy[ok], gx[ok], S[ok]
     ccov = S[:, 0] / np.maximum(S[:, 1], 1e-3); cslope = S[:, 5:10]; criv, cwat = S[:, 3], S[:, 4]
     csp = S[:, 10:14] / np.maximum(S[:, 10:14].sum(1, keepdims=True), 1e-6)

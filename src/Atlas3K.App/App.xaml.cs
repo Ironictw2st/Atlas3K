@@ -21,6 +21,12 @@ public partial class App : Application
             args.Handled = true;
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) => ErrorDialog.Log("Unhandled exception", args.ExceptionObject as Exception);
+        // every window gets the app icon (WPF windows don't inherit the exe's)
+        var icon = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/atlas3k.ico"));
+        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler((w, _) =>
+        {
+            if (w is Window { Icon: null } window) window.Icon = icon;
+        }));
 
         if (!File.Exists(AppSettings.FilePath) && e.Args.Length == 0)
         {

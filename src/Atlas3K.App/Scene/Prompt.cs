@@ -21,7 +21,7 @@ public static class Prompt
         var dialog = new Window
         {
             Title = title, Owner = owner, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Theme.Brush("Panel"),
         };
         string? result = null;
         var ok = new Button { Content = "OK", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 6, 0) };
@@ -31,7 +31,7 @@ public static class Prompt
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
         var panel = new StackPanel { Margin = new Thickness(12) };
-        panel.Children.Add(new TextBlock { Text = label, Foreground = Brushes.Gainsboro, Margin = new Thickness(0, 0, 0, 6) });
+        panel.Children.Add(new TextBlock { Text = label, Foreground = Theme.Brush("Text"), Margin = new Thickness(0, 0, 0, 6) });
         panel.Children.Add(input);
         panel.Children.Add(buttons);
         dialog.Content = panel;

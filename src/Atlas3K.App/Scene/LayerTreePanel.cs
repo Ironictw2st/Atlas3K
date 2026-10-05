@@ -23,7 +23,7 @@ public sealed class LayerTreePanel : DockPanel
         public bool IsLayer => Kind is "file" or "layer";
     }
 
-    private readonly TreeView _tree = new() { Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Brushes.Gainsboro };
+    private readonly TreeView _tree = new() { Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Theme.Brush("Text") };
     private SceneModel? _model;
     private bool _suppressSelection;
     private Point? _dragStart;
@@ -107,8 +107,9 @@ public sealed class LayerTreePanel : DockPanel
         {
             var count = _model.EntitiesOf(layer.Id).Count(e => !TerryEntityTypes.IsLayerType(e.Type));
             var node = new Node("file", layer.Id, null);
-            var label = layer.Name + (layer.Export ? "" : "  (not exported)") + (_model.ActiveLayer == layer.Id ? "  ★" : "");
-            _tree.Items.Add(MakeItem(node, label, $"{count}", true, _model.Invisible.Contains(layer.Id), _model.Frozen.Contains(layer.Id)));
+            var label = layer.Name + (layer.Export ? "" : "  (not exported)");
+            _tree.Items.Add(MakeItem(node, label, $"{count}", true, _model.Invisible.Contains(layer.Id), _model.Frozen.Contains(layer.Id),
+                                     active: _model.ActiveLayer == layer.Id));
         }
         Reexpand(_tree.Items, expanded, selected);
     }
@@ -139,7 +140,8 @@ public sealed class LayerTreePanel : DockPanel
             }
     }
 
-    private TreeViewItem MakeItem(Node node, string text, string? detail, bool expandable, bool hidden = false, bool frozen = false)
+    private TreeViewItem MakeItem(Node node, string text, string? detail, bool expandable, bool hidden = false, bool frozen = false,
+                                  string? icon = null, bool active = false)
     {
         var header = new StackPanel { Orientation = Orientation.Horizontal };
         if (node.IsLayer)
@@ -148,7 +150,7 @@ public sealed class LayerTreePanel : DockPanel
             vis.Click += (_, _) => StateToggled?.Invoke(node, "visible", vis.IsChecked == true);
             var lockBtn = new ToggleButton
             {
-                IsChecked = frozen, Content = "🔒", ToolTip = "Locked (frozen)", FontSize = 9, Padding = new Thickness(1, 0, 1, 0),
+                IsChecked = frozen, Content = Theme.Icon(Theme.Glyph.Lock, 10), ToolTip = "Locked (frozen)", Padding = new Thickness(1, 0, 1, 0),
                 Margin = new Thickness(0, 0, 4, 0), Opacity = frozen ? 1 : 0.35, Background = Brushes.Transparent, BorderThickness = new Thickness(0),
             };
             lockBtn.Click += (_, _) => StateToggled?.Invoke(node, "frozen", lockBtn.IsChecked == true);
@@ -165,11 +167,13 @@ public sealed class LayerTreePanel : DockPanel
                 Background = new SolidColorBrush(Color.FromRgb((byte)(c >> 16), (byte)(c >> 8), (byte)c)),
             });
         }
-        header.Children.Add(new TextBlock { Text = text, Foreground = hidden ? Brushes.Gray : Brushes.Gainsboro });
+        if (icon is not null) header.Children.Add(new TextBlock { Text = icon, FontFamily = Theme.IconFont, FontSize = 11, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.Brush("DimText") });
+        header.Children.Add(new TextBlock { Text = text, Foreground = hidden ? Theme.Brush("DimText") : Theme.Brush("Text") });
+        if (active) header.Children.Add(new TextBlock { Text = Theme.Glyph.Star, FontFamily = Theme.IconFont, FontSize = 11, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.Brush("Accent"), ToolTip = "Active layer (new entities go here)" });
         if (detail is not null)
-            header.Children.Add(new TextBlock { Text = "  " + detail, Foreground = Brushes.Gray, FontSize = 11, VerticalAlignment = VerticalAlignment.Center });
+            header.Children.Add(new TextBlock { Text = "  " + detail, Foreground = Theme.Brush("DimText"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center });
 
-        var item = new TreeViewItem { Header = header, Tag = node, Foreground = Brushes.Gainsboro, ContextMenu = MenuFor(node) };
+        var item = new TreeViewItem { Header = header, Tag = node, Foreground = Theme.Brush("Text"), ContextMenu = MenuFor(node) };
         if (expandable)
         {
             item.Items.Add(new TreeViewItem { Header = "…" });
@@ -201,9 +205,9 @@ public sealed class LayerTreePanel : DockPanel
             {
                 var members = all.Count(m => m.Parents.Contains(e.Id));
                 var label = e.Name ?? e.Id;
-                if (e.Type == TerryEntityTypes.TagLayer) label = "🏷 " + label;
                 item.Items.Add(MakeItem(new Node("layer", node.FileLayer, e.Id), label, $"{members}", members > 0,
-                    _model.Invisible.Contains(e.Id), _model.Frozen.Contains(e.Id)));
+                    _model.Invisible.Contains(e.Id), _model.Frozen.Contains(e.Id),
+                    icon: e.Type == TerryEntityTypes.TagLayer ? Theme.Glyph.Tag : Theme.Glyph.Folder));
             }
             else
             {
@@ -214,7 +218,7 @@ public sealed class LayerTreePanel : DockPanel
         if (list.Count > MaxChildren)
             item.Items.Add(new TreeViewItem
             {
-                Header = new TextBlock { Text = $"… {list.Count - MaxChildren} more (use Find, or select in the view)", Foreground = Brushes.Gray },
+                Header = new TextBlock { Text = $"… {list.Count - MaxChildren} more (use Find, or select in the view)", Foreground = Theme.Brush("DimText") },
                 Tag = new Node("more", node.FileLayer, null), IsEnabled = false,
             });
     }

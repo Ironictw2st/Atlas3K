@@ -14,12 +14,12 @@ public static class Theme
     /// <summary>Segoe Fluent / MDL2 glyphs used across the app.</summary>
     public static class Glyph
     {
-        public const string Play = "", Stop = "", Save = "", Open = "", New = "",
-            Package = "", Check = "", Error = "", Warning = "", Pending = "",
-            Running = "", Skipped = "", Folder = "", Copy = "", Build = "",
-            Settings = "", Info = "", Map = "", Terrain = "", Scene = "",
-            Tiles = "", Battle = "", Up = "", Down = "", Delete = "", Lock = "",
-            Tag = "", Star = "";
+        public const string Play = "\uE768", Stop = "\uE71A", Save = "\uE74E", Open = "\uE8E5", New = "\uE710",
+            Package = "\uE7B8", Check = "\uE73E", Error = "\uE783", Warning = "\uE7BA", Pending = "\uE916",
+            Running = "\uE895", Skipped = "\uE738", Cancelled = "\uE711", Folder = "\uE838", Copy = "\uE8C8", Build = "\uE90F",
+            Settings = "\uE713", Info = "\uE946", Map = "\uE826", Terrain = "\uE909", Scene = "\uE7F4",
+            Tiles = "\uE80A", Battle = "\uE7FC", Up = "\uE70E", Down = "\uE70D", Delete = "\uE74D", Lock = "\uE72E",
+            Tag = "\uE8EC", Star = "\uE734";
     }
 
     public static TextBlock Icon(string glyph, double size = 14, Brush? brush = null) => new()

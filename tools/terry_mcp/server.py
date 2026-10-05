@@ -130,6 +130,34 @@ def build_step(step: str, map_name: str = "3k_dlc07_main_map", out_dir: str | No
 
 
 @mcp.tool()
+def build_project(project: str, segments: list[str] | None = None, steps: list[str] | None = None,
+                  custom_steps: list[str] | None = None, out_dir: str | None = None, pack_output: str | None = None) -> dict:
+    """Run an Atlas3K project's build (.atlas3k), exactly as the app's Build window does.
+
+    project: path to the .atlas3k file (e.g. research/main190/main190.atlas3k).
+    segments: subset of validate, compile, custom, pack, install; default = the project's enabled segments
+              (pack / install only when the profile enables them).
+    steps: native compile steps to run instead of the profile's.
+    custom_steps: only these custom steps (by name), instead of every enabled one.
+    out_dir / pack_output: override the profile's compile output folder / pack file (e.g. a scratch test).
+    Returns the build report: per item (validate, compile:<step>, custom:<name>, pack, install) status
+    (ok / warning / failed / blocked / skipped / cancelled), seconds, problems, notes; plus the log file path.
+    """
+    args = ["build", "--project", os.path.abspath(project), "--json"]
+    if segments:
+        args += ["--segments", ",".join(segments)]
+    if steps:
+        args += ["--steps", ",".join(steps)]
+    if custom_steps:
+        args += ["--custom", ",".join(custom_steps)]
+    if out_dir:
+        args += ["--out", out_dir]
+    if pack_output:
+        args += ["--pack-output", pack_output]
+    return _run(args)
+
+
+@mcp.tool()
 def diagnose(map_name: str = "3k_dlc07_main_map", out_dir: str | None = None, to_working_data: bool = False,
              ak_root: str | None = None) -> dict:
     """Per-step readiness: which BOB action each step replaces, whether it is native yet, and missing inputs."""

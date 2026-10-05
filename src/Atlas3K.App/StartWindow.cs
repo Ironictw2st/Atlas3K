@@ -36,6 +36,7 @@ public sealed class StartWindow : Window
         Background = Theme.Brush("Bg");
         Foreground = Theme.Brush("Text");
         Content = BuildLayout();
+        Placement.Track(this, "start");
     }
 
     private UIElement BuildLayout()
@@ -52,9 +53,9 @@ public sealed class StartWindow : Window
         dock.Children.Add(menu);
 
         var grid = new Grid { Margin = new Thickness(36, 24, 36, 24) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star), MinWidth = 440 });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 260 });
 
         // left: title + editor tiles
         var left = new StackPanel();
@@ -73,7 +74,7 @@ public sealed class StartWindow : Window
         left.Children.Add(mapLine);
 
         var tiles = new WrapPanel();
-        tiles.Children.Add(Tile(Theme.Glyph.Scene, "Scene editor", "Props, entities, prefabs, layers; 2D and 3D views of the campaign map.",
+        tiles.Children.Add(Tile(Theme.Glyph.Scene, "Scene editor", "Props, entities, prefabs and layers, in 2D and 3D.",
                                 () => new Scene.SceneWindow(_paths).Show()));
         tiles.Children.Add(Tile(Theme.Glyph.Tiles, "Tile map", "Paint the campaign tile map hex by hex, with live validation.",
                                 () => new CampaignTileWindow(_paths).Show()));
@@ -134,7 +135,7 @@ public sealed class StartWindow : Window
 
     private static Button Tile(string glyph, string title, string text, Action open)
     {
-        var content = new StackPanel { Width = 220 };
+        var content = new StackPanel { Width = 180 };
         content.Children.Add(Theme.Icon(glyph, 26, Theme.Brush("Accent")));
         content.Children.Add(new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 4) });
         content.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Foreground = Theme.Brush("DimText") });
@@ -142,7 +143,7 @@ public sealed class StartWindow : Window
         {
             Content = content, Padding = new Thickness(16), Margin = new Thickness(0, 0, 12, 12),
             HorizontalContentAlignment = HorizontalAlignment.Left, VerticalContentAlignment = VerticalAlignment.Top,
-            Background = Theme.Brush("Panel"), Height = 150,
+            Background = Theme.Brush("Panel"), Height = 140,
         };
         b.Click += (_, _) =>
         {

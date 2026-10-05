@@ -28,15 +28,15 @@ public sealed partial class SceneWindow : Window
 
     private readonly SceneView _view = new();
     private readonly Viewport3D.Viewport3DControl _view3d = new();
-    private readonly TabControl _centre = new() { Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)), BorderThickness = new Thickness(0) };
+    private readonly TabControl _centre = new() { Background = Theme.Brush("Bg"), BorderThickness = new Thickness(0) };
     private bool Is3D => _centre.SelectedIndex == 1;
     private readonly LayerTreePanel _tree = new();
     private readonly InspectorPanel _inspector = new();
     private readonly TextBlock _status = new() { FontFamily = new FontFamily("Consolas"), Text = "Loading..." };
-    private readonly TextBlock _hover = new() { FontFamily = new FontFamily("Consolas"), Foreground = Brushes.Gray };
+    private readonly TextBlock _hover = new() { FontFamily = new FontFamily("Consolas"), Foreground = Theme.Brush("DimText") };
     private readonly TextBox _search = new() { Margin = new Thickness(0, 0, 4, 0) };
-    private readonly ListBox _results = new() { Height = 170, Background = Brushes.Transparent, Foreground = Brushes.Gainsboro, Visibility = Visibility.Collapsed };
-    private readonly TextBlock _resultInfo = new() { Foreground = Brushes.Gray, FontSize = 11, Visibility = Visibility.Collapsed };
+    private readonly ListBox _results = new() { Height = 170, Background = Brushes.Transparent, Foreground = Theme.Brush("Text"), Visibility = Visibility.Collapsed };
+    private readonly TextBlock _resultInfo = new() { Foreground = Theme.Brush("DimText"), FontSize = 11, Visibility = Visibility.Collapsed };
     private List<string> _resultIds = [];
     private bool _loadedOnce;
 
@@ -47,9 +47,10 @@ public sealed partial class SceneWindow : Window
         Width = Math.Min(1700, SystemParameters.WorkArea.Width);
         Height = Math.Min(1000, SystemParameters.WorkArea.Height);
         WindowState = WindowState.Maximized;
-        Background = new SolidColorBrush(Color.FromRgb(30, 30, 30));
-        Foreground = Brushes.Gainsboro;
+        Background = Theme.Brush("Bg");
+        Foreground = Theme.Brush("Text");
         Content = BuildLayout();
+        Placement.Track(this, "scene");
         Wire();
         Loaded += async (_, _) => await LoadAsync();
     }
@@ -90,7 +91,7 @@ public sealed partial class SceneWindow : Window
         DockPanel.SetDock(menu, Dock.Top);
         dock.Children.Add(menu);
 
-        var statusBar = new DockPanel { Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)) };
+        var statusBar = new DockPanel { Background = Theme.Brush("Panel") };
         DockPanel.SetDock(_hover, Dock.Right);
         _hover.Margin = new Thickness(6, 3, 6, 3);
         _status.Margin = new Thickness(6, 3, 6, 3);
@@ -106,7 +107,7 @@ public sealed partial class SceneWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) });
 
-        var left = new DockPanel { Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)) };
+        var left = new DockPanel { Background = Theme.Brush("Panel") };
         var searchRow = new DockPanel { Margin = new Thickness(6) };
         var find = new Button { Content = "Find", Padding = new Thickness(8, 1, 8, 1) };
         find.Click += (_, _) => RunSearch();
@@ -146,7 +147,7 @@ public sealed partial class SceneWindow : Window
         Grid.SetColumn(centrePanel, 2);
         grid.Children.Add(centrePanel);
         grid.Children.Add(Splitter(3));
-        var right = new Border { Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)), Child = _inspector };
+        var right = new Border { Background = Theme.Brush("Panel"), Child = _inspector };
         Grid.SetColumn(right, 4);
         grid.Children.Add(right);
         dock.Children.Add(grid);
@@ -156,8 +157,8 @@ public sealed partial class SceneWindow : Window
     /// <summary>Season preview and tile overlay, for both views.</summary>
     private UIElement SharedBar()
     {
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)) };
-        bar.Children.Add(new TextBlock { Text = "Season", Foreground = Brushes.Gray, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 4, 0) });
+        var bar = new StackPanel { Orientation = Orientation.Horizontal, Background = Theme.Brush("Panel") };
+        bar.Children.Add(new TextBlock { Text = "Season", Foreground = Theme.Brush("DimText"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 4, 0) });
         var season = new ComboBox { Margin = new Thickness(2), MinWidth = 90, ToolTip = "Season preview: props whose season mask excludes it are hidden; trees and tile props use its models; ground textures and snow (3D) follow it" };
         season.Items.Add("All seasons");
         foreach (var name in SceneModel.Seasons) season.Items.Add(name["season_".Length..]);
@@ -172,7 +173,7 @@ public sealed partial class SceneWindow : Window
         bar.Children.Add(season);
         var showHidden = new CheckBox
         {
-            Content = "Show hidden layers", Foreground = Brushes.Gainsboro, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 2, 0),
+            Content = "Show hidden layers", Foreground = Theme.Brush("Text"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 2, 0),
             ToolTip = "Also draw layers hidden in the project's .terry.user (they still export to the game). View only: the saved visibility is not changed.",
         };
         showHidden.Click += (_, _) =>
@@ -181,10 +182,11 @@ public sealed partial class SceneWindow : Window
             _view.Refresh();
             _view3d.Refresh();
         };
+        bar.Children.Add(BarSeparator());
         bar.Children.Add(showHidden);
         var regions = new CheckBox
         {
-            Content = "Regions", Foreground = Brushes.Gainsboro, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 2, 0),
+            Content = "Regions", Foreground = Theme.Brush("Text"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 2, 0),
             ToolTip = "Region mask from the kit's map.hex (a colour per land region, dark borders) and each region's city (its main settlement slot); hover to read the region",
         };
         regions.Click += (_, _) =>
@@ -194,7 +196,8 @@ public sealed partial class SceneWindow : Window
             _view3d.Invalidate();
         };
         bar.Children.Add(regions);
-        bar.Children.Add(new TextBlock { Text = "Tiles", Foreground = Brushes.Gray, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) });
+        bar.Children.Add(BarSeparator());
+        bar.Children.Add(new TextBlock { Text = "Tiles", Foreground = Theme.Brush("DimText"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) });
         var tiles = new ComboBox { Margin = new Thickness(2), MinWidth = 120, ToolTip = "Overlay the placed tiles from the map's compiled tile_list.bin, coloured by tile set; hover to read a tile" };
         tiles.Items.Add("Off");
         tiles.Items.Add("Features");
@@ -214,7 +217,7 @@ public sealed partial class SceneWindow : Window
         {
             var c = SceneModel.TileColour(set);
             legend.Children.Add(new Border { Width = 10, Height = 10, Margin = new Thickness(6, 0, 3, 0), Background = new SolidColorBrush(Color.FromRgb((byte)(c >> 16), (byte)(c >> 8), (byte)c)) });
-            legend.Children.Add(new TextBlock { Text = label, Foreground = Brushes.Gray, FontSize = 11 });
+            legend.Children.Add(new TextBlock { Text = label, Foreground = Theme.Brush("DimText"), FontSize = 11 });
         }
         bar.Children.Add(legend);
         return bar;
@@ -222,7 +225,7 @@ public sealed partial class SceneWindow : Window
 
     private UIElement Build3DPanel()
     {
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)) };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal, Background = Theme.Brush("Panel") };
         var modes = new List<System.Windows.Controls.Primitives.ToggleButton>();
         void Mode(string label, Viewport3D.Viewport3DControl.GizmoMode mode, string tip)
         {
@@ -239,27 +242,29 @@ public sealed partial class SceneWindow : Window
         Mode("Move (W)", Viewport3D.Viewport3DControl.GizmoMode.Move, "Drag an axis arrow, or the square for the ground plane; Ctrl snaps to 0.5");
         Mode("Rotate (E)", Viewport3D.Viewport3DControl.GizmoMode.Rotate, "Drag the ring to turn about the vertical axis; Ctrl snaps to 15°");
         Mode("Scale (R)", Viewport3D.Viewport3DControl.GizmoMode.Scale, "Drag the box up/down; Ctrl snaps to 0.1");
-        var trees = new CheckBox { Content = "Trees", IsChecked = true, Foreground = Brushes.Gainsboro, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) };
+        bar.Children.Add(BarSeparator());
+        var trees = new CheckBox { Content = "Trees", IsChecked = true, Foreground = Theme.Brush("Text"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) };
         trees.Click += (_, _) => { _view3d.ShowTrees = trees.IsChecked == true; _view3d.Invalidate(); };
         bar.Children.Add(trees);
-        var water = new CheckBox { Content = "Water", IsChecked = true, Foreground = Brushes.Gainsboro, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) };
+        var water = new CheckBox { Content = "Water", IsChecked = true, Foreground = Theme.Brush("Text"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) };
         water.Click += (_, _) => { _view3d.ShowWater = water.IsChecked == true; _view3d.Invalidate(); };
         bar.Children.Add(water);
-        var tileMeshes = new CheckBox { Content = "Tile meshes", IsChecked = true, Foreground = Brushes.Gainsboro, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0),
+        var tileMeshes = new CheckBox { Content = "Tile meshes", IsChecked = true, Foreground = Theme.Brush("Text"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0),
             ToolTip = "The placed tiles' own content: cliff meshes, the props of their bmd (mountains, their trees, bridges, road props) and river water" };
         tileMeshes.Click += (_, _) => { _view3d.ShowTileMeshes = tileMeshes.IsChecked == true; _view3d.Invalidate(); };
         bar.Children.Add(tileMeshes);
-        var frame = new Button { Content = "Frame (F)", Padding = new Thickness(8, 1, 8, 1), Margin = new Thickness(8, 2, 2, 2) };
+        bar.Children.Add(BarSeparator());
+        var frame = new Button { Content = "Frame (F)", Padding = new Thickness(8, 1, 8, 1), Margin = new Thickness(2) };
         frame.Click += (_, _) => _view3d.FrameSelection();
         bar.Children.Add(frame);
         var all = new Button { Content = "All (Home)", Padding = new Thickness(8, 1, 8, 1), Margin = new Thickness(2) };
         all.Click += (_, _) => _view3d.FrameAll();
         bar.Children.Add(all);
-        bar.Children.Add(new TextBlock
-        {
-            Text = "  right-drag orbit (+WASD/QE fly, Shift faster) · middle-drag pan · wheel zoom · click pick · drag box-select",
-            Foreground = Brushes.Gray, VerticalAlignment = VerticalAlignment.Center, FontSize = 11,
-        });
+        var help = Theme.Icon(Theme.Glyph.Info, 14, Theme.Brush("DimText"));
+        help.Margin = new Thickness(10, 0, 6, 0);
+        help.ToolTip = "Mouse: right-drag orbit (+ WASD/QE fly, Shift faster) · middle-drag pan · wheel zoom · click pick · drag box-select\n" +
+                       "Keys: W move, E rotate, R scale, F frame selection, Home frame all";
+        bar.Children.Add(help);
         var dock = new DockPanel();
         DockPanel.SetDock(bar, Dock.Top);
         dock.Children.Add(bar);
@@ -267,9 +272,14 @@ public sealed partial class SceneWindow : Window
         return dock;
     }
 
+    private static Border BarSeparator() => new()
+    {
+        Width = 1, Margin = new Thickness(8, 4, 6, 4), Background = Theme.Brush("BorderBrush"),
+    };
+
     private static GridSplitter Splitter(int column)
     {
-        var s = new GridSplitter { Width = 4, HorizontalAlignment = HorizontalAlignment.Stretch, Background = new SolidColorBrush(Color.FromRgb(50, 50, 52)) };
+        var s = new GridSplitter { Width = 4, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Theme.Brush("Bg") };
         Grid.SetColumn(s, column);
         return s;
     }
@@ -811,7 +821,7 @@ public sealed partial class SceneWindow : Window
     private void Status(string text, bool error = false, bool warning = false)
     {
         _status.Text = text;
-        _status.Foreground = error ? Brushes.IndianRed : warning ? Brushes.Orange : Brushes.Gainsboro;
+        _status.Foreground = error ? Brushes.IndianRed : warning ? Brushes.Orange : Theme.Brush("Text");
     }
 
     private static string F(double v) => LayerWriter.F(v);

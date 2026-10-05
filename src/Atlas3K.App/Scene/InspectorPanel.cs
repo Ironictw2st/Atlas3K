@@ -191,7 +191,7 @@ public sealed class InspectorPanel : ScrollViewer
         headerPanel.Children.Add(new TextBlock
         {
             Text = component.StartsWith("EC") ? component[2..] : component,
-            Foreground = Brushes.Gainsboro, FontWeight = FontWeights.SemiBold,
+            Foreground = Theme.Brush("Text"), FontWeight = FontWeights.SemiBold,
             ToolTip = component + (readOnly ? " (read-only in Terry)" : "") + (slot is { Conditional: true } ? $" (when {slot.Parameter}={slot.Value})" : ""),
         });
 
@@ -218,7 +218,7 @@ public sealed class InspectorPanel : ScrollViewer
         return new Expander
         {
             Header = headerPanel, Content = panel, IsExpanded = component is not ("ECDLCMask" or "ECTerrainClamp" or "ECPropHeightPatch"),
-            Foreground = Brushes.Gainsboro, Margin = new Thickness(0, 4, 0, 0), BorderBrush = Edge, BorderThickness = new Thickness(0, 1, 0, 0),
+            Foreground = Theme.Brush("Text"), Margin = new Thickness(0, 4, 0, 0), BorderBrush = Edge, BorderThickness = new Thickness(0, 1, 0, 0),
         };
     }
 
@@ -322,7 +322,7 @@ public sealed class InspectorPanel : ScrollViewer
     {
         var tb = new TextBox
         {
-            Text = value, IsReadOnly = readOnly, Background = Box, Foreground = Brushes.Gainsboro, BorderBrush = Edge,
+            Text = value, IsReadOnly = readOnly, Background = Box, Foreground = Theme.Brush("Text"), BorderBrush = Edge,
             CaretBrush = Brushes.White, Margin = new Thickness(1), ToolTip = mixed ? "(mixed values)" : null,
         };
         if (mixed) tb.Background = new SolidColorBrush(Color.FromRgb(55, 50, 40));
@@ -371,7 +371,7 @@ public sealed class InspectorPanel : ScrollViewer
     }
 
     private static UIElement ReadOnlyRow(string label, string value) =>
-        Row(label, new TextBox { Text = value, IsReadOnly = true, Background = Brushes.Transparent, Foreground = Brushes.Gainsboro, BorderThickness = new Thickness(0) });
+        Row(label, new TextBox { Text = value, IsReadOnly = true, Background = Brushes.Transparent, Foreground = Theme.Brush("Text"), BorderThickness = new Thickness(0) });
 
     /// <summary>A grid of equal columns (vector components).</summary>
     private sealed class UniformGridPanel : Grid

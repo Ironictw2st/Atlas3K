@@ -24,11 +24,20 @@ def on_msg(msg, data):
     if msg["type"] == "send":
         p = msg["payload"]; counts[p["kind"]] = counts.get(p["kind"], 0) + 1
         log.write(json.dumps(p) + "\n"); log.flush()
-        if p["kind"] in ("hooked", "loaded", "pass_start"): print(time.strftime("%T"), p, flush=True)
+        if p["kind"] in ("hooked", "loaded", "pass_start", "modules"): print(time.strftime("%T"), p, flush=True)
         elif "tiles" in p: print(time.strftime("%T"), p["kind"], p.get("pass"), len(p["tiles"]), flush=True)
     else: print("frida:", msg, flush=True)
 scr = sess.create_script(open(HERE / "frida_tilemap.js", encoding="utf-8").read())
 scr.on("message", on_msg); scr.load()
 print(f"attached to {pid} after {time.time() - t0:.2f}s", flush=True)
+import threading
+def watch():                                                # log every new process while BOB runs
+    fam, told = {pid}, set()
+    while proc.poll() is None:
+        for q in psutil.process_iter(["name", "ppid"]):
+            if q.info["ppid"] in fam and q.pid not in fam:
+                fam.add(q.pid); print(time.strftime("%T"), "BOB child process", q.pid, q.info["name"], flush=True)
+        time.sleep(0.2)
+threading.Thread(target=watch, daemon=True).start()
 out = proc.communicate()[0]
 print(out[-1500:]); print("counts", counts)

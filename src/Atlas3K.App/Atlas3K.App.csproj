@@ -21,7 +21,12 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>Atlas3K</AssemblyName>
     <RootNamespace>Atlas3K.App</RootNamespace>
+    <ApplicationIcon>Assets/atlas3k.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets/atlas3k.ico" />
+  </ItemGroup>
 
 </Project>

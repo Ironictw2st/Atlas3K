@@ -60,7 +60,7 @@ static class BuildCommands
                     var r = e.Result!;
                     log.WriteLine($"=== {e.Id} {r.Status} {r.Seconds:F1} s{(r.FilesWritten > 0 ? $", {r.FilesWritten} files" : "")}");
                     foreach (var p in r.Problems) log.WriteLine($"    ! {p}");
-                    foreach (var n in r.Notes) log.WriteLine($"    note: {n}");
+                    foreach (var n in r.Notes) log.WriteLine($"    {BuildRunner.NoteLine(n)}");
                     break;
             }
         }, cancel.Token);

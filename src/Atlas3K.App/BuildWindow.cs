@@ -86,6 +86,7 @@ public sealed class BuildWindow : Window
         _log.FontFamily = Theme.MonoFont;
         _log.Background = Theme.Brush("Bg");
         Content = BuildLayout();
+        Placement.Track(this, "build");
         UpdateTitle();
         ShowEmptyState();
         _filter.TextChanged += (_, _) => RefreshLog();
@@ -388,7 +389,8 @@ public sealed class BuildWindow : Window
             "ok" => (Theme.Glyph.Check, "Ok"),
             "warning" => (Theme.Glyph.Warning, "Warn"),
             "failed" or "blocked" => (Theme.Glyph.Error, "Error"),
-            "skipped" or "cancelled" => (Theme.Glyph.Skipped, "DimText"),
+            "cancelled" => (Theme.Glyph.Cancelled, "DimText"),
+            "skipped" => (Theme.Glyph.Skipped, "DimText"),
             _ => (Theme.Glyph.Pending, "DimText"),
         };
         row.StatusIcon.Text = glyph;
@@ -498,7 +500,7 @@ public sealed class BuildWindow : Window
     {
         _buildAll.IsEnabled = _runSelected.IsEnabled = _packOnly.IsEnabled = !running;
         _cancel.IsEnabled = running;
-        _tree.IsEnabled = !running;
+        foreach (var r in _rows.Values) r.Check.IsEnabled = !running;   // the tree stays enabled (selection, scrolling)
         _profileHost.IsEnabled = !running;
         if (running) _progress.Foreground = Theme.Brush("Text");
     }
@@ -509,8 +511,8 @@ public sealed class BuildWindow : Window
         {
             case BuildRunner.EventKind.Started:
                 SetStatus(e.Id, "running");
-                if (e.Id.StartsWith("compile:")) SetStatus("compile", "running");
-                AddLine(e.Id, "— start");
+                if (e.Id.StartsWith("compile:")) SetStatus("compile", "running");   // compile steps log their own "start"
+                else AddLine(e.Id, "— start");
                 break;
             case BuildRunner.EventKind.Log:
                 AddLine(e.Id, e.Message!);
@@ -522,7 +524,7 @@ public sealed class BuildWindow : Window
                     row.Item.ToolTip = string.Join("\n", r.Problems.Concat(r.Notes)) is { Length: > 0 } t ? t : null;
                 AddLine(e.Id, $"— {r.Status} in {Duration(r.Seconds)}");
                 foreach (var p in r.Problems) AddLine(e.Id, "! " + p);
-                foreach (var n in r.Notes) AddLine(e.Id, "note: " + n);
+                foreach (var n in r.Notes) AddLine(e.Id, BuildRunner.NoteLine(n));
                 break;
         }
     }

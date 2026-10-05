@@ -19,9 +19,23 @@ public static partial class GameSetup
         foreach (var library in SteamLibraries())
         {
             var game = Path.Combine(library, "steamapps", "common", GameFolderName);
-            if (Directory.Exists(Path.Combine(game, "data"))) return game;
+            if (Directory.Exists(Path.Combine(game, "data"))) return TrueCase(game);
         }
         return null;
+    }
+
+    /// <summary>The path as cased on disk (Steam's registry value is lower case).</summary>
+    private static string TrueCase(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(full)!.ToUpperInvariant();
+        var result = root;
+        foreach (var part in full[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var match = Directory.EnumerateFileSystemEntries(result, part).FirstOrDefault();
+            result = match ?? Path.Combine(result, part);
+        }
+        return result;
     }
 
     private static IEnumerable<string> SteamLibraries()

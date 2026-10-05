@@ -39,6 +39,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         Title = AppInfo.Title($"Terrain painter — {paths.MapName}");
         StandardMenus.AddTo(MainMenu, this, paths);
+        Placement.Track(this, "painter");
         LaunchBobItem.Visibility = AppSettings.Current.DeveloperMode ? Visibility.Visible : Visibility.Collapsed;
         CommandBindings.Add(new CommandBinding(UndoCommand, (_, _) => Map.Undo.Undo(), (_, e) => e.CanExecute = Map.Undo.CanUndo));
         CommandBindings.Add(new CommandBinding(RedoCommand, (_, _) => Map.Undo.Redo(), (_, e) => e.CanExecute = Map.Undo.CanRedo));

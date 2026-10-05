@@ -61,6 +61,8 @@ PROT, HEXI, NOMAD, KNE, NPNEW, NPOLD, NPOLDF, VAN = 0, 1, 2, 3, 4, 5, 6, 7
 GNAME = {PROT: "protected_other", HEXI: "hexi", NOMAD: "nomad", KNE: "korea_ne", NPNEW: "np_new", NPOLD: "np_old_kept",
          NPOLDF: "np_old_flagged", VAN: "vanilla"}
 DOMAIN = (HEXI, NOMAD, KNE, NPNEW, NPOLDF)
+VAN_CLIM = (0, 1, 3, 4)                                 # map.hex climate codes of the per-climate vanilla references
+VAN_CN = {0: "arid", 1: "cold", 3: "subtrop", 4: "temperate"}
 NPOLD_ROW = 830                 # np_old north of this hex row (row 0 = south) is part of "the north" -> rewritten
 ZONE_EDGE = 6                   # np_old within this many hexes of the Hexi zone edge (or inside it) -> rewritten
 
@@ -217,12 +219,23 @@ def learn_priors(I, C, log=print):
     pcold = np.where(play & C["imp"], pc[1][C["sbin"]], np.where(play, pc[0][C["sbin"]], pslope[C["sbin"]])).astype(np.float32)
     # where the pre-polish painting wanted mountain ground (Qilian, Yin shan, ...), keep it likelier - on SLOPES only
     # (slope band >= 2; flat land never gets the boost: H2), smoothed over ~3 hexes so blob outlines do not carry over
-    ci = ndi.gaussian_filter(cold.astype(np.float32), 6.0)
+    ci = warp_cells(ndi.gaussian_filter(cold.astype(np.float32), 6.0), seed=79)
     C["pcold"] = np.where(C["sbin"] >= 2, np.maximum(pcold, 0.85 * ci), pcold).astype(np.float32)
     log("vanilla dryness prior by climate (arid, steppe, green):", {k: np.round(v, 2).tolist() for k, v in prior.items()},
         " grain by town distance bin:", np.round(gr, 3).tolist(), " mountain ground by slope band (passable / impassable; any):",
         np.round(pc, 2).tolist(), np.round(pslope, 2).tolist())
     return prior, gr
+
+
+def warp_cells(a, amp=15.0, cell=50, seed=77):
+    """large-scale domain warp of a cell map (+-amp cells at ~cell wavelength): straight edges of the pre-polish
+    painting (pad rows, zone rectangles, the Manchurian block) must not survive as straight intent edges."""
+    Hq, Wq = a.shape[-2:]
+    dy = amp * smooth_noise((Hq, Wq), cell, seed); dx = amp * smooth_noise((Hq, Wq), cell, seed + 1)
+    yy, xx = np.mgrid[0:Hq, 0:Wq].astype(np.float32)
+    co = [np.clip(yy + dy, 0, Hq - 1).ravel(), np.clip(xx + dx, 0, Wq - 1).ravel()]
+    if a.ndim == 2: return ndi.map_coordinates(a, co, order=1).reshape(Hq, Wq)
+    return np.stack([ndi.map_coordinates(c, co, order=1).reshape(Hq, Wq) for c in a])
 
 
 def intent_map(I, C, prior, sigma=12.0):
@@ -239,7 +252,8 @@ def intent_map(I, C, prior, sigma=12.0):
         it = np.where(ws > 0.05, out / np.maximum(ws, 1e-6), pr)
     a = np.clip(ws / 0.3, 0, 1)                        # little information (mountain areas) -> lean on the prior
     it = (0.75 * a) * it + (1 - 0.75 * a) * pr
-    return (it / it.sum(0, keepdims=True)).astype(np.float32)
+    it = warp_cells(it.astype(np.float32))
+    return (it / np.maximum(it.sum(0, keepdims=True), 1e-6)).astype(np.float32)
 
 
 # ------------------------------------------------------------------------------------------------------------ quilting
@@ -274,7 +288,8 @@ class Quilter:
         for i, ch in enumerate(chans):                       # window means via uniform filter, sampled at the corners
             m = ndi.uniform_filter(ch, n, mode="constant", origin=-(n // 2))
             S[:, i] = m[gy, gx]
-        vanok = S[:, 15] >= 0.75 - 1e-4; badok = S[:, 16] <= 1e-6; watok = S[:, 17] <= 0.25
+        vanok = (S[:, 15] >= 0.75 - 1e-4) & (S[:, 15] + S[:, 17] >= 0.999)     # vanilla land + water only
+        badok = S[:, 16] <= 1e-6; watok = S[:, 17] <= 0.25
         ok = vanok & badok & watok
         self.cy, self.cx = gy[ok], gx[ok]
         S = S[ok]
@@ -286,7 +301,7 @@ class Quilter:
         self.crow = C["row"][rc].astype(np.float32); self.cclim = C["clim"][rc]
         self.creg = I["f"]["region"][C["r"][rc], C["c"][rc]]
         self.used = np.zeros(len(self.cy), np.float32)
-        log(f"donor windows: {len(self.cy):,} valid of {len(gy):,} (vanilla land >= 75%, no rice/tea/road/shroud, <= 25% water)")
+        log(f"donor windows: {len(self.cy):,} valid of {len(gy):,} (only vanilla land + <= 25% water, no rice/tea/road/shroud)")
         # noise for the cut edge weights (irregular seams where old and new disagree everywhere)
         self.rng = np.random.default_rng(SEED)
 
@@ -579,10 +594,13 @@ def _runs_ge(e, L):
 def metrics(B, I, sample_windows=True):
     """per group (+ vanilla): transitions per land hex, hex-border share, flat-mountain share, long straight boundary runs
     per 1000 hexes, class histogram distance to vanilla same climate, patch size / shape statistics."""
-    H, W, w, h, f, gc = I["H"], I["W"], I["w"], I["h"], I["f"], I["gc"]
+    H, W, w, h, f, gc0 = I["H"], I["W"], I["w"], I["h"], I["f"], I["gc"]
     land = f["terr"] == 0
-    G = list(DOMAIN) + [VAN]
-    ng = 8
+    # vanilla split by climate (codes 8.. = VAN_CLIM), recombined as VAN at the end: the fair reference per climate
+    gc = gc0.copy(); vm = gc0 == VAN
+    for i, cl in enumerate(VAN_CLIM): gc[vm & (f["climate"] == cl)] = 8 + i
+    G = list(DOMAIN) + [8 + i for i in range(len(VAN_CLIM))]
+    ng = 8 + len(VAN_CLIM)
     trans = np.zeros(ng); hexb = np.zeros(ng); tot_h = np.zeros(ng); runs = np.zeros(ng)
     hist = np.zeros((ng, 5, 256))
     TILE = 256; L = 40
@@ -604,12 +622,15 @@ def metrics(B, I, sample_windows=True):
             m = (g == gg) & ld
             if not m.any(): continue
             runs[gg] += _runs_ge(dv & m, L) + _runs_ge((dh & m).T, L)
-    nh = np.bincount(gc[land], minlength=ng).astype(float)
+    for arr in (trans, hexb, tot_h, runs, hist): arr[VAN] = arr[8:].sum(0)
+    nh = np.bincount(gc[land], minlength=ng).astype(float); nh[VAN] = nh[8:].sum()
+    G = G + [VAN]
+    gname = dict(GNAME); gname.update({8 + i: "vanilla_" + VAN_CN[cl] for i, cl in enumerate(VAN_CLIM)})
     out = {}
     vhist = hist[VAN]
     for gg in G:
         d = dict(land_hexes=int(nh[gg]))
-        if nh[gg] == 0: out[GNAME[gg]] = d; continue
+        if nh[gg] == 0: out[gname[gg]] = d; continue
         d["transitions_per_hex"] = round(float(trans[gg] / nh[gg]), 2)
         d["hex_border_pct"] = round(float(100 * hexb[gg] / max(tot_h[gg], 1)), 1)
         d["straight_runs_per_1k_hex"] = round(float(1000 * runs[gg] / nh[gg]), 2)
@@ -619,22 +640,23 @@ def metrics(B, I, sample_windows=True):
             if a.sum() < 64 * 2000 or v.sum() == 0: continue
             dist[cl] = round(float(np.abs(a / a.sum() - v / v.sum()).sum() / 2), 3)       # total variation 0..1
         d["class_tv_vs_vanilla_by_climate"] = dist
-        out[GNAME[gg]] = d
+        out[gname[gg]] = d
     # flat mountain (hex centres, blend_polish's measure)
     Bh = B[I["py"], I["px"]]
     flat = land & (f["imp"] == 0) & (I["s5"] < FLAT_SLOPE)
     for gg in G:
-        m = flat & (gc == gg)
-        if m.sum() > 50: out[GNAME[gg]]["flat_mountain_pct"] = round(100 * float(np.isin(Bh[m], [4, 5, 6, 7]).mean()), 1)
+        m = flat & ((gc == gg) if gg != VAN else (gc >= 8))
+        if m.sum() > 50: out[gname[gg]]["flat_mountain_pct"] = round(100 * float(np.isin(Bh[m], [4, 5, 6, 7]).mean()), 1)
     if sample_windows:
         for gg in G:
             if nh[gg] == 0: continue
-            out[GNAME[gg]].update(patch_stats(B, I, gg))
+            out[gname[gg]].update(patch_stats(B, I, gg, gcode=(gc0 if gg == VAN else gc)))
     return out
 
 
-def sample_windows(I, g, n=24, S=256, seed=3):
-    H, W, w, h, gc, f = I["H"], I["W"], I["w"], I["h"], I["gc"], I["f"]
+def sample_windows(I, g, n=24, S=256, seed=3, gcode=None):
+    H, W, w, h, f = I["H"], I["W"], I["w"], I["h"], I["f"]
+    gc = I["gc"] if gcode is None else gcode
     rng = np.random.default_rng(seed)
     rr, cc = np.nonzero(gc == g)
     if not len(rr): return []
@@ -652,11 +674,11 @@ def sample_windows(I, g, n=24, S=256, seed=3):
     return wins
 
 
-def patch_stats(B, I, g, S=256):
+def patch_stats(B, I, g, S=256, gcode=None):
     """same-class connected patches (4-conn) in sampled 256 px windows fully inside the group: size (hexes), shape
     index P / (4 sqrt A) (1 = square; larger = more ragged), fractal dimension D from log P ~ D/2 log A."""
     sizes, perims = [], []
-    for y0, x0 in sample_windows(I, g, S=S):
+    for y0, x0 in sample_windows(I, g, S=S, gcode=gcode):
         blk = B[y0:y0 + S, x0:x0 + S]
         for k in np.unique(blk):
             m = blk == k
@@ -807,6 +829,7 @@ def main(dry=False):
     files = previews(Bcur, B1, I, preview_crops(I)); overview(Bcur, B1, I)
     print("previews:", files)
     if dry:
+        (OUT / "dry_result_blend_v2.tif").write_bytes(buf.getvalue())       # for inspection only (never copied anywhere)
         print(f"dry run: nothing written outside {OUT} ({time.time() - t0:.0f}s)"); return rep
     assert same, "TIFF format would change"
     BACKUP.mkdir(exist_ok=True); shutil.copy2(BLEND, BACKUP / BLEND.name)
@@ -819,15 +842,19 @@ def main(dry=False):
 def print_table(a, b, c, path):
     keys = ("transitions_per_hex", "hex_border_pct", "straight_runs_per_1k_hex", "flat_mountain_pct", "patch_hex_area_weighted",
             "patch_shape_index", "fractal_dim")
-    lines = [f"{'group':16s} {'metric':26s} {'pre-polish':>10s} {'current':>10s} {'v2':>10s}   vanilla"]
+    lines = [f"{'group':16s} {'metric':26s} {'pre-polish':>10s} {'current':>10s} {'v2':>10s}   vanilla (all)"]
     for g in a:
-        if g == "vanilla": continue
+        if g.startswith("vanilla"): continue
         for k in keys:
             if k not in a[g] and k not in c[g]: continue
             fm = lambda d: f"{d.get(k)}" if d.get(k) is not None else "-"
             lines.append(f"{g:16s} {k:26s} {fm(a[g]):>10s} {fm(b[g]):>10s} {fm(c[g]):>10s}   {fm(c['vanilla'])}")
         lines.append(f"{g:16s} {'class TV vs vanilla/clim':26s} {str(a[g].get('class_tv_vs_vanilla_by_climate')):>10s} -> "
                      f"{str(c[g].get('class_tv_vs_vanilla_by_climate'))}")
+    lines.append("vanilla references (unchanged by v2):")
+    for g in c:
+        if g.startswith("vanilla"):
+            lines.append(f"  {g:18s} " + "  ".join(f"{k} {c[g].get(k)}" for k in keys if c[g].get(k) is not None))
     txt = "\n".join(lines); print(txt); Path(path).write_text(txt + "\n", encoding="utf-8")
 
 

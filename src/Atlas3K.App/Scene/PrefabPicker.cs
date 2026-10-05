@@ -14,11 +14,11 @@ public static class PrefabPicker
         var dialog = new Window
         {
             Title = $"Place prefab — {lib.Database} library ({all.Count})", Owner = owner, Width = 640, Height = 560,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Theme.Brush("Panel"),
         };
         var filter = new TextBox { Margin = new Thickness(0, 0, 0, 6) };
-        var list = new ListBox { Background = Brushes.Transparent, Foreground = Brushes.Gainsboro };
-        var info = new TextBlock { Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 6), MinHeight = 36 };
+        var list = new ListBox { Background = Brushes.Transparent, Foreground = Theme.Brush("Text") };
+        var info = new TextBlock { Foreground = Theme.Brush("DimText"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 6), MinHeight = 36 };
         var ok = new Button { Content = "Place", IsDefault = true, Width = 90, Margin = new Thickness(0, 0, 6, 0) };
         var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 90 };
         string? result = null;
@@ -54,7 +54,7 @@ public static class PrefabPicker
         var header = new TextBlock
         {
             Text = all.Count == 0 ? $"No prefabs in {lib.Root} yet. Select entities and use Edit → Make prefab to create one." : "Filter:",
-            Foreground = Brushes.Gainsboro, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4),
+            Foreground = Theme.Brush("Text"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4),
         };
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(filter, Dock.Top);

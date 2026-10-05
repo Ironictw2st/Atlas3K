@@ -42,7 +42,12 @@ public sealed class AppSettings
         {
             if (File.Exists(FilePath)) return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), Json) ?? new();
         }
-        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { }
+        catch (JsonException)
+        {
+            // keep the broken file for the user instead of overwriting it with defaults on the next save
+            try { File.Copy(FilePath, FilePath + ".bad", overwrite: true); } catch (IOException) { }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         return new AppSettings();
     }
 

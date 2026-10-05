@@ -352,7 +352,7 @@ public sealed class BuildLogWindow : Window
         FontFamily = new System.Windows.Media.FontFamily("Consolas"),
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-        Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 30, 30)),
+        Background = Theme.Brush("Bg"),
         Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220)),
     };
 

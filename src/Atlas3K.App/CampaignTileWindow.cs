@@ -49,12 +49,12 @@ public sealed class CampaignTileWindow : Window
     private readonly CampaignTileView _view = new();
     private readonly TextBlock _status = new() { FontFamily = new FontFamily("Consolas"), Text = "Loading..." };
     private readonly TextBlock _summary = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
-    private readonly ListBox _palette = new() { Height = 260, Background = Brushes.Transparent, Foreground = Brushes.Gainsboro };
-    private readonly ListBox _issueList = new() { Height = 180, Background = Brushes.Transparent, Foreground = Brushes.Gainsboro };
-    private readonly ListBox _history = new() { Height = 120, Background = Brushes.Transparent, Foreground = Brushes.Gainsboro };
+    private readonly ListBox _palette = new() { Height = 260, Background = Brushes.Transparent, Foreground = Theme.Brush("Text") };
+    private readonly ListBox _issueList = new() { Height = 180, Background = Brushes.Transparent, Foreground = Theme.Brush("Text") };
+    private readonly ListBox _history = new() { Height = 120, Background = Brushes.Transparent, Foreground = Theme.Brush("Text") };
     private readonly Slider _radius = new() { Minimum = 0, Maximum = 12, Value = 1, IsSnapToTickEnabled = true, TickFrequency = 1 };
     private readonly TextBlock _radiusLabel = new() { Text = "Brush radius: 1 hex" };
-    private readonly CheckBox _allowWarnings = new() { Content = "Save despite warnings", Foreground = Brushes.Gainsboro, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly CheckBox _allowWarnings = new() { Content = "Save despite warnings", Foreground = Theme.Brush("Text"), Margin = new Thickness(0, 6, 0, 0) };
     private readonly Dictionary<Tool, RadioButton> _toolButtons = [];
     private Tool _tool = Tool.Navigate;
 
@@ -65,9 +65,10 @@ public sealed class CampaignTileWindow : Window
         Title = AppInfo.Title($"Campaign tile map — {paths.MapName}");
         Width = 1500;
         Height = 950;
-        Background = new SolidColorBrush(Color.FromRgb(30, 30, 30));
-        Foreground = Brushes.Gainsboro;
+        Background = Theme.Brush("Bg");
+        Foreground = Theme.Brush("Text");
         Content = BuildLayout();
+        Placement.Track(this, "tiles");
 
         _view.HoverChanged += Hover;
         _view.HexDown += HexDown;
@@ -106,7 +107,7 @@ public sealed class CampaignTileWindow : Window
         DockPanel.SetDock(menu, Dock.Top);
         dock.Children.Add(menu);
 
-        var statusBar = new Border { Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)), Padding = new Thickness(6, 3, 6, 3), Child = _status };
+        var statusBar = new Border { Background = Theme.Brush("Panel"), Padding = new Thickness(6, 3, 6, 3), Child = _status };
         DockPanel.SetDock(statusBar, Dock.Bottom);
         dock.Children.Add(statusBar);
 
@@ -118,7 +119,7 @@ public sealed class CampaignTileWindow : Window
             (Tool.Line, "Line (click points, Enter = draw, Esc = cancel)"), (Tool.Fill, "Fill connected area (click)"), (Tool.Pick, "Eyedropper (click)"),
         })
         {
-            var rb = new RadioButton { Content = text, Foreground = Brushes.Gainsboro, Margin = new Thickness(0, 2, 0, 2), IsChecked = tool == Tool.Navigate, GroupName = "tool" };
+            var rb = new RadioButton { Content = text, Foreground = Theme.Brush("Text"), Margin = new Thickness(0, 2, 0, 2), IsChecked = tool == Tool.Navigate, GroupName = "tool" };
             rb.Checked += (_, _) => SetTool(tool);
             _toolButtons[tool] = rb;
             panel.Children.Add(rb);
@@ -139,11 +140,11 @@ public sealed class CampaignTileWindow : Window
         panel.Children.Add(_history);
         panel.Children.Add(new TextBlock
         {
-            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Foreground = Brushes.Gray,
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Foreground = Theme.Brush("DimText"),
             Text = "Right/middle drag pans, wheel zooms. Double-click an issue to go to it. After saving, build the map (Ctrl+B: " +
                    "tile_list, then global_map + global_mesh) and check holes (tiles-holes / check_tile_holes).",
         });
-        var scroll = new ScrollViewer { Width = 320, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)), Content = panel };
+        var scroll = new ScrollViewer { Width = 320, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Background = Theme.Brush("Panel"), Content = panel };
         DockPanel.SetDock(scroll, Dock.Left);
         dock.Children.Add(scroll);
         dock.Children.Add(_view);
@@ -199,7 +200,7 @@ public sealed class CampaignTileWindow : Window
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
             row.Children.Add(new Rectangle { Width = 14, Height = 14, Fill = new SolidColorBrush(Color.FromRgb(s.R, s.G, s.B)), Stroke = Brushes.Black, Margin = new Thickness(0, 0, 6, 0) });
-            row.Children.Add(new TextBlock { Text = $"{s.Name}  ({counts.GetValueOrDefault(s.Rgb):N0})", Foreground = counts.ContainsKey(s.Rgb) ? Brushes.Gainsboro : Brushes.Gray });
+            row.Children.Add(new TextBlock { Text = $"{s.Name}  ({counts.GetValueOrDefault(s.Rgb):N0})", Foreground = counts.ContainsKey(s.Rgb) ? Theme.Brush("Text") : Theme.Brush("DimText") });
             _palette.Items.Add(new ListBoxItem { Content = row, Tag = s.Name });
         }
         _palette.SelectedIndex = 0;

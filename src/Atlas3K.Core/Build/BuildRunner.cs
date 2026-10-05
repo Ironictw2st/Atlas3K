@@ -143,6 +143,7 @@ public sealed class BuildRunner
         }
 
         var ctx = Context();
+        var started = new System.Collections.Concurrent.ConcurrentDictionary<string, Stopwatch>();
         var pipeline = new CampaignBuildPipeline
         {
             Progress = e =>
@@ -150,15 +151,19 @@ public sealed class BuildRunner
                 var id = "compile:" + e.Step;
                 switch (e.Kind)
                 {
-                    case CampaignBuildPipeline.StepEventKind.Started: _events(new Event(id, EventKind.Started)); break;
+                    case CampaignBuildPipeline.StepEventKind.Started:
+                        started[id] = Stopwatch.StartNew();
+                        _events(new Event(id, EventKind.Started));
+                        break;
                     case CampaignBuildPipeline.StepEventKind.Log: Log(id, e.Message!); break;
                     case CampaignBuildPipeline.StepEventKind.Finished:
                         var o = e.Outcome!;
-                        var r = new ItemResult(id, o.Status, o.Result?.Elapsed.TotalSeconds ?? 0, o.Problems, o.Result?.Notes ?? [], o.Result?.Written.Count ?? 0);
+                        var seconds = o.Result?.Elapsed.TotalSeconds ?? (started.TryGetValue(id, out var w) ? w.Elapsed.TotalSeconds : 0);
+                        var r = new ItemResult(id, o.Status, seconds, o.Problems, o.Result?.Notes ?? [], o.Result?.Written.Count ?? 0);
                         lock (_items) _items.Add(r);
                         Write(id, $"{o.Status}{(o.Result is { } res ? $" {res.Elapsed.TotalSeconds:F1} s, {res.Written.Count} files" : "")}");
                         foreach (var p in o.Problems) Write(id, "! " + p);
-                        foreach (var n in r.Notes) Write(id, "note: " + n);
+                        foreach (var n in r.Notes) Write(id, NoteLine(n));
                         _events(new Event(id, EventKind.Finished, Result: r));
                         break;
                 }
@@ -308,7 +313,7 @@ public sealed class BuildRunner
         lock (_items) _items.Add(result);
         Write(id, $"{result.Status} {result.Seconds:F1} s");
         foreach (var p in result.Problems) Write(id, "! " + p);
-        foreach (var n in result.Notes) Write(id, "note: " + n);
+        foreach (var n in result.Notes) Write(id, NoteLine(n));
         _events(new Event(id, EventKind.Finished, Result: result));
         return result.Succeeded;
     }
@@ -357,6 +362,9 @@ public sealed class BuildRunner
             File.Copy(f, dest, overwrite: true);
         }
     }
+
+    /// <summary>A note as a log line: "warning: …" as is, else "note: …".</summary>
+    public static string NoteLine(string note) => note.StartsWith(WarningPrefix) ? note : "note: " + note;
 
     private static string Safe(string s) => string.Concat(s.Select(c => Path.GetInvalidFileNameChars().Contains(c) || c == ' ' ? '_' : c));
 }
