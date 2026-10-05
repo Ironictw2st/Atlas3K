@@ -2,8 +2,8 @@
 # Build the CLI into a private dir, rebuild native global_props from the frozen kit, diff against BOB main190.
 set -e
 cd /z/Claude/TerryClone
-dotnet build src/Atlas3K.Cli -c Release -o output/props_parity/cli_bin 2>&1 | grep -E " error |Build succeeded"
-C=output/props_parity/cli_bin/Atlas3K.Cli.exe
+dotnet build src/Atlas3K.Cli -c Release -o output/props_finish/cli_bin 2>&1 | grep -E " error |Build succeeded"
+C=output/props_finish/cli_bin/Atlas3K.Cli.exe
 B=output/bob_runs/20261004_230523_frida_trees_main190/bob_terrain_out/global_props.bin
 N=output/props_parity/native/terrain/campaigns/3k_190e_expanded_map/global_props.bin
 $C build-campaign --ak 'Z:\Claude\TerryClone\output\props_parity\ak' --map 3k_190e_expanded_map --steps rasters,rivers,global_props --out 'Z:\Claude\TerryClone\output\props_parity\native' 2>&1 | grep -E "note|error" | tail -4

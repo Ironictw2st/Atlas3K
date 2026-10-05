@@ -1,3 +1,4 @@
+using Atlas3K.Formats;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Xml.Linq;
@@ -93,8 +94,15 @@ public sealed class GlobalPropsBuilder
             if (outside.Count > 0) Notes.Add($"{outside.Count} objects in {region} reach outside the quadtree root: dropped (as BOB)");
             cells.AddRange(objects.Where(o => CellOf(o) >= 0).GroupBy(CellOf).Select(g => (region, g)));
         }
-        // BOB's entry order: quadtree cells ascending; in a cell, regions in the order their first (lowest-id) object reached it
-        foreach (var (region, cell) in cells.OrderBy(c => c.Cell.Key).ThenBy(c => c.Cell.Min(o => o.Id)))
+        // BOB's entry order: quadtree cells ascending; each cell keeps its regions in a CA_STD hash map keyed by region name,
+        // filled as the scene is walked by ascending entity id, and is written in that map's list order (CA::murmur_hash
+        // buckets, 1 -> 2b+1 growth: CaHash.HashMapOrder). Matches all 2,417 main190 cells (research/props/cell_map_order.py).
+        var ordered = cells.GroupBy(c => c.Cell.Key).OrderBy(g => g.Key).SelectMany(g =>
+        {
+            var byName = g.ToDictionary(c => c.Region, StringComparer.Ordinal);
+            return CaHash.HashMapOrder(g.OrderBy(c => c.Cell.Min(o => o.Id)).Select(c => c.Region)).Select(r => byName[r]);
+        });
+        foreach (var (region, cell) in ordered)
         {
             {
                 var cellBody = BmdBody.Dynamic(_t.Framing);
