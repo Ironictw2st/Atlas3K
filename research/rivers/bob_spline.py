@@ -6,6 +6,8 @@ import math, re, sys
 import xml.etree.ElementTree as ET
 import numpy as np
 F = np.float32
+WORLD_F32 = False
+CTRL_MODE = 'local'   # 'local': W(p + t) ; 'world': W(p) + t
 B = [[-1, 3, -3, 1], [3, -6, 3, 0], [-3, 3, 0, 0], [1, 0, 0, 0]]
 
 
@@ -39,7 +41,13 @@ class Spline:
 
     def add(self, p0, p1, p2, p3):
         P = [list(map(F, p)) for p in (p0, p1, p2, p3)]
-        straight = (P[0] == P[1] and P[2] == P[3])
+        h = F(0.5)
+        e01, e23 = P[0] == P[1], P[2] == P[3]
+        straight = e01 or e23                              # FUN_18016e440: any degenerate end -> straight length
+        if e01 and not e23: P[1] = [F(F(P[2][k] + P[0][k]) * h) for k in range(3)]
+        elif e23 and not e01: P[2] = [F(F(P[1][k] + P[3][k]) * h) for k in range(3)]
+        elif e01 and e23:
+            P[1] = [F(F(P[3][k] + P[0][k]) * h) for k in range(3)]; P[2] = list(P[1])
         self.segs.append(P)
         if straight:
             L = F(math.sqrt(F(sum(F(F(P[0][k] - P[3][k]) * F(P[0][k] - P[3][k])) for k in (1, 0, 2)))))
@@ -95,7 +103,10 @@ def rivers(layer):
         sp = ent.find("ECRiverSpline")
         if sp is None: continue
         tr = ent.find("ECTransform"); pos = list(map(float, tr.get("position").split())); yaw = math.radians(float(tr.get("rotation").split()[1]))
-        def W(p): return (pos[0] + p[0] * math.cos(yaw) + p[2] * math.sin(yaw), pos[1] + p[1], pos[2] - p[0] * math.sin(yaw) + p[2] * math.cos(yaw))
+        def W(p, pos=pos, yaw=yaw):
+            if yaw == 0 and WORLD_F32:
+                return tuple(F(F(p[k]) + F(pos[k])) for k in range(3))
+            return (pos[0] + p[0] * math.cos(yaw) + p[2] * math.sin(yaw), pos[1] + p[1], pos[2] - p[0] * math.sin(yaw) + p[2] * math.cos(yaw))
         pts = [(tuple(map(float, p.get("position").split(","))), tuple(map(float, p.get("tangent_in").split(","))),
                 tuple(map(float, p.get("tangent_out").split(",")))) for p in sp.iter("point")]
         out.append((ent.get("id"), ent.get("name"), pts, W, float(sp.get("spline_step_size", "1.5"))))
