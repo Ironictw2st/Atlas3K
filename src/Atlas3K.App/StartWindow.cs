@@ -41,6 +41,18 @@ public sealed class StartWindow : Window
         Placement.Track(this, "start");
     }
 
+    /// <summary>Closes the other windows one by one first, so an unsaved-edits prompt's Cancel keeps the app running
+    /// (Application.Shutdown ignores a cancelled Closing).</summary>
+    private void ExitApp()
+    {
+        foreach (var w in Application.Current.Windows.OfType<Window>().Where(w => w != this).ToList())
+        {
+            w.Close();
+            if (PresentationSource.FromVisual(w) is not null) return;   // still open: the user cancelled
+        }
+        Application.Current.Shutdown();
+    }
+
     private UIElement BuildLayout()
     {
         var dock = new DockPanel();
@@ -48,7 +60,7 @@ public sealed class StartWindow : Window
         var file = new MenuItem { Header = "_File" };
         file.Items.Add(StandardMenus.Item("_Settings…", OpenSettings, tooltip: "Folders, linked packs, tile map source and developer mode."));
         file.Items.Add(new Separator());
-        file.Items.Add(StandardMenus.Item("E_xit", () => Application.Current.Shutdown()));
+        file.Items.Add(StandardMenus.Item("E_xit", ExitApp));
         menu.Items.Add(file);
         StandardMenus.AddTo(menu, this, _paths);
         DockPanel.SetDock(menu, Dock.Top);
