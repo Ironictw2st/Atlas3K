@@ -38,30 +38,28 @@ public sealed class BuildProfileEditor : ScrollViewer
         var b = _project.Build;
         var form = new StackPanel { Margin = new Thickness(14, 6, 14, 14), MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Left };
 
-        form.Children.Add(Theme.Header("Project", 4));
-        form.Children.Add(Field("Name", () => _project.Name, v => _project.Name = v));
-        form.Children.Add(Field("Map", () => _project.Map, v => _project.Map = v, tip: "Campaign map name, e.g. 3k_main_map"));
-        form.Children.Add(Field("Assembly kit", () => _project.AssemblyKit, v => _project.AssemblyKit = v, Browse.Folder, "Empty = the default kit (Settings)"));
-        form.Children.Add(Field("Game data", () => _project.GameData, v => _project.GameData = v, Browse.Folder, "Empty = the default game data folder"));
+        form.Children.Add(Theme.Header("Project", 4).Card("profile.header.project"));
+        form.Children.Add(Field("Name", () => _project.Name, v => _project.Name = v, key: "profile.name"));
+        form.Children.Add(Field("Map", () => _project.Map, v => _project.Map = v, key: "profile.map"));
+        form.Children.Add(Field("Assembly kit", () => _project.AssemblyKit, v => _project.AssemblyKit = v, Browse.Folder, "profile.kit"));
+        form.Children.Add(Field("Game data", () => _project.GameData, v => _project.GameData = v, Browse.Folder, "profile.gameData"));
         form.Children.Add(Field("Mod packs", () => string.Join("; ", _project.ModPacks), v => _project.ModPacks = Split(v, ';'),
-                                tip: "Packs searched before vanilla for assets, highest priority first; separate with ;"));
+                                key: "profile.modPacks"));
 
-        form.Children.Add(Theme.Header("Tile map source"));
+        form.Children.Add(Theme.Header("Tile map source").Card("profile.header.tileMap"));
         var tileMap = new TileMapSourcePanel(_project.TileMap, _paths);
         tileMap.Changed += () => { _project.TileMap = tileMap.StoredValue; _changed(); };
         form.Children.Add(tileMap);
 
-        form.Children.Add(Theme.Header("Compile"));
-        form.Children.Add(Field("Output", () => b.Output, v => b.Output = v, Browse.Folder,
-                                "Where Compile writes, laid out like working_data. {ak}\\working_data replaces the kit's output in place, as BOB did."));
-        form.Children.Add(Field("Accept tile-map codes", () => string.Join(", ", b.AcceptTileMap), v => b.AcceptTileMap = Split(v, ','),
-                                tip: "Tile-map pre-flight errors to tolerate, e.g. layout.mesh_columns"));
-        form.Children.Add(Field("Clean before compile", () => string.Join(", ", b.Clean), v => b.Clean = Split(v, ','),
-                                tip: "Folders under the compiled terrain folder to delete first, e.g. global_meshes, height_patches, models"));
-        form.Children.Add(Field("Backup folder", () => b.Backup, v => b.Backup = v, Browse.Folder,
-                                "When set, a rolling copy of the raw and compiled terrain is kept here before each compile"));
+        form.Children.Add(Theme.Header("Compile").Card("profile.header.compile"));
+        form.Children.Add(Field("Output folder", () => b.Output, v => b.Output = v, Browse.Folder, "profile.output"));
+        form.Children.Add(Field("Accepted tile-map errors", () => string.Join(", ", b.AcceptTileMap), v => b.AcceptTileMap = Split(v, ','),
+                                key: "profile.acceptTileMap"));
+        form.Children.Add(Field("Delete before compile", () => string.Join(", ", b.Clean), v => b.Clean = Split(v, ','),
+                                key: "profile.clean"));
+        form.Children.Add(Field("Terrain backup folder", () => b.Backup, v => b.Backup = v, Browse.Folder, "profile.backup"));
 
-        form.Children.Add(Theme.Header("Custom steps"));
+        form.Children.Add(Theme.Header("Custom steps").Card("profile.header.custom"));
         form.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Foreground = Theme.Brush("DimText"), Margin = new Thickness(0, 0, 0, 6),
@@ -71,18 +69,17 @@ public sealed class BuildProfileEditor : ScrollViewer
         });
         form.Children.Add(CustomGrid());
 
-        form.Children.Add(Theme.Header("Pack"));
-        form.Children.Add(Combo("Mode", Enum.GetValues<PackMode>(), () => b.Pack.Mode, v => b.Pack.Mode = v,
-                                "New: a pack with only the contents below. Merge: the base pack with the contents replacing or adding files."));
-        form.Children.Add(Field("Output pack", () => b.Pack.Output, v => b.Pack.Output = v, Browse.SaveFile, "e.g. {game}\\my_map.pack or {project}\\{map}.pack"));
-        form.Children.Add(Field("Merge base", () => b.Pack.Base, v => b.Pack.Base = v, Browse.File, "Merge only. Empty = merge into the output pack itself"));
+        form.Children.Add(Theme.Header("Pack").Card("profile.header.pack"));
+        form.Children.Add(Combo("Pack mode", Enum.GetValues<PackMode>(), () => b.Pack.Mode, v => b.Pack.Mode = v, "profile.packMode"));
+        form.Children.Add(Field("Output pack", () => b.Pack.Output, v => b.Pack.Output = v, Browse.SaveFile, "profile.packOutput"));
+        form.Children.Add(Field("Merge base", () => b.Pack.Base, v => b.Pack.Base = v, Browse.File, "profile.packBase"));
         form.Children.Add(Field("Replace folders", () => string.Join(", ", b.Pack.ReplaceDirs), v => b.Pack.ReplaceDirs = Split(v, ','),
-                                tip: "Merge only: pack folders whose old files are dropped unless re-added, e.g. terrain/campaigns/{map}/"));
-        form.Children.Add(new TextBlock { Text = "Contents (later rows win for the same pack path)", Foreground = Theme.Brush("DimText"), Margin = new Thickness(0, 8, 0, 4) });
+                                key: "profile.replaceDirs"));
+        form.Children.Add(new TextBlock { Text = "Contents (later rows win for the same pack path)", Foreground = Theme.Brush("DimText"), Margin = new Thickness(0, 8, 0, 4) }.Card("profile.contents"));
         form.Children.Add(ContentsGrid());
 
-        form.Children.Add(Theme.Header("Install"));
-        form.Children.Add(Check("Keep a backup of the pack being replaced", () => b.Install.Backup, v => b.Install.Backup = v));
+        form.Children.Add(Theme.Header("Install").Card("profile.header.install"));
+        form.Children.Add(Check("Keep a backup of the pack being replaced", () => b.Install.Backup, v => b.Install.Backup = v, "profile.installBackup"));
         form.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Foreground = Theme.Brush("DimText"),
@@ -100,14 +97,14 @@ public sealed class BuildProfileEditor : ScrollViewer
             ItemsSource = _custom, AutoGenerateColumns = false, CanUserAddRows = false, MinHeight = 90, MaxHeight = 260,
             HeadersVisibility = DataGridHeadersVisibility.Column, SelectionMode = DataGridSelectionMode.Single,
         };
-        grid.Columns.Add(new DataGridCheckBoxColumn { Header = "On", Binding = new Binding(nameof(CustomStep.Enabled)) });
-        grid.Columns.Add(new DataGridTextColumn { Header = "Name", Binding = new Binding(nameof(CustomStep.Name)), Width = 140 });
-        grid.Columns.Add(new DataGridComboBoxColumn { Header = "Runs", ItemsSource = Enum.GetValues<CustomStepStage>(), SelectedItemBinding = new Binding(nameof(CustomStep.RunAt)), Width = 110 });
-        grid.Columns.Add(new DataGridTextColumn { Header = "Command", Binding = new Binding(nameof(CustomStep.Command)), Width = 110 });
-        grid.Columns.Add(new DataGridTextColumn { Header = "Arguments", Binding = new Binding(nameof(CustomStep.Arguments)), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        grid.Columns.Add(new DataGridTextColumn { Header = "Working folder", Binding = new Binding(nameof(CustomStep.WorkingDir)), Width = 130 });
-        grid.Columns.Add(new DataGridTextColumn { Header = "Timeout (s)", Binding = new Binding(nameof(CustomStep.TimeoutSeconds)), Width = 80 });
-        grid.Columns.Add(new DataGridCheckBoxColumn { Header = "Continue on error", Binding = new Binding(nameof(CustomStep.ContinueOnError)) });
+        grid.Columns.Add(new DataGridCheckBoxColumn { Header = ColumnHeader("On", "profile.custom.on"), Binding = new Binding(nameof(CustomStep.Enabled)) });
+        grid.Columns.Add(new DataGridTextColumn { Header = ColumnHeader("Name", "profile.custom.name"), Binding = new Binding(nameof(CustomStep.Name)), Width = 140 });
+        grid.Columns.Add(new DataGridComboBoxColumn { Header = ColumnHeader("Runs", "profile.custom.runs"), ItemsSource = Enum.GetValues<CustomStepStage>(), SelectedItemBinding = new Binding(nameof(CustomStep.RunAt)), Width = 110 });
+        grid.Columns.Add(new DataGridTextColumn { Header = ColumnHeader("Command", "profile.custom.command"), Binding = new Binding(nameof(CustomStep.Command)), Width = 110 });
+        grid.Columns.Add(new DataGridTextColumn { Header = ColumnHeader("Arguments", "profile.custom.arguments"), Binding = new Binding(nameof(CustomStep.Arguments)), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        grid.Columns.Add(new DataGridTextColumn { Header = ColumnHeader("Working folder", "profile.custom.workingDir"), Binding = new Binding(nameof(CustomStep.WorkingDir)), Width = 130 });
+        grid.Columns.Add(new DataGridTextColumn { Header = ColumnHeader("Timeout (s)", "profile.custom.timeout"), Binding = new Binding(nameof(CustomStep.TimeoutSeconds)), Width = 80 });
+        grid.Columns.Add(new DataGridCheckBoxColumn { Header = ColumnHeader("Continue on error", "profile.custom.continue"), Binding = new Binding(nameof(CustomStep.ContinueOnError)) });
         grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() => { _project.Build.CustomSteps = [.. _custom]; _changed(); });
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
@@ -116,10 +113,10 @@ public sealed class BuildProfileEditor : ScrollViewer
             var name = UniqueName("step");
             _custom.Add(new CustomStep { Name = name, Command = "python", Arguments = "script.py" });
             grid.SelectedIndex = _custom.Count - 1;
-        }));
-        buttons.Children.Add(Theme.IconButton(Theme.Glyph.Delete, "Remove", (_, _) => { if (grid.SelectedItem is CustomStep s) _custom.Remove(s); }));
-        buttons.Children.Add(Theme.IconButton(Theme.Glyph.Up, "Up", (_, _) => Move(grid, -1)));
-        buttons.Children.Add(Theme.IconButton(Theme.Glyph.Down, "Down", (_, _) => Move(grid, +1)));
+        }).Card("profile.custom.add"));
+        buttons.Children.Add(Theme.IconButton(Theme.Glyph.Delete, "Remove", (_, _) => { if (grid.SelectedItem is CustomStep s) _custom.Remove(s); }).Card("profile.custom.remove"));
+        buttons.Children.Add(Theme.IconButton(Theme.Glyph.Up, "Up", (_, _) => Move(grid, -1)).Card("profile.custom.up"));
+        buttons.Children.Add(Theme.IconButton(Theme.Glyph.Down, "Down", (_, _) => Move(grid, +1)).Card("profile.custom.down"));
         buttons.Children.Add(Theme.IconButton(Theme.Glyph.Open, "Browse command…", (_, _) =>
         {
             if (grid.SelectedItem is not CustomStep s) return;
@@ -131,7 +128,7 @@ public sealed class BuildProfileEditor : ScrollViewer
             grid.Items.Refresh();
             _project.Build.CustomSteps = [.. _custom];
             _changed();
-        }, "Pick the program or script for the selected step"));
+        }).Card("profile.custom.browse"));
         return new StackPanel { Children = { grid, buttons } };
     }
 
@@ -142,9 +139,9 @@ public sealed class BuildProfileEditor : ScrollViewer
             ItemsSource = _contents, AutoGenerateColumns = false, CanUserAddRows = false, MinHeight = 90, MaxHeight = 240,
             HeadersVisibility = DataGridHeadersVisibility.Column, SelectionMode = DataGridSelectionMode.Single,
         };
-        grid.Columns.Add(new DataGridTextColumn { Header = "Source (file or folder on disk)", Binding = new Binding(nameof(PackContent.Source)), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        grid.Columns.Add(new DataGridTextColumn { Header = "Path in pack", Binding = new Binding(nameof(PackContent.Path)), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        grid.Columns.Add(new DataGridCheckBoxColumn { Header = "Optional", Binding = new Binding(nameof(PackContent.Optional)) });
+        grid.Columns.Add(new DataGridTextColumn { Header = ColumnHeader("Source (file or folder on disk)", "profile.contents.source"), Binding = new Binding(nameof(PackContent.Source)), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        grid.Columns.Add(new DataGridTextColumn { Header = ColumnHeader("Path in pack", "profile.contents.path"), Binding = new Binding(nameof(PackContent.Path)), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        grid.Columns.Add(new DataGridCheckBoxColumn { Header = ColumnHeader("Optional", "profile.contents.optional"), Binding = new Binding(nameof(PackContent.Optional)) });
         grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() => { _project.Build.Pack.Contents = [.. _contents]; _changed(); });
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
@@ -152,18 +149,18 @@ public sealed class BuildProfileEditor : ScrollViewer
         {
             var dlg = new OpenFolderDialog();
             if (dlg.ShowDialog() == true) _contents.Add(new PackContent { Source = dlg.FolderName, Path = "" });
-        }));
+        }).Card("profile.contents.addFolder"));
         buttons.Children.Add(Theme.IconButton(Theme.Glyph.New, "Add file…", (_, _) =>
         {
             var dlg = new OpenFileDialog();
             if (dlg.ShowDialog() == true) _contents.Add(new PackContent { Source = dlg.FileName, Path = Path.GetFileName(dlg.FileName) });
-        }));
-        buttons.Children.Add(Theme.IconButton(Theme.Glyph.Delete, "Remove", (_, _) => { if (grid.SelectedItem is PackContent c) _contents.Remove(c); }));
+        }).Card("profile.contents.addFile"));
+        buttons.Children.Add(Theme.IconButton(Theme.Glyph.Delete, "Remove", (_, _) => { if (grid.SelectedItem is PackContent c) _contents.Remove(c); }).Card("profile.contents.remove"));
         buttons.Children.Add(Theme.IconButton(Theme.Glyph.Build, "Default contents", (_, _) =>
         {
             _contents.Clear();
             foreach (var c in BuildProject.CreateDefault(_project.Map).Build.Pack.Contents) _contents.Add(c);
-        }, "The compiled terrain folder, camera heightmap and tree list"));
+        }).Card("profile.contents.default"));
         return new StackPanel { Children = { grid, buttons } };
     }
 
@@ -183,9 +180,9 @@ public sealed class BuildProfileEditor : ScrollViewer
 
     // ------------------------------------------------------------------ fields
 
-    private UIElement Field(string label, Func<string> get, Action<string> set, Browse browse = Browse.None, string? tip = null)
+    private UIElement Field(string label, Func<string> get, Action<string> set, Browse browse = Browse.None, string? key = null)
     {
-        var grid = Row(label, tip);
+        var grid = Row(label, key);
         var box = new TextBox { Text = get(), VerticalContentAlignment = VerticalAlignment.Center };
         box.LostFocus += (_, _) =>
         {
@@ -197,7 +194,7 @@ public sealed class BuildProfileEditor : ScrollViewer
         grid.Children.Add(box);
         if (browse != Browse.None)
         {
-            var button = new Button { Content = "…", Margin = new Thickness(4, 0, 0, 0), Padding = new Thickness(8, 0, 8, 0), ToolTip = "Browse" };
+            var button = new Button { Content = "…", Margin = new Thickness(4, 0, 0, 0), Padding = new Thickness(8, 0, 8, 0), }.Card("profile.browse");
             button.Click += (_, _) =>
             {
                 string? picked = browse switch
@@ -217,9 +214,9 @@ public sealed class BuildProfileEditor : ScrollViewer
         return grid;
     }
 
-    private UIElement Combo<T>(string label, T[] values, Func<T> get, Action<T> set, string? tip = null) where T : struct, Enum
+    private UIElement Combo<T>(string label, T[] values, Func<T> get, Action<T> set, string? key = null) where T : struct, Enum
     {
-        var grid = Row(label, tip);
+        var grid = Row(label, key);
         var combo = new ComboBox { ItemsSource = values, SelectedItem = get(), HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 140 };
         combo.SelectionChanged += (_, _) => { if (combo.SelectedItem is T v) { set(v); _changed(); } };
         Grid.SetColumn(combo, 1);
@@ -227,16 +224,17 @@ public sealed class BuildProfileEditor : ScrollViewer
         return grid;
     }
 
-    private UIElement Check(string label, Func<bool> get, Action<bool> set)
+    private UIElement Check(string label, Func<bool> get, Action<bool> set, string key)
     {
-        var box = new CheckBox { Content = label, IsChecked = get(), Margin = new Thickness(160, 4, 0, 4) };
+        var box = new CheckBox { Content = label, IsChecked = get(), Margin = new Thickness(160, 4, 0, 4) }.Card(key);
         box.Click += (_, _) => { set(box.IsChecked == true); _changed(); };
         return box;
     }
 
-    private static Grid Row(string label, string? tip)
+    private static Grid Row(string label, string? key)
     {
-        var grid = new Grid { Margin = new Thickness(0, 2, 0, 2), ToolTip = tip };
+        var grid = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+        if (key is not null) grid.Card(key);
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 300 });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -246,4 +244,7 @@ public sealed class BuildProfileEditor : ScrollViewer
 
     private static List<string> Split(string v, char sep) =>
         v.Split(sep, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    /// <summary>A grid column header with an info card.</summary>
+    private static TextBlock ColumnHeader(string text, string key) => new TextBlock { Text = text }.Card(key);
 }

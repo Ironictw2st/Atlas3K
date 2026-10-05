@@ -65,7 +65,7 @@ public sealed class BuildWindow : Window
         IsReadOnly = true, BorderThickness = new Thickness(0), VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, TextWrapping = TextWrapping.NoWrap,
     };
-    private readonly TextBox _filter = new() { Width = 180, ToolTip = "Show only log lines containing this text" };
+    private readonly TextBox _filter = new() { Width = 180 };
     private readonly CheckBox _onlySelected = new() { Content = "Selected row only", Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
     private readonly CheckBox _autoScroll = new() { Content = "Auto-scroll", IsChecked = true, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _projectLabel = new() { FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
@@ -113,19 +113,19 @@ public sealed class BuildWindow : Window
         var left = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 6, 8, 6) };
         left.Children.Add(Theme.Icon(Theme.Glyph.Map, 16, Theme.Brush("Accent")));
         _projectLabel.Margin = new Thickness(6, 0, 12, 0);
-        left.Children.Add(_projectLabel);
-        left.Children.Add(Theme.IconButton(Theme.Glyph.Open, "Open…", (_, _) => OpenProjectDialog(), "Open a .atlas3k project"));
-        left.Children.Add(Theme.IconButton(Theme.Glyph.New, "New…", (_, _) => NewProjectDialog(), "New project for a map"));
-        _save = Theme.IconButton(Theme.Glyph.Save, "Save", (_, _) => SaveProject(), "Save the project (Ctrl+S)");
+        left.Children.Add(_projectLabel.Card("build.project"));
+        left.Children.Add(Theme.IconButton(Theme.Glyph.Open, "Open…", (_, _) => OpenProjectDialog(), null).Card("build.open"));
+        left.Children.Add(Theme.IconButton(Theme.Glyph.New, "New…", (_, _) => NewProjectDialog(), null).Card("build.new"));
+        _save = Theme.IconButton(Theme.Glyph.Save, "Save", (_, _) => SaveProject(), null).Card("build.save");
         left.Children.Add(_save);
         left.Children.Add(new Border { Width = 1, Background = Theme.Brush("BorderBrush"), Margin = new Thickness(8, 2, 12, 2) });
-        _buildAll = Theme.IconButton(Theme.Glyph.Play, "Build all", (_, _) => Run(AllRequest()), "Run every ticked segment and step (F5)", (Style)FindResource("AccentButton"));
-        _runSelected = Theme.IconButton(Theme.Glyph.Running, "Run selected", (_, _) => RunSelected(), "Run only the highlighted segment, step or custom step");
-        _packOnly = Theme.IconButton(Theme.Glyph.Package, "Pack only", (_, _) => Run(new BuildRunner.Request { Segments = new HashSet<BuildSegment> { BuildSegment.Pack } }), "Re-pack the current output without compiling");
-        _cancel = Theme.IconButton(Theme.Glyph.Stop, "Cancel", (_, _) => { _cts?.Cancel(); _progress.Text = "Cancelling…"; }, "Stop the build at the next check");
+        _buildAll = Theme.IconButton(Theme.Glyph.Play, "Build all", (_, _) => Run(AllRequest()), null, (Style)FindResource("AccentButton")).Card("build.buildAll");
+        _runSelected = Theme.IconButton(Theme.Glyph.Running, "Run selected", (_, _) => RunSelected(), null).Card("build.runSelected");
+        _packOnly = Theme.IconButton(Theme.Glyph.Package, "Pack only", (_, _) => Run(new BuildRunner.Request { Segments = new HashSet<BuildSegment> { BuildSegment.Pack } }), null).Card("build.packOnly");
+        _cancel = Theme.IconButton(Theme.Glyph.Stop, "Cancel", (_, _) => { _cts?.Cancel(); _progress.Text = "Cancelling…"; }, null).Card("build.cancel");
         _cancel.IsEnabled = false;
         foreach (var b in new[] { _buildAll, _runSelected, _packOnly, _cancel }) left.Children.Add(b);
-        left.Children.Add(_progress);
+        left.Children.Add(_progress.Card("build.progress"));
         bar.Children.Add(left);
         DockPanel.SetDock(bar, Dock.Top);
         dock.Children.Add(bar);
@@ -134,12 +134,12 @@ public sealed class BuildWindow : Window
         var treePanel = new DockPanel { Background = Theme.Brush("Panel") };
         var treeHint = new TextBlock
         {
-            Text = "Ticks are saved with the project. Select a row and use Run selected to run just that part.",
+            Text = "Ticked rows run on Build all, top to bottom; ticks are saved with the project. Select a row and press Run selected to run only that part. Hover a row for what it does.",
             TextWrapping = TextWrapping.Wrap, Foreground = Theme.Brush("DimText"), Margin = new Thickness(10, 6, 10, 8), FontSize = 11,
         };
         DockPanel.SetDock(treeHint, Dock.Bottom);
         treePanel.Children.Add(treeHint);
-        var treeHeader = Theme.Header("Build segments", 8);
+        var treeHeader = Theme.Header("Build steps (run top to bottom)", 8).Card("build.tree");
         treeHeader.Margin = new Thickness(10, 8, 10, 4);
         DockPanel.SetDock(treeHeader, Dock.Top);
         treePanel.Children.Add(treeHeader);
@@ -147,8 +147,8 @@ public sealed class BuildWindow : Window
 
         // right: log + profile tabs
         var tabs = new TabControl { Margin = new Thickness(0, 4, 0, 0) };
-        tabs.Items.Add(new TabItem { Header = "Log", Content = BuildLogPanel() });
-        tabs.Items.Add(new TabItem { Header = "Profile", Content = _profileHost });
+        tabs.Items.Add(new TabItem { Header = "Log", Content = BuildLogPanel() }.Card("build.tab.log"));
+        tabs.Items.Add(new TabItem { Header = "Project settings", Content = _profileHost }.Card("build.tab.settings"));
 
         _body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(340), MinWidth = 220 });
         _body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -172,17 +172,16 @@ public sealed class BuildWindow : Window
     {
         var dock = new DockPanel();
         var tools = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
-        tools.Children.Add(new TextBlock { Text = "Filter", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
-        tools.Children.Add(_filter);
-        tools.Children.Add(_onlySelected);
-        tools.Children.Add(_autoScroll);
+        tools.Children.Add(new TextBlock { Text = "Filter", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }.Card("build.filter"));
+        tools.Children.Add(_filter.Card("build.filter"));
+        tools.Children.Add(_onlySelected.Card("build.onlySelected"));
+        tools.Children.Add(_autoScroll.Card("build.autoScroll"));
         tools.Children.Add(new Border { Width = 12 });
-        tools.Children.Add(Theme.IconButton(Theme.Glyph.Copy, "Copy", (_, _) => Clipboard.SetText(_log.Text), "Copy the shown log"));
-        tools.Children.Add(Theme.IconButton(Theme.Glyph.Folder, "Log file", (_, _) => Reveal(_lastLogFile), "Show the last build's log file"));
-        tools.Children.Add(Theme.IconButton(Theme.Glyph.Folder, "Output", (_, _) => Reveal(_project is null ? null : _project.OutputDir(Paths())), "Open the compile output folder"));
-        tools.Children.Add(Theme.IconButton(Theme.Glyph.Package, "Pack", (_, _) => Reveal(PackPath()), "Show the pack"));
-        _showTileErrors = Theme.IconButton(Theme.Glyph.Warning, "Show tile errors", (_, _) => ShowTileErrors(),
-            "Open the tile map editor in error mode: every tile-map error highlighted, with recommended fixes");
+        tools.Children.Add(Theme.IconButton(Theme.Glyph.Copy, "Copy", (_, _) => Clipboard.SetText(_log.Text)).Card("build.copy"));
+        tools.Children.Add(Theme.IconButton(Theme.Glyph.Folder, "Log file", (_, _) => Reveal(_lastLogFile)).Card("build.logFile"));
+        tools.Children.Add(Theme.IconButton(Theme.Glyph.Folder, "Output folder", (_, _) => Reveal(_project is null ? null : _project.OutputDir(Paths()))).Card("build.outputFolder"));
+        tools.Children.Add(Theme.IconButton(Theme.Glyph.Package, "Pack file", (_, _) => Reveal(PackPath())).Card("build.packFile"));
+        _showTileErrors = Theme.IconButton(Theme.Glyph.Warning, "Show tile errors", (_, _) => ShowTileErrors()).Card("build.tileErrors");
         _showTileErrors.Visibility = Visibility.Collapsed;
         tools.Children.Add(_showTileErrors);
         DockPanel.SetDock(tools, Dock.Top);
@@ -203,8 +202,8 @@ public sealed class BuildWindow : Window
             TextWrapping = TextWrapping.Wrap, Foreground = Theme.Brush("DimText"), TextAlignment = TextAlignment.Center,
         });
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 16, 0, 0) };
-        buttons.Children.Add(Theme.IconButton(Theme.Glyph.New, $"New project for {_defaults.MapName}…", (_, _) => NewProjectDialog(), style: (Style)FindResource("AccentButton")));
-        buttons.Children.Add(Theme.IconButton(Theme.Glyph.Open, "Open project…", (_, _) => OpenProjectDialog()));
+        buttons.Children.Add(Theme.IconButton(Theme.Glyph.New, $"New project for {_defaults.MapName}…", (_, _) => NewProjectDialog(), style: (Style)FindResource("AccentButton")).Card("build.emptyNew"));
+        buttons.Children.Add(Theme.IconButton(Theme.Glyph.Open, "Open project…", (_, _) => OpenProjectDialog()).Card("build.emptyOpen"));
         panel.Children.Add(buttons);
         var recent = AppSettings.Current.RecentProjects.Where(File.Exists).Take(6).ToList();
         if (recent.Count > 0)
@@ -212,7 +211,7 @@ public sealed class BuildWindow : Window
             panel.Children.Add(Theme.Header("Recent", 20));
             foreach (var r in recent)
             {
-                var link = new Button { Content = r, HorizontalContentAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 1, 0, 1) };
+                var link = new Button { Content = r, HorizontalContentAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 1, 0, 1) }.Card("build.recent");
                 link.Click += (_, _) => OpenProject(r);
                 panel.Children.Add(link);
             }
@@ -331,18 +330,20 @@ public sealed class BuildWindow : Window
         var steps = profile.Steps.Count > 0 ? profile.Steps.ToHashSet(StringComparer.OrdinalIgnoreCase)
                                             : CampaignBuildPipeline.NativeSteps.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        AddRow(_tree.Items, "validate", BuildSegment.Validate, "Validate", "pre-flight: inputs and tile map", true, null);
+        AddRow(_tree.Items, "validate", BuildSegment.Validate, "Validate", InfoCard.For("build.validate"), true, null);
         AddCustom(CustomStepStage.BeforeCompile);
-        var compile = AddRow(_tree.Items, "compile", BuildSegment.Compile, "Compile", "native campaign steps", true, null);
+        var compile = AddRow(_tree.Items, "compile", BuildSegment.Compile, "Compile", InfoCard.For("build.compile"), true, null);
         foreach (var step in CampaignBuildPipeline.NativeSteps)
-            AddRow(compile.Item.Items, "compile:" + step.Name, BuildSegment.Compile, step.Name, $"replaces BOB {step.ReplacesBobAction}", steps.Contains(step.Name),
+            AddRow(compile.Item.Items, "compile:" + step.Name, BuildSegment.Compile, step.Name,
+                   InfoCards.BuildStepKey(step.Name) is { } key ? InfoCard.For(key) : InfoCard.Make(step.Name, $"Replaces BOB {step.ReplacesBobAction}."), steps.Contains(step.Name),
                    on => SetStep(step.Name, on)).Step = step.Name;
         compile.Item.IsExpanded = true;
         AddCustom(CustomStepStage.AfterCompile);
-        AddRow(_tree.Items, "pack", BuildSegment.Pack, "Pack", profile.Pack.Output.Length > 0 ? $"{profile.Pack.Mode.ToString().ToLowerInvariant()} → {Path.GetFileName(p.Expand(profile.Pack.Output, Paths()))}" : "no pack output set",
+        var packTarget = profile.Pack.Output.Length > 0 ? $"{profile.Pack.Mode} pack → {Path.GetFileName(p.Expand(profile.Pack.Output, Paths()))}" : "No pack output set yet (Project settings → Pack).";
+        AddRow(_tree.Items, "pack", BuildSegment.Pack, "Pack", InfoCard.Make("Pack", $"{InfoCards.Get("build.pack").Text}\n{packTarget}"),
                profile.Pack.Enabled, on => { profile.Pack.Enabled = on; MarkDirty(); });
         AddCustom(CustomStepStage.AfterPack);
-        AddRow(_tree.Items, "install", BuildSegment.Install, "Install", "copy the pack into the game's data folder", profile.Install.Enabled,
+        AddRow(_tree.Items, "install", BuildSegment.Install, "Install", InfoCard.For("build.install"), profile.Install.Enabled,
                on => { profile.Install.Enabled = on; MarkDirty(); });
         AddCustom(CustomStepStage.AfterInstall);
 
@@ -350,14 +351,15 @@ public sealed class BuildWindow : Window
         {
             foreach (var c in profile.CustomSteps.Where(c => c.RunAt == stage))
             {
-                var row = AddRow(_tree.Items, "custom:" + c.Name, BuildSegment.Custom, c.Name, $"custom: {c.Command} {c.Arguments}", c.Enabled,
+                var row = AddRow(_tree.Items, "custom:" + c.Name, BuildSegment.Custom, c.Name,
+                                 InfoCard.Make($"Custom step: {c.Name} ({stage})", $"Runs: {c.Command} {c.Arguments}\n{InfoCards.Get("build.custom").Text}"), c.Enabled,
                                  on => { c.Enabled = on; MarkDirty(); });
                 row.Custom = c.Name;
             }
         }
     }
 
-    private Row AddRow(ItemCollection parent, string id, BuildSegment segment, string label, string tooltip, bool on, Action<bool>? changed)
+    private Row AddRow(ItemCollection parent, string id, BuildSegment segment, string label, ToolTip card, bool on, Action<bool>? changed)
     {
         var check = new CheckBox { IsChecked = on, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
         var icon = Theme.Icon(Theme.Glyph.Pending, 12, Theme.Brush("DimText"));
@@ -365,7 +367,9 @@ public sealed class BuildWindow : Window
         var info = new TextBlock { Foreground = Theme.Brush("DimText"), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, FontSize = 11 };
         var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center };
         if (segment == BuildSegment.Custom) text.FontStyle = FontStyles.Italic;
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Children = { check, icon, text, info }, ToolTip = tooltip };
+        var header = new StackPanel { Orientation = Orientation.Horizontal, Children = { check, icon, text, info }, ToolTip = card };
+        ToolTipService.SetInitialShowDelay(header, InfoCard.ShowDelayMs);
+        ToolTipService.SetShowDuration(header, 60_000);
         var item = new TreeViewItem { Header = header, Padding = new Thickness(2, 3, 2, 3) };
         if (id is "validate" or "compile:tile_list")
             item.MouseDoubleClick += (_, e) => { if (_showTileErrors.Visibility == Visibility.Visible) { ShowTileErrors(); e.Handled = true; } };

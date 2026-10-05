@@ -71,11 +71,11 @@ Settings live in `%AppData%\Atlas3K\settings.json`. Change them later from **Fil
 - **Cancel** stops at the next check.
 - Every run writes a log and a JSON report to `<output>\build_logs`.
 
-The **Profile** tab edits everything else:
+Hover any row, button or field for an info card on what it does. The **Project settings** tab edits everything else:
 - the compile output (default: the kit's `working_data`, as BOB did)
-- tile-map codes to accept
-- folders to clean before compiling
-- a rolling backup folder
+- accepted tile-map errors
+- folders to delete before compiling
+- a terrain backup folder
 - pack mode and contents
 - install options
 

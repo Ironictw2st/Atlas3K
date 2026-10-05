@@ -19,6 +19,11 @@
   - Packs are never written. Edits save to a loose `tile_map.png` in a chosen folder (default: the kit's map folder), with one journal per target.
   - The build's `tile_list` step reads the same source. It extracts a pack entry to the build output first and logs which file it used.
 
+### Build window
+- **Info cards:** hover any button, build row, compile step, tab, field or column header for a short card (bold title, 1-2 sentences) saying what it does, what it reads and writes, and when to use it. Compile-step cards name the BOB action each step replaces.
+  - The card helper (`InfoCard.Card(key)`) and its text tables (`InfoCards.*.cs`, one per window) are shared, so other windows can use them.
+- **Clearer labels:** the *Profile* tab is now *Project settings*; *Build segments* is *Build steps (run top to bottom)*; *Output* / *Pack* log buttons are *Output folder* / *Pack file*; profile fields *Accepted tile-map errors*, *Delete before compile*, *Terrain backup folder* and *Pack mode*.
+
 ## 0.1.0-alpha.2 (2026-10-05)
 
 ### Native build: byte-identical to BOB

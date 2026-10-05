@@ -16,7 +16,7 @@ All of them share one undo journal per tile map: `output/tile_edits/<map>/` (sna
 
 ## Tile map source
 
-By default the tile map is the kit's `raw_data/terrain/campaigns/<map>/tile_map.png`, edited in place. **File > Tile map source…** in the tile map window, **Settings > Tile map source** (the default) and the `.atlas3k` project's **Tile map source** (Build window, Profile tab; JSON field `tileMap`) can read it instead from:
+By default the tile map is the kit's `raw_data/terrain/campaigns/<map>/tile_map.png`, edited in place. **File > Tile map source…** in the tile map window, **Settings > Tile map source** (the default) and the `.atlas3k` project's **Tile map source** (Build window, Project settings tab; JSON field `tileMap`) can read it instead from:
 
 | Kind | Reads | Saves edits to |
 |---|---|---|
