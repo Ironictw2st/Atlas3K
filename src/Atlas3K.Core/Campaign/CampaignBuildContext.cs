@@ -14,6 +14,9 @@ public sealed class CampaignBuildContext
     /// <summary>Cancels the build; long steps check it between rows / meshes, the pipeline between steps.</summary>
     public CancellationToken Cancel { get; init; }
 
+    /// <summary>trees step: keep the reference list's heights where a tree is unchanged (false = compute every height).</summary>
+    public bool ReuseTreeHeights { get; init; } = true;
+
     public CampaignBuildContext(ProjectPaths paths, string? targetRoot = null, Action<string>? log = null)
     {
         Paths = paths;

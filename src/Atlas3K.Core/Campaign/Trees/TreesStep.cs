@@ -24,7 +24,8 @@ public sealed class TreesStep : ICampaignBuildStep
 
     public string Name => "trees";
     public string ReplacesBobAction => "Terrain / Campaign Trees";
-    public IReadOnlyList<string> DependsOn => ["rasters"];
+    // tile_list: only orders the two when both are selected (the hf terrain reads the fresh tile list)
+    public IReadOnlyList<string> DependsOn => ["rasters", "tile_list"];
 
     /// <summary>Keep the reference list's heights where a tree lands on exactly the same spot.</summary>
     public bool ReuseReferenceHeights { get; init; } = true;
@@ -54,7 +55,7 @@ public sealed class TreesStep : ICampaignBuildStep
         var grid = HexGrid.ForTreeMap(map.Width, map.Height, (float)(map.Width * (595.1 / 1784)));
         var colours = CampaignTreeGenerator.ReadTreeMap(map, palette, grid, AkExporter.NoTreeIndex);
 
-        var reference = ReuseReferenceHeights ? ReferenceTrees(ctx, grid, notes) : null;
+        var reference = ReuseReferenceHeights && ctx.ReuseTreeHeights ? ReferenceTrees(ctx, grid, notes) : null;
         LfSampler? lf = null;
         var lfPath = ctx.OutFile("lf_height_map.compressed_map");
         if (File.Exists(lfPath))
@@ -83,7 +84,7 @@ public sealed class TreesStep : ICampaignBuildStep
         var path = Path.Combine(ctx.TargetRoot, TreeExporter.PackPath(ctx.MapName));
         list.Save(path);
         notes.Add($"{list.TotalInstances} trees of {list.Types.Count} types on a {grid.Columns}x{grid.Rows} hex grid; " +
-                  $"heights: {reused} from the reference list, {sampled} from lf");
+                  $"heights: {reused} from the reference list, {sampled} computed ({(terrain is null ? "lf" : "lf + tile hf")})");
         if (list.TotalInstances == 0) notes.Add("the CampaignTree map has no tree colours: the list is empty");
         return new StepResult(Name, [path], notes, sw.Elapsed);
     }
@@ -94,9 +95,11 @@ public sealed class TreesStep : ICampaignBuildStep
     /// <summary>BOB's tile-space terrain height (lf + per-tile hf) when a tile list and the game's tile database exist.</summary>
     private static TileHfHeight? TileHeights(CampaignBuildContext ctx, List<string> notes)
     {
+        // BOB's Campaign Trees reads the tile list through the game's file system (the packed/compiled one), not the
+        // kit's working copy: on vanilla the kit tile list (built from the kit tile map) moves 1,359 tree heights
         var tl = new[] { ctx.OutFile("tile_list.bin"),
-                         Path.Combine(ctx.Paths.AkWorkingDir, "terrain", "campaigns", ctx.MapName, "tile_list.bin"),
-                         Path.Combine(ctx.Paths.TerrainDir, "tile_list.bin") }.FirstOrDefault(File.Exists);
+                         Path.Combine(ctx.Paths.TerrainDir, "tile_list.bin"),
+                         Path.Combine(ctx.Paths.AkWorkingDir, "terrain", "campaigns", ctx.MapName, "tile_list.bin") }.FirstOrDefault(File.Exists);
         if (tl is null || !Directory.Exists(ctx.Paths.GameDataDir))
         {
             notes.Add("no tile_list.bin or game data folder: tree heights are lf only (no river/road/canal hf)");
