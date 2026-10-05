@@ -87,10 +87,14 @@ Each of these looked fine in the decompile and only showed up when the output wa
 | Tile list | The pass sorts are MSVC `std::sort` (introsort, unstable). Port it exactly (`MsvcSort`), including how ties come out. |
 | Tile list | `calculate_flow` neither flows nor queues a tile that has no `TLT_EQUALS` entry link (a river crossing). |
 | Trees | The tree list comes from BOB's *Campaign Trees* action. The height scale is `(l·1100)·f′ − f′·240` with f′ = tile/25.6, the terrain setup's own constants. The algebraically equal `(l·5500)·f − f·1200` rounds differently in float32. |
+| Trees | Per tree, the height provider (qttoolutility FUN_18011f1d0) asks only the tiles registered on the point's cell, (int)(x/T), (int)(z/(T·1.15476)), each tile on cells [X, X+w) × [Y, Y+h), and keeps the **highest** answering height (0 if none answers). Not the camera quadtree, and not the first tile. |
 | Global props | Quadtree cell rule, record order by entity id, BOB's own quaternion and sine routines for matrices, `-0` written as `+0`, region order from CA's hash map, map bounds from `map_data.esf`. |
 | Camera heightmap | BOB samples its scene (height patches, global mesh, a tile fallback reached through its own quadtree), not "terrain plus props". The PNG needs classic zlib's compressor to match byte for byte. |
 | Rivers | Adaptive spline sampling (`optimise_spline`, including its in-place unique bug), BOB's own float-to-half, a snap pass of vertices onto triangle corners, triangles dropped by normal y, and height patches rasterised from the river models already on disk. |
 | Global meshes | When the pack is set to Movie, BOB reads lf and the tile list from the game VFS, not the kit. The grid step is in double precision. The triangle merger runs 50 passes of 1.28 with an MSVC-sorted candidate list. |
+| Global meshes | The VFS rule holds on vanilla too: BOB reads CA's `tile_list.bin` and `lf_sea_height_map` from `data/terrain.pack`, not the kit's (`gmesh/find_pack_inputs.py`). Compare against a fresh BOB run only with the inputs BOB read. |
+| Global meshes | Land byte 0xA6 is character 165 of the mesh's own `.compressed_map` output path (stale string memory): it depends on the kit folder and map name. |
+| Global meshes | MESH_SPLITTER closes a chunk after the triangle that brings it to 65,000 vertices; the chunks become extra meshes of the same LOD, not extra files. |
 
 ## Folder index
 

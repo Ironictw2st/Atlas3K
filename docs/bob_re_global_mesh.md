@@ -188,4 +188,4 @@ BOB references: `output/bob_runs/frida_gmesh_main190_bob_terrain` and `frida_gco
   - u = (x − minX)/(maxX − minX)·n, likewise v, through an identity matrix.
   - Same per-triangle rasteriser as the river height patches.
   - u16 = trunc((h − lo)·(1/(hi − lo))·65535), header (0, lo, 0, 0, hi, 0).
-- MESH_SPLITTER never splits on main190 (all meshes are under 65,536 vertices).
+- MESH_SPLITTER never splits on main190 (all meshes are under 65,000 vertices). Ported 2026-10-05 from FUN_1800d0f80 (decompile in `research/bob_re/splitter`): triangles in order into chunks with first-use numbering, a chunk closes after the triangle that brings it to ≥ 65,000 vertices; the chunks are meshes of the file's one LOD. See *Global meshes vs BOB on vanilla* in `docs/native_campaign_build.md`.

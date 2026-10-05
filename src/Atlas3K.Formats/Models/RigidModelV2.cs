@@ -4,7 +4,7 @@ using System.Text;
 namespace Atlas3K.Formats.Models;
 
 /// <summary>
-/// The single-LOD, single-mesh RMV2 (version 8) files BOB writes for campaign terrain:
+/// The single-LOD RMV2 (version 8) files BOB writes for campaign terrain:
 /// global_meshes\land_mesh_N / sea_mesh_N (material 101 TerrainTiles, 16-byte vertices) and
 /// models\river_N.wsmodel.rigid_model_v2 (material 68 default, 48-byte vertices).
 ///
@@ -16,6 +16,9 @@ namespace Atlas3K.Formats.Models;
 ///        u32 index offset, u32 index count, 6 x f32 bounding box (min xyz, max xyz); offsets relative to 0xA8
 ///   0xD8 32-byte shader block ("rigid_default" + uninitialised bytes)
 ///   0xF8 material block (88 bytes for TerrainTiles, 860 for default), then vertices, then u16 indices.
+/// A global mesh over BOB's MESH_SPLITTER limit has several meshes in LOD 0 (<see cref="MoreMeshes"/>): each mesh
+/// section (header at 0x00..0x2F of the section, offsets relative to the section) follows the previous one, and the LOD
+/// header holds the total vertex and index bytes.
 /// </summary>
 public sealed class RigidModelV2
 {
@@ -36,6 +39,8 @@ public sealed class RigidModelV2
     public ushort[] Indices { get; set; } = [];
     /// <summary>min x, y, z, max x, y, z.</summary>
     public float[] Bounds { get; set; } = new float[6];
+    /// <summary>The LOD's further meshes (only their mesh fields are used), written after this one.</summary>
+    public List<RigidModelV2> MoreMeshes { get; } = [];
 
     public int VertexCount => Vertices.Length / VertexStride;
 
@@ -44,60 +49,88 @@ public sealed class RigidModelV2
     public static RigidModelV2 Read(ReadOnlySpan<byte> b)
     {
         if (!b[..4].SequenceEqual("RMV2"u8)) throw new InvalidDataException("Not an RMV2 file.");
-        if (U32(b, 4) != 8 || U32(b, 8) != 1 || U32(b, 0x8C) != 1)
-            throw new InvalidDataException("Only single-LOD, single-mesh RMV2 v8 terrain models are supported.");
-        var vertexOffset = (int)U32(b, 0xB0);
-        var vertexCount = (int)U32(b, 0xB4);
-        var indexOffset = (int)U32(b, 0xB8);
-        var indexCount = (int)U32(b, 0xBC);
+        if (U32(b, 4) != 8 || U32(b, 8) != 1)
+            throw new InvalidDataException("Only single-LOD RMV2 v8 terrain models are supported.");
+        var meshes = (int)U32(b, 0x8C);
+        if (meshes < 1) throw new InvalidDataException("RMV2 LOD without meshes.");
+        RigidModelV2? model = null;
+        var start = (int)U32(b, 0x98);
+        for (var m = 0; m < meshes; m++)
+        {
+            var mesh = ReadMesh(b, start, b.Slice(0xA4, 4).ToArray());
+            if (model is null) model = mesh;
+            else model.MoreMeshes.Add(mesh);
+            start += (int)U32(b, start + 4);
+        }
+        return model!;
+    }
+
+    private static RigidModelV2 ReadMesh(ReadOnlySpan<byte> b, int start, byte[] lodQuality)
+    {
+        var vertexOffset = (int)U32(b, start + 0x08);
+        var vertexCount = (int)U32(b, start + 0x0C);
+        var indexOffset = (int)U32(b, start + 0x10);
+        var indexCount = (int)U32(b, start + 0x14);
         var vertexBytes = indexOffset - vertexOffset;
         var model = new RigidModelV2
         {
-            Material = BinaryPrimitives.ReadUInt16LittleEndian(b[0xA8..]),
-            RenderFlags = BinaryPrimitives.ReadUInt16LittleEndian(b[0xAA..]),
-            LodQuality = b.Slice(0xA4, 4).ToArray(),
-            Shader = b.Slice(ShaderStart, 32).ToArray(),
-            MaterialBlock = b[MaterialStart..(MeshStart + vertexOffset)].ToArray(),
+            Material = BinaryPrimitives.ReadUInt16LittleEndian(b[start..]),
+            RenderFlags = BinaryPrimitives.ReadUInt16LittleEndian(b[(start + 2)..]),
+            LodQuality = lodQuality,
+            Shader = b.Slice(start + ShaderStart - MeshStart, 32).ToArray(),
+            MaterialBlock = b[(start + MaterialStart - MeshStart)..(start + vertexOffset)].ToArray(),
             VertexStride = vertexCount == 0 ? 16 : vertexBytes / vertexCount,
-            Vertices = b.Slice(MeshStart + vertexOffset, vertexBytes).ToArray(),
+            Vertices = b.Slice(start + vertexOffset, vertexBytes).ToArray(),
             Indices = new ushort[indexCount],
         };
-        for (var i = 0; i < 6; i++) model.Bounds[i] = BitConverter.ToSingle(b.Slice(0xC0 + i * 4, 4));
+        for (var i = 0; i < 6; i++) model.Bounds[i] = BitConverter.ToSingle(b.Slice(start + 0x18 + i * 4, 4));
         for (var i = 0; i < indexCount; i++)
-            model.Indices[i] = BinaryPrimitives.ReadUInt16LittleEndian(b[(MeshStart + indexOffset + i * 2)..]);
+            model.Indices[i] = BinaryPrimitives.ReadUInt16LittleEndian(b[(start + indexOffset + i * 2)..]);
         return model;
     }
 
     public byte[] ToBytes()
     {
-        var vertexOffset = MaterialStart - MeshStart + MaterialBlock.Length;
-        var indexOffset = vertexOffset + Vertices.Length;
-        var sectionSize = indexOffset + Indices.Length * 2;
-        var result = new byte[MeshStart + sectionSize];
+        RigidModelV2[] meshes = [this, .. MoreMeshes];
+        var sizes = meshes.Select(m => MaterialStart - MeshStart + m.MaterialBlock.Length + m.Vertices.Length + m.Indices.Length * 2).ToArray();
+        var result = new byte[MeshStart + sizes.Sum()];
         var s = result.AsSpan();
         "RMV2"u8.CopyTo(s);
         W(s, 4, 8);
         W(s, 8, 1);
-        W(s, 0x8C, 1);
-        W(s, 0x90, (uint)Vertices.Length);
-        W(s, 0x94, (uint)(Indices.Length * 2));
+        W(s, 0x8C, (uint)meshes.Length);
+        W(s, 0x90, (uint)meshes.Sum(m => m.Vertices.Length));
+        W(s, 0x94, (uint)meshes.Sum(m => m.Indices.Length * 2));
         W(s, 0x98, MeshStart);
         BinaryPrimitives.WriteSingleLittleEndian(s[0x9C..], 1e6f);
         LodQuality.CopyTo(s[0xA4..]);
-        BinaryPrimitives.WriteUInt16LittleEndian(s[0xA8..], Material);
-        BinaryPrimitives.WriteUInt16LittleEndian(s[0xAA..], RenderFlags);
-        W(s, 0xAC, (uint)sectionSize);
-        W(s, 0xB0, (uint)vertexOffset);
-        W(s, 0xB4, (uint)VertexCount);
-        W(s, 0xB8, (uint)indexOffset);
-        W(s, 0xBC, (uint)Indices.Length);
-        for (var i = 0; i < 6; i++) BinaryPrimitives.WriteSingleLittleEndian(s[(0xC0 + i * 4)..], Bounds[i]);
-        Shader.CopyTo(s[ShaderStart..]);
-        MaterialBlock.CopyTo(s[MaterialStart..]);
-        Vertices.CopyTo(s[(MeshStart + vertexOffset)..]);
-        for (var i = 0; i < Indices.Length; i++)
-            BinaryPrimitives.WriteUInt16LittleEndian(s[(MeshStart + indexOffset + i * 2)..], Indices[i]);
+        var start = MeshStart;
+        for (var k = 0; k < meshes.Length; k++)
+        {
+            meshes[k].WriteMesh(s[start..(start + sizes[k])]);
+            start += sizes[k];
+        }
         return result;
+    }
+
+    /// <summary>One mesh section (header, shader, material, vertices, indices; offsets relative to its start).</summary>
+    private void WriteMesh(Span<byte> s)
+    {
+        var vertexOffset = MaterialStart - MeshStart + MaterialBlock.Length;
+        var indexOffset = vertexOffset + Vertices.Length;
+        BinaryPrimitives.WriteUInt16LittleEndian(s, Material);
+        BinaryPrimitives.WriteUInt16LittleEndian(s[2..], RenderFlags);
+        W(s, 0x04, (uint)s.Length);
+        W(s, 0x08, (uint)vertexOffset);
+        W(s, 0x0C, (uint)VertexCount);
+        W(s, 0x10, (uint)indexOffset);
+        W(s, 0x14, (uint)Indices.Length);
+        for (var i = 0; i < 6; i++) BinaryPrimitives.WriteSingleLittleEndian(s[(0x18 + i * 4)..], Bounds[i]);
+        Shader.CopyTo(s[(ShaderStart - MeshStart)..]);
+        MaterialBlock.CopyTo(s[(MaterialStart - MeshStart)..]);
+        Vertices.CopyTo(s[vertexOffset..]);
+        for (var i = 0; i < Indices.Length; i++)
+            BinaryPrimitives.WriteUInt16LittleEndian(s[(indexOffset + i * 2)..], Indices[i]);
     }
 
     public void Write(string path) => File.WriteAllBytes(path, ToBytes());

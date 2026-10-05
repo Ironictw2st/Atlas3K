@@ -105,7 +105,7 @@ public sealed class GlobalMeshStep : ICampaignBuildStep
                 if (results[(kind, index)] is not { } mesh) continue;
                 if (bob is not null)   // header bytes BOB leaves from its string buffers (identical across its runs)
                 {
-                    if (kind == MeshKind.Land) mesh.Model.LodQuality = [0, 0, (byte)number.ToString()[0], 0];
+                    if (kind == MeshKind.Land) mesh.Model.LodQuality = [0, 0, StaleLandByte(ctx, number), 0];
                     var shader = (byte[])mesh.Model.Shader.Clone();
                     Array.Clear(shader, 16, 16);
                     shader[24] = 0x9E;
@@ -126,6 +126,17 @@ public sealed class GlobalMeshStep : ICampaignBuildStep
             notes.Add($"{number} {kind.ToString().ToLowerInvariant()} meshes");
         }
         return new StepResult(Name, written, notes, sw.Elapsed);
+    }
+
+    /// <summary>Byte 0xA6 of a land mesh: BOB leaves character 165 of the mesh's land_mesh_N.compressed_map path there
+    /// (kit working folder\terrain\campaigns\map\global_meshes\...). On the Steam kits that is the first digit of N for
+    /// assembly_kit_190E / 3k_190e_expanded_map and 's', 'e', 'r' for 1-, 2-, 3-digit N on assembly_kit /
+    /// 3k_dlc07_main_map (BOB runs on both, 2026-10-05). 0 when the path is shorter.</summary>
+    internal static byte StaleLandByte(CampaignBuildContext ctx, int number)
+    {
+        var path = Path.Combine(ctx.Paths.AkWorkingDir, "terrain", "campaigns", ctx.MapName, "global_meshes",
+            $"land_mesh_{number}.compressed_map");
+        return path.Length > 165 ? (byte)path[165] : (byte)0;
     }
 
     private static string? TileListSource(CampaignBuildContext ctx) =>

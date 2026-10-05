@@ -212,7 +212,7 @@ public sealed class GlobalMeshBuilder
         // first-use renumbering
         var remap = new Dictionary<int, int>();
         var positions = new List<(float X, float Y, float Z)>();
-        var indices = new List<ushort>();
+        var indices = new List<int>();
         foreach (var t in merged)
             foreach (var q in t)
             {
@@ -222,30 +222,76 @@ public sealed class GlobalMeshBuilder
                     remap.Add(q, id);
                     positions.Add((x[q], y[q], z[q]));
                 }
-                indices.Add(checked((ushort)id));
+                indices.Add(id);
             }
 
         if (_bob is not null && (BobGlobalHeight.Variant & 8192) == 0)
             BobSkirts(n, i0, j0, y, flags, remap, kind == MeshKind.Sea, positions, indices);
         else
             AddSkirts(merged, n, i0, j0, x, y, z, Valid, positions, indices);
-        if (positions.Count > ushort.MaxValue)
-            throw new InvalidDataException($"{kind} mesh ({row},{col}) has {positions.Count} vertices, more than 16-bit indices allow.");
-
-        var model = RigidModelV2.NewTerrainTile(kind == MeshKind.Sea);
-        model.Vertices = RigidModelV2.PackPositions(positions);
-        model.Indices = [.. indices];
-        if (_bob is not null)   // FUN_180124ed0 after MESH_SPLITTER: (1/total) · i0 · ext and ((cells + i0) / total) · ext
-            model.SetTileBounds(1f / _gridTotal * i0 * _bobExtent, 1f / _gridTotal * j0 * _bobExtent,
-                ((float)_cells + i0) / _gridTotal * _bobExtent, ((float)_cells + j0) / _gridTotal * _bobExtent);
-        else model.SetTileBounds(Coord(i0), Coord(j0), Coord(i0 + _cells), Coord(j0 + _cells));
+        // MESH_SPLITTER: one mesh per chunk of under 65,000 vertices, all in the file's LOD 0
+        RigidModelV2? model = null;
+        foreach (var (chunkPositions, chunkIndices) in SplitMesh(positions, indices))
+        {
+            var part = RigidModelV2.NewTerrainTile(kind == MeshKind.Sea);
+            part.Vertices = RigidModelV2.PackPositions(chunkPositions);
+            part.Indices = [.. chunkIndices.Select(i => checked((ushort)i))];
+            if (_bob is not null)   // FUN_180124ed0 after MESH_SPLITTER: (1/total) · i0 · ext and ((cells + i0) / total) · ext
+                part.SetTileBounds(1f / _gridTotal * i0 * _bobExtent, 1f / _gridTotal * j0 * _bobExtent,
+                    ((float)_cells + i0) / _gridTotal * _bobExtent, ((float)_cells + j0) / _gridTotal * _bobExtent);
+            else part.SetTileBounds(Coord(i0), Coord(j0), Coord(i0 + _cells), Coord(j0 + _cells));
+            if (model is null) model = part;
+            else model.MoreMeshes.Add(part);
+        }
 
         Raster<ushort>? heights = null;
         float[]? header = null;
         if (kind == MeshKind.Land)
             (heights, header) = _bob is not null && (BobGlobalHeight.Variant & 16384) == 0
-                ? BobHeightMap(positions, indices, model.Bounds, n) : RasteriseSurface(merged, n, x, y, z);
-        return new MeshResult(row, col, model, heights, header, inputTriangles);
+                ? BobHeightMap(positions, indices, model!.Bounds, n) : RasteriseSurface(merged, n, x, y, z);
+        return new MeshResult(row, col, model!, heights, header, inputTriangles);
+    }
+
+    /// <summary>The vertex limit of BOB's MESH_SPLITTER.</summary>
+    public const int SplitVertices = 65000;
+
+    /// <summary>BOB's MESH_SPLITTER (tooldatabuilder FUN_1800d0f80): walk the triangles in order, renumbering vertices by
+    /// first use into the current chunk; after a whole triangle, once the chunk has 65,000 vertices or more, start a new
+    /// chunk (fresh numbering) with the next triangle. A mesh under the limit comes back unchanged (its vertices are
+    /// already in first-use order).</summary>
+    public static IEnumerable<(List<(float X, float Y, float Z)> Positions, List<int> Indices)> SplitMesh(
+        List<(float X, float Y, float Z)> positions, List<int> indices)
+    {
+        if (positions.Count < SplitVertices)
+        {
+            yield return (positions, indices);
+            yield break;
+        }
+        var remap = new Dictionary<int, int>();
+        var chunkPositions = new List<(float, float, float)>();
+        var chunkIndices = new List<int>();
+        for (var t = 0; t + 2 < indices.Count; t += 3)
+        {
+            for (var k = 0; k < 3; k++)
+            {
+                var v = indices[t + k];
+                if (!remap.TryGetValue(v, out var id))
+                {
+                    id = chunkPositions.Count;
+                    remap.Add(v, id);
+                    chunkPositions.Add(positions[v]);
+                }
+                chunkIndices.Add(id);
+            }
+            if (chunkPositions.Count >= SplitVertices && t + 3 < indices.Count)
+            {
+                yield return (chunkPositions, chunkIndices);
+                remap = [];
+                chunkPositions = [];
+                chunkIndices = [];
+            }
+        }
+        yield return (chunkPositions, chunkIndices);
     }
 
     private static Action<string> TraceWriter(string path)
@@ -286,7 +332,7 @@ public sealed class GlobalMeshBuilder
     /// +x and +z over vertices the cleaner dropped to the next kept one; if the edge's midpoint ±0.01 across it is a
     /// hole, add a double-sided quad 1.0 deep. Positions are the height-query coordinates.</summary>
     private void BobSkirts(int n, int i0, int j0, float[] y, byte[] flags, Dictionary<int, int> kept, bool sea,
-        List<(float, float, float)> positions, List<ushort> indices)
+        List<(float, float, float)> positions, List<int> indices)
     {
         const float probe = 0.01f, half = 0.5f;
         float H(float px, float pz) => _bob!.Height(px, pz, sea);
@@ -294,12 +340,12 @@ public sealed class GlobalMeshBuilder
         static bool Edge(byte f) => f == 0 || f == 3;
         void Quad(float ax, float ay, float az, float bx, float by, float bz)
         {
-            var s = checked((ushort)positions.Count);
+            var s = positions.Count;
             positions.Add((ax, ay, az));
             positions.Add((bx, by, bz));
             positions.Add((ax, ay - SkirtDepth, az));
             positions.Add((bx, by - SkirtDepth, bz));
-            foreach (var q in (ReadOnlySpan<int>)[0, 1, 2, 2, 1, 3, 1, 0, 2, 1, 2, 3]) indices.Add((ushort)(s + q));
+            foreach (var q in (ReadOnlySpan<int>)[0, 1, 2, 2, 1, 3, 1, 0, 2, 1, 2, 3]) indices.Add(s + q);
         }
         for (var row = 0; row < n; row++)
             for (var col = 0; col < n; col++)
@@ -359,7 +405,7 @@ public sealed class GlobalMeshBuilder
 
     /// <summary>Double-sided vertical quads under boundary edges that border a hole or the map edge.</summary>
     private void AddSkirts(List<int[]> surface, int n, int i0, int j0, float[] x, float[] y, float[] z,
-        Func<int, int, bool> valid, List<(float, float, float)> positions, List<ushort> indices)
+        Func<int, int, bool> valid, List<(float, float, float)> positions, List<int> indices)
     {
         var edgeUse = new Dictionary<(int, int), int>();
         foreach (var t in surface)
@@ -375,12 +421,12 @@ public sealed class GlobalMeshBuilder
                 int a = t[e], b = t[(e + 1) % 3];
                 if (edgeUse[a < b ? (a, b) : (b, a)] != 1) continue;
                 if (OnSeam(a, b, n, i0, j0, valid)) continue;
-                var s = checked((ushort)positions.Count);
+                var s = positions.Count;
                 positions.Add((x[a], y[a], z[a]));
                 positions.Add((x[b], y[b], z[b]));
                 positions.Add((x[a], y[a] - SkirtDepth, z[a]));
                 positions.Add((x[b], y[b] - SkirtDepth, z[b]));
-                foreach (var q in (ReadOnlySpan<int>)[0, 1, 2, 2, 1, 3, 1, 0, 2, 1, 2, 3]) indices.Add((ushort)(s + q));
+                foreach (var q in (ReadOnlySpan<int>)[0, 1, 2, 2, 1, 3, 1, 0, 2, 1, 2, 3]) indices.Add(s + q);
             }
     }
 
@@ -398,7 +444,7 @@ public sealed class GlobalMeshBuilder
     /// <summary>BOB's land_mesh_N.compressed_map (FUN_180124ed0 → WARSCAPE::rasterise_max_heights, as for river height
     /// patches): the final mesh (skirts included) mapped to an n × n field over the model's box, max height per pixel,
     /// −50 where nothing covers; u16 = trunc((h − lo) / (hi − lo) · 65535), header (0, lo, 0, 0, hi, 0).</summary>
-    private static (Raster<ushort>, float[]) BobHeightMap(List<(float X, float Y, float Z)> positions, List<ushort> indices,
+    private static (Raster<ushort>, float[]) BobHeightMap(List<(float X, float Y, float Z)> positions, List<int> indices,
         float[] bounds, int size)
     {
         const float invalid = -50f;
