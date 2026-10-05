@@ -170,7 +170,7 @@ public sealed class GlobalPropsBuilder
 
     private int CellOf(Obj o)
     {
-        if (o.Radius >= 1e8) return 0;                                         // rivers, polygon meshes: the root
+        if (o.Radius >= 1e8) return 0;                                         // rivers: the root
         var b = o.Box ?? [(float)o.X, (float)o.Z, (float)o.X, (float)o.Z];
         return BobCell(b[0], b[1], b[2], b[3]);
     }
@@ -250,22 +250,10 @@ public sealed class GlobalPropsBuilder
             try
             {
                 var rm = Atlas3K.Formats.Models.RigidModel.Read(bytes);
-                var variant = Environment.GetEnvironmentVariable("ATLAS3K_GP_AABB") ?? "";
-                if (variant == "lod0vtx" || variant == "allvtx")
-                {
-                    var src = variant == "lod0vtx" ? rm.Lods.Take(1) : rm.Lods;
-                    var ps = src.SelectMany(l => l.Meshes).SelectMany(q => q.Positions).ToArray();
-                    if (ps.Length >= 3)
-                    {
-                        float[] lo = [float.MaxValue, float.MaxValue, float.MaxValue], hi = [float.MinValue, float.MinValue, float.MinValue];
-                        for (var i = 0; i < ps.Length; i += 3)
-                            for (var a = 0; a < 3; a++) { lo[a] = Math.Min(lo[a], ps[i + a]); hi[a] = Math.Max(hi[a], ps[i + a]); }
-                        box = (lo, hi);
-                    }
-                    _aabb[path] = box;
-                    return box;
-                }
-                var meshes = (variant == "lod0hdr" ? rm.Lods.Take(1) : rm.Lods).SelectMany(l => l.Meshes).ToList();
+                var meshes = rm.Lods.SelectMany(l => l.Meshes).ToList();
+                // a model whose vertex stride doesn't fit its declared format (water_lily_1/3: format 12, stride 20) fails
+                // to load in BOB, which then boxes it as [-1, 1]^3 (Frida on FUN_18005e050, 2026-10-05)
+                if (meshes.Any(q => q.PositionsOnly)) meshes = [];
                 if (meshes.Count > 0)
                     box = ([meshes.Min(q => q.BoundsMin[0]), meshes.Min(q => q.BoundsMin[1]), meshes.Min(q => q.BoundsMin[2])],
                            [meshes.Max(q => q.BoundsMax[0]), meshes.Max(q => q.BoundsMax[1]), meshes.Max(q => q.BoundsMax[2])]);
@@ -456,7 +444,9 @@ public sealed class GlobalPropsBuilder
                 if (outline.Count < 3) return;
                 var vertices = outline.Select(p => (p.Item1, tr.Position.Y, p.Item2)).ToList();
                 var indices = Triangulate(outline);
-                objects.Add(new Obj("poly", vertices.Average(v => v.Item1), vertices.Average(v => v.Item3), 1e9, "",
+                // quadtree cell: BOB boxes a polygon mesh as the point at its entity transform (main190: position 0,0 -> the
+                // south-west level-6 cell 5397), not its outline (2026-10-05)
+                objects.Add(new Obj("poly", tr.Position.X, tr.Position.Z, 0, "",
                     _ => BmdRecords.PolyMesh(_t.Poly, vertices, indices, material), null, tr.Position.X, tr.Position.Z));
             }
         }
@@ -513,29 +503,31 @@ public sealed class GlobalPropsBuilder
         (float)origin + float.Parse((string?)p.Attribute(name) ?? "0", CultureInfo.InvariantCulture);
 
 
-    /// <summary>Ear-clipping triangulation of a simple polygon (x, z outline).</summary>
+    /// <summary>Ear-clipping triangulation of a simple polygon (x, z outline), in BOB's order: the scan starts at
+    /// vertex 1 and stays on the same slot after clipping an ear (the next vertex), each ear written (next, ear,
+    /// previous), the last three vertices as (V2, V1, V0). Byte-exact on the main190 polygon mesh (2026-10-05).</summary>
     private static List<ushort> Triangulate(List<(double X, double Z)> pts)
     {
         var idx = Enumerable.Range(0, pts.Count).ToList();
         double Area() { double a = 0; for (var i = 0; i < idx.Count; i++) { var p = pts[idx[i]]; var q = pts[idx[(i + 1) % idx.Count]]; a += p.X * q.Z - q.X * p.Z; } return a; }
         if (Area() < 0) idx.Reverse();
         var result = new List<ushort>();
-        var guard = 0;
-        while (idx.Count > 3 && guard++ < 10000)
+        var slot = 1;
+        var misses = 0;
+        while (idx.Count > 3 && misses < idx.Count)
         {
-            for (var i = 0; i < idx.Count; i++)
+            slot %= idx.Count;
+            int a = idx[(slot + idx.Count - 1) % idx.Count], b = idx[slot], c = idx[(slot + 1) % idx.Count];
+            var cross = (pts[b].X - pts[a].X) * (pts[c].Z - pts[a].Z) - (pts[b].Z - pts[a].Z) * (pts[c].X - pts[a].X);
+            if (cross > 0 && !idx.Any(k => k != a && k != b && k != c && InTri(pts[k], pts[a], pts[b], pts[c])))
             {
-                int a = idx[(i + idx.Count - 1) % idx.Count], b = idx[i], c = idx[(i + 1) % idx.Count];
-                var cross = (pts[b].X - pts[a].X) * (pts[c].Z - pts[a].Z) - (pts[b].Z - pts[a].Z) * (pts[c].X - pts[a].X);
-                if (cross <= 0) continue;
-                var inside = idx.Any(k => k != a && k != b && k != c && InTri(pts[k], pts[a], pts[b], pts[c]));
-                if (inside) continue;
-                result.AddRange([(ushort)a, (ushort)b, (ushort)c]);
-                idx.RemoveAt(i);
-                break;
+                result.AddRange([(ushort)c, (ushort)b, (ushort)a]);
+                idx.RemoveAt(slot);
+                misses = 0;
             }
+            else { slot++; misses++; }
         }
-        if (idx.Count == 3) result.AddRange([(ushort)idx[0], (ushort)idx[1], (ushort)idx[2]]);
+        if (idx.Count == 3) result.AddRange([(ushort)idx[2], (ushort)idx[1], (ushort)idx[0]]);
         return result;
 
         static bool InTri((double X, double Z) p, (double X, double Z) a, (double X, double Z) b, (double X, double Z) c)

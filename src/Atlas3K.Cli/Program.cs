@@ -392,7 +392,7 @@ static void GpBody(string[] a)
         var x = BitConverter.ToSingle(p, 24 + 36); var z = BitConverter.ToSingle(p, 24 + 44);
         Console.WriteLine($"  prop idx {idx} x? {x:R} z? {z:R}  head {Convert.ToHexString(p, 0, 24)} m {Convert.ToHexString(p, 24, 48)}");
     }
-    Console.WriteLine($"vfx {b.Vfx.Count} lights {b.PointLights.Count} scenes {b.CompositeScenes.Count} sounds {b.Sounds.Count}");
+    Console.WriteLine($"vfx {b.Vfx.Count} lights {b.PointLights.Count} scenes {b.CompositeScenes.Count} sounds {b.Sounds.Count} probes {b.LightProbes.Count} polys {string.Join(",", b.PolyMeshes.Select(x => x.Length))}");
     if (a.Length < 3) return;
     // gp-body <a> <entry> <b>: byte offsets where each section's records differ
     var o = Atlas3K.Formats.Props.BmdBody.Parse(Atlas3K.Formats.Props.GlobalProps.Load(a[2]).Bodies().First(x => x.Name.EndsWith(a[1], StringComparison.Ordinal)).Body);
