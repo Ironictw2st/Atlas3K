@@ -125,6 +125,9 @@ public sealed class CampaignPathGrid
             for (var h = 0; h < n; h++)
             {
                 if (!slot[h]) continue;
+                // the settlement slot area is walkable even where the ppd marks a hex impassable (190E: 823,261 / 912,773
+                // get the slot's 0 cost in CA's spd)
+                if (Types[h] == 2) Types[h] = 0;
                 for (var d = 0; d < 6; d++)
                 {
                     var nb = Neighbour[h * 6 + d];
@@ -187,6 +190,101 @@ public sealed class CampaignPathGrid
     /// <summary>Shortest path costs from <paramref name="source"/> over the whole grid (uint.MaxValue = unreachable).
     /// reverse = costs of paths from every hex to the source. Dial's bucket queue: costs are small integers.
     /// <paramref name="visit"/> gets each hex as it is settled, in increasing cost order.</summary>
+    /// <summary>
+    /// The landmark search exactly as the game runs it (FUN_18059f480): a binary heap of (hex, cost) entries ordered by
+    /// cost only, with duplicates instead of decrease-key, a hex skipped when already visited. With
+    /// <paramref name="aliasVisited"/> the visited set behaves like the game's 1024×1024 sparse map: coordinates ≥ 1024
+    /// share the visited flag of 960 + (c &amp; 63) (64-hex leaves), so on maps wider or taller than 1024 hexes some hexes are never
+    /// settled. <paramref name="visit"/> gets every settled hex in pop order.
+    /// </summary>
+    public void SearchGame(int source, bool reverse, bool aliasVisited, Action<int, uint> visit)
+    {
+        var n = Width * Height;
+        var visited = aliasVisited ? new bool[1024 * 1024] : new bool[n];
+        int Key(int h)
+        {
+            if (!aliasVisited) return h;
+            int x = h % Width, y = h / Width;
+            if (x >= 1024) x = 960 + (x & 63); // CAI_SPARSE_MAP<1024,64,bool>: 64-hex leaves (checked in the DLL)
+            if (y >= 1024) y = 960 + (y & 63);
+            return y * 1024 + x;
+        }
+        var heapH = new List<int>(1 << 16);
+        var heapC = new List<uint>(1 << 16);
+        void Push(int h, uint c)
+        {
+            heapH.Add(h); heapC.Add(c);
+            var i = heapH.Count - 1;
+            while (i > 0)
+            {
+                var parent = (i - 1) >> 1;
+                if (heapC[parent] <= c) break;
+                heapH[i] = heapH[parent]; heapC[i] = heapC[parent];
+                i = parent;
+            }
+            heapH[i] = h; heapC[i] = c;
+        }
+        (int H, uint C) Pop()
+        {
+            var cnt = heapH.Count;
+            var topH = heapH[0]; var topC = heapC[0];
+            if (cnt > 1)
+            {
+                var vh = heapH[cnt - 1]; var vc = heapC[cnt - 1];
+                var len = cnt - 1;
+                var hole = 0;
+                var maxNonLeaf = (len - 1) >> 1;
+                while (hole < maxNonLeaf)
+                {
+                    var child = 2 * hole + 2;
+                    if (heapC[child - 1] < heapC[child]) child--;
+                    heapH[hole] = heapH[child]; heapC[hole] = heapC[child];
+                    hole = child;
+                }
+                if (hole == maxNonLeaf && (len & 1) == 0)
+                {
+                    heapH[hole] = heapH[len - 1]; heapC[hole] = heapC[len - 1];
+                    hole = len - 1;
+                }
+                while (hole > 0)
+                {
+                    var parent = (hole - 1) >> 1;
+                    if (!(vc < heapC[parent])) break;
+                    heapH[hole] = heapH[parent]; heapC[hole] = heapC[parent];
+                    hole = parent;
+                }
+                heapH[hole] = vh; heapC[hole] = vc;
+            }
+            heapH.RemoveAt(cnt - 1); heapC.RemoveAt(cnt - 1);
+            return (topH, topC);
+        }
+        var costs = reverse ? Reverse : Forward;
+        Push(source, 0);
+        while (heapH.Count > 0)
+        {
+            var (h, c) = Pop();
+            var k = Key(h);
+            if (visited[k]) continue;
+            visited[k] = true;
+            visit(h, c);
+            var o = h * 6;
+            for (var d = 0; d < 6; d++)
+            {
+                var ec = costs[o + d];
+                if (ec == NoEdge) continue;
+                var nb = Neighbour[o + d];
+                if (visited[Key(nb)]) continue;
+                Push(nb, c + ec);
+            }
+            for (var l = LinkStart[h]; l < LinkStart[h + 1]; l++)
+            {
+                var nb = Links[l];
+                if (visited[Key(nb)]) continue;
+                Push(nb, c + BridgeCost);
+            }
+        }
+    }
+
     public uint[] Search(int source, bool reverse, Action<int, uint>? visit = null)
     {
         var n = Width * Height;

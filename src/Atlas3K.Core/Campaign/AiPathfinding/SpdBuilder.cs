@@ -68,16 +68,28 @@ public static class SpdBuilder
         Parallel.For(0, 16, po, k =>
         {
             var lm = landmarks[k / 2];
-            var dist = grid.Search(grid.Index(lm.X, lm.Y), (k & 1) == 1);
-            for (var y = 0; y < grid.Height; y++)
-            for (var x = 0; x < grid.Width; x++)
+            if (grid.Width <= SparseMapSize && grid.Height <= SparseMapSize)
             {
-                var d = dist[y * grid.Width + x];
-                if (d == uint.MaxValue) continue;
-                var c = Alias(y) * w + Alias(x);
-                ref var v = ref values[c * 16 + k];
-                if (v == SpdData.NoPath || d > v) v = d;
-                written[c] = true; // benign race: every writer stores true
+                var dist = grid.Search(grid.Index(lm.X, lm.Y), (k & 1) == 1);
+                for (var y = 0; y < grid.Height; y++)
+                for (var x = 0; x < grid.Width; x++)
+                {
+                    var d = dist[y * grid.Width + x];
+                    if (d == uint.MaxValue) continue;
+                    var c = y * w + x;
+                    values[c * 16 + k] = d;
+                    written[c] = true; // benign race: every writer stores true
+                }
+            }
+            else
+            {
+                // big maps: the game's own heap order and its 1024-wide sparse visited map decide which hexes settle
+                grid.SearchGame(grid.Index(lm.X, lm.Y), (k & 1) == 1, true, (h, d) =>
+                {
+                    var c = Alias(h / grid.Width) * w + Alias(h % grid.Width);
+                    values[c * 16 + k] = d;
+                    written[c] = true;
+                });
             }
         });
         int bx0 = int.MaxValue, by0 = int.MaxValue, bx1 = -1, by1 = -1;
