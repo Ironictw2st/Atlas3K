@@ -40,7 +40,7 @@ The `terry` MCP server also edits the props in the kit's region layers (`<map>.<
 | `global_map` | Global Mesh (`global_map\` part) | native | `global_blend.dds`, `texture_arrays.xml`, `global_map\tile_list.bin` byte-identical |
 | `global_mesh` | Global Mesh (`land_mesh_N`, `sea_mesh_N`) | native (game-valid) | same mesh count and positions (170 land, 125 sea); holes identical (coverage IoU 1.0); land triangles 1.06× vanilla, sea 1.00×; surface-to-lf error equal to vanilla's (p99 ≈ 0.1–0.25); compressed-map holes agree on 97–99.7% of grid points |
 | `rivers` | Terry file (river models, height patches) | native (game-valid) | same 24 rivers and numbering as vanilla (checked by shape); land-mesh river holes left uncovered: 78 px map-wide (vanilla 0, BOB 732). vs BOB main190 (prototype): spline, lengths and sample lists bit-exact, index lists identical on 21/24, exact vertex positions 90.4%, 0/24 whole files; see *Rivers vs BOB* |
-| `global_props` | Terry file (`global_props.bin`) | native (near byte-identical to BOB) | main190 against BOB (2026-10-05): 12,429 of 12,461 common bodies byte-identical; BOB has 4 more entries (12,465). Remaining differences are listed under "global_props.bin vs BOB" below. main190 checked in game 2026-10-04 |
+| `global_props` | Terry file (`global_props.bin`) | native (byte-identical to BOB) | main190 against BOB (2026-10-05): the whole file is byte-identical (24,778,485 bytes, 12,465 entries); see "global_props.bin vs BOB" below. main190 checked in game 2026-10-04 |
 | `camera_heightmap` | Generate Camera Height Map | native (close, not byte-identical) | correlation 0.94, 73% of pixels within 0.1 units |
 | `trees` | Campaign Trees (`trees.campaign_tree_list`) | native | byte-identical when the CampaignTree map is the one decoded from vanilla (`trees-decode`) and heights are reused; heights computed from scratch (`TileHfHeight`): 205,765 of 205,767 vanilla trees bit-exact |
 | `lookup` | Texture / Convert lookup texture | native | byte-identical to BOB (vanilla's minimap differs in 304 bytes because of CA's own file) |
@@ -79,7 +79,7 @@ After the fix both render in game. Other findings from the comparison:
 | global_map | `global_blend.dds` and `texture_arrays.xml` byte-identical; the `tile_list.bin` copy differs (same differences as tile_list) |
 | global_meshes | 184 land / 126 sea meshes, same as BOB; not byte-identical (expected) |
 | rivers | 24 rivers / 48 model files, same as BOB. Height patches: 108 vs 85 files, because the native tiling per river is wider |
-| global_props | 66,271 vs 66,268 objects; model + position 100%. Region: 100% (331 regions, same set as BOB) since the fix below. It was 67.7% while the step used layer names. River models are numbered differently (see the regions note), but each river entity gets BOB's region |
+| global_props | 66,271 vs 66,268 objects; model + position 100%. Region: 100% (331 regions, same set as BOB) since the fix below. It was 67.7% while the step used layer names. River models are numbered as BOB (see the regions note) |
 | lookup | `.dds` and `.tga` byte-identical; `_minimap.tga` differs in 6,959 of 3.88M bytes |
 | rasters, climate | byte-identical to the kit's copies, but those were built natively too, so there is no BOB reference |
 | camera_heightmap, trees | no BOB output in the kit to compare against |
@@ -162,7 +162,8 @@ The decompiled algorithm is written up in `docs/bob_re_global_mesh.md`. Native v
 
 ### Rivers (`RiverBuilder`)
 
-- **Source:** every `ECRiverSpline` entity in the AK layers. The river number comes from the entity name (`river_N`), the numbering vanilla and the renumbered `global_props.bin` use.
+- **Source:** every `ECRiverSpline` entity in the AK layers.
+- **Numbering:** BOB's (`RiverNumbering.Bob`, see the global_props regions note) whenever the map.hex region lookup is available, so the models, height patches and `global_props.bin` match a BOB build. `RiverNumbersByName` (rivers step and `GlobalPropsBuilder`, keep both in step) numbers by the entity name (`river_N`) instead, which is CA's numbering in the shipped vanilla files.
 - **Curve:** a chain of cubic Béziers, (p_i, p_i + tangent_out, p_i+1 + tangent_in, p_i+1), placed by the entity transform and sampled every `spline_step_size` along the arc.
 - **Cross-sections:** 5 vertices each, at −w/2, −w/4, 0, w/4 and w/2.
   - **Width margin:** width × 1.15, with both ends pushed out by w/2, so the water covers the tile-based land-mesh holes. The extra water sits under the higher banks.
@@ -214,7 +215,7 @@ Verified bit-exact against a Frida dump of BOB (`research/bob_re/frida_rivers.js
    A second Frida pass that would dump the raw 32-byte half vertices from `FUN_18015e9e0` (`frida_rivers2.js`) was refused twice by BOB's GUI: ticking "Terry file" also ticked dependencies. It needs another attempt, to tell whether the shared y already exists in the section builder or is applied later.
 2. **x/z:** 120 x and 103 z single half-step differences remain, probably from the same mechanism; they follow the same groups.
 3. **Three rivers with odd counts** (`river_23` 129 vertices / 573 indices, `river_12` 334 / 1575, `river_3` 292 / 1368): BOB drops or adds vertices that aren't a whole cross-section, so some extra pass, a weld or degenerate-triangle removal, applies there. None of the simple rules (same position, zero area) reproduce it without breaking the 21 rivers that already match.
-4. **Not started:** the 48-byte vertex fields (uv, normal, tangent, bitangent), the header, and the height patches (BOB 88 files vs native 108). The river numbering is BOB's (not plain descending entity id: `river_3` and `river_4` swap on main190) and is handled by the props-finish worker.
+4. **Not started:** the 48-byte vertex fields (uv, normal, tangent, bitangent), the header, and the height patches (BOB 88 files vs native 108). The river numbering is BOB's (`RiverNumbering.Bob`, all 24 main190 rivers).
 
 ### global_props.bin (`GlobalPropsBuilder`)
 
@@ -222,12 +223,12 @@ Verified bit-exact against a Frida dump of BOB (`research/bob_re/frida_rivers.js
 - **Regions:** BOB puts every object in the region of the map.hex hex under its entity's ECTransform position, whichever layer it came from.
   - The lookup is a port of bob_terrain `FUN_18005fe10`, in `HexRegionLookup.cs`.
   - Grid geometry: flat-top hexes of radius R = (2/3)·(maxx − minx)/(columns − 1) over the map bounds, odd columns half a hex north. There is a corner test at the slanted edges, and the maths is in float32.
-  - The bounds come from the map's `campaign_map_playable_areas` row; BOB reads them from map_data.esf.
+  - The bounds come from the map's `campaign_map_playable_areas` row, refined to the floats in the working `map_data.esf` header (two ESF vec2 values, type 0x0c), which BOB reads: they can be an ulp off the XML's decimal text (main190 max x 986.05096 vs float(986.051)), which moved one boundary prop.
   - For river models (placed at the origin) the position is the ECRiver entity's transform.
   - Without a map.hex the step falls back to the layer name. A layer whose name isn't one of the map's regions goes to `3k_main_reg_non_playable`.
   - Checked on main190: 66,268 of 66,268 objects get BOB's region. On vanilla, 99.99% get CA's; the exceptions are the 24 duplicate river-model props that the converted kit layers carry at the origin.
-  - **River numbering:** BOB numbers `models/river_N` by ECRiver entity id, descending. The native rivers step numbers by entity name instead, which matches vanilla's numbering on the vanilla layer. Models, height patches and props agree with each other either way.
-- **Cells:** 7 quadtree levels, each a row-major 2^L × 2^L grid over the world (595.1 × 541.79 scaled to the map; row 0 = north). Cell id = the number of cells in the shallower levels + row × 2^L + col. An object goes to the deepest cell that holds its bounds. The native builder uses the model's LOD0 radius; rivers and polygon meshes go in cell 0.
+  - **River numbering** (`RiverNumbering.Bob`): BOB numbers `models/river_N` by how many river models it has already written, walking the river entities grouped by region: regions by their largest river entity id, descending; inside a region, ascending id. Checked on all 24 main190 rivers in two BOB runs (Frida, `research/bob_re/frida_props_finish.js`). CA's shipped vanilla files number by entity name instead (`RiverNumbersByName`). Models, height patches and props agree with each other either way.
+- **Cells:** 7 quadtree levels, each a row-major 2^L × 2^L grid over the world (595.1 × 541.79 scaled to the map; row 0 = north). Cell id = the number of cells in the shallower levels + row × 2^L + col. An object goes to the deepest cell that holds its box (see below); rivers go in cell 0.
 - **Season buckets:** 16 + bits (spring 1, summer 2, autumn 4, winter 8; harvest adds none). No season mask = 31.
 - **Files:**
   - `bmd_objects.<region>.<cell>.<bucket>.bin` holds the objects.
@@ -244,10 +245,11 @@ Reference: `output/bob_runs/20261004_230523_frida_trees_main190/bob_terrain_out/
 BOB's rules, from the decompiled bob_terrain / qttoolutility / empireutility / calibs code and checked on the reference:
 - **Quadtree cell:** the deepest of 7 levels (first child NW, NE, SW, SE) holding the object's box.
   - Root: the map bounds' x range by the hex grid's z extent ((rows + 0.5) × row step).
-  - Boxes: ECMesh entities use the model AABB through the world matrix, with [-1, 1]^3 for .wsmodel. Point lights use radius × mean column length × 0.5. Everything else is a point.
+  - Boxes: ECMesh entities use the model AABB (all LODs' mesh header bounds) through the world matrix, with [-1, 1]^3 for .wsmodel and for models BOB fails to load: a vertex stride that doesn't fit the declared format (`RigidModel.Mesh.PositionsOnly`; main190: `water_lily_1/3`, format 12 with stride 20; Frida on `FUN_18005e050`). Point lights use radius × mean column length × 0.5. Everything else is a point, a polygon mesh included: the point at its entity transform, not its outline (main190: (0, 0) → level-6 cell 5397).
   - Boxes outside the root are dropped.
 - **Buckets:** only ECMesh and ECVFX entities are season-bucketed. Decals, scenes, lights, sounds, probes and polygon meshes use 16.
-- **Record order:** ascending entity id in every section (BOB iterates the scene by id).
+- **Record order:** ascending entity id in every section (BOB iterates the scene by id). In the props section the decals (ECDecal) come before the ECMesh props, each by id.
+- **Polygon mesh triangulation:** ear clipping that starts at vertex 1 and stays on the same slot after clipping an ear; each ear is written (next, ear, previous) and the last three vertices (V2, V1, V0).
 - **Preamble:** only the enum types and season codes that are used.
   - They're registered in first-use order with composite scenes first, then lights, props and VFX (each by id).
   - An empty season mask registers every code in catalog order.
@@ -264,17 +266,9 @@ BOB's rules, from the decompiled bob_terrain / qttoolutility / empireutility / c
   - Sound cloud points = float(position) + float(offset).
 - **Entry order:** cells ascending. Inside a cell, regions are in the list order of a CA_STD hash map keyed by region name, filled by ascending first entity id (`CaHash.HashMapOrder`: CA::murmur_hash, buckets 1 -> 2b+1, re-bucketing in list order). Matches all 2,417 main190 cells (`research/props/cell_map_order.py`, 2026-10-05).
 
-**Remaining differences:**
+**Result:** the native main190 `global_props.bin` is byte-identical to BOB's (`cmp`, 24,778,485 bytes, 12,465 entries, 2026-10-05). Progress that day: 12,429 of 12,461 common bodies → entry order (CA_STD hash map), BOB's river numbering, ESF bounds, -0 positions, decals first, default box for unloadable models, polygon mesh cell and triangulation.
 
-| Difference | Bodies | Cause |
-|---|---|---|
-| Entry order | 3,475 of 12,461 common entries | region order inside a cell (above) |
-| River model numbers in prop paths | 25 | BOB numbers `river_N` by ECRiver entity id descending; the native rivers step numbers by entity name (vanilla's numbering). Changing it means changing the rivers step too |
-| Entries only in BOB | 4: `3k_main_sea_lake.3396(.31)`, `3k_main_reg_non_playable.5397(.16)` | 2 water lilies BOB puts one level deeper (cell level 6 vs 5): model AABB differs slightly from BOB's `WarscapeModelData::aabb` |
-| Prop counts | 4 | the same two water lilies and their neighbour cells |
-| Props differ / paths reordered | 3 / 2 | a decal inside a prefab: BOB orders it by a different id than the expanded inner entity |
-| Polygon mesh | 1 (`3k_main_reg_non_playable.0.16`) | body 2,375 bytes in BOB vs 2,658 native: triangulation / vertex set differs |
-| Root `bmd_objects.bin` | 1 | follows the 4 BOB-only entries |
+**Not covered by the main190 check:** polygons wound clockwise (the builder reverses them first; BOB's handling is unchecked) and vanilla's own `global_props.bin`, which CA built with entity-name river numbers.
 
 **Record templates:** new records start from vanilla's most common record of each type (read from `global_props.bin` in the game packs), with the layer's fields replaced:
 - path, transform, meta tags (flags plus a mask covering whole enum types) and season mask
