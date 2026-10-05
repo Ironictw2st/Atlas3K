@@ -26,6 +26,11 @@ public sealed class AiPathGrid
     public int[] Neighbour { get; }
     public int[] PortLinkStart { get; }
     public int[] PortLinks { get; }
+    /// <summary>Hex radius and half hex height in world units (the pathfinder's +0x50 / +0x54 copies).</summary>
+    /// <summary>Edges navigable in the ppd: a beach only ever switches these (FUN_1812013e0 masks its entry with them).</summary>
+    private readonly bool[] _open;
+    public float HexSize { get; }
+    public float HalfRow { get; }
     public float[] WorldX { get; }
     public float[] WorldY { get; }
     private readonly List<(ushort Enter, ushort Leave, List<(int Hex, byte Mask)> EnterEdges, List<(int Hex, byte Mask)> LeaveEdges)> _beaches = [];
@@ -43,6 +48,7 @@ public sealed class AiPathGrid
         Slot = new bool[n];
         Neighbour = new int[n * 6];
         EdgesPlain = new byte[n * 6];
+        _open = new bool[n * 6];
         for (var y = 0; y < Height; y++)
         for (var x = 0; x < Width; x++)
         {
@@ -54,6 +60,7 @@ public sealed class AiPathGrid
             {
                 var e = ppd.Cells[h * 8 + d];
                 EdgesPlain[h * 6 + d] = (byte)((e & 0xBF) | (e >> 1 & 0x40));
+                if ((e & 0x80) != 0) _open[h * 6 + d] = true;
                 Neighbour[h * 6 + d] = ppd.Neighbour(x, y, d, out var nx, out var ny) ? ny * Width + nx : -1;
             }
         }
@@ -133,6 +140,8 @@ public sealed class AiPathGrid
         // CAMPAIGN_MAP_DATA::real_world_position_for_logical_position (FUN_18130a860)
         var hexSize = 0.6666667f / (Width - 1f) * (regions.WorldMax.X - regions.WorldMin.X);
         var halfRow = hexSize * 0.8660254f;
+        HexSize = hexSize;
+        HalfRow = halfRow;
         var rowStep = halfRow + halfRow;
         var colStep = hexSize * 1.5f;
         WorldX = new float[n];
@@ -155,17 +164,24 @@ public sealed class AiPathGrid
         {
             if (_gated.TryGetValue((zero, cc, ce), out var e)) return e;
             e = (byte[])(zero ? EdgesZero : EdgesPlain).Clone();
+            // Beach objects (ppd beaches, loaded by FUN_181208f40, switched by FUN_181209d80 in CAMPAIGN_PATHFINDER::setup)
+            // keep a counter per edge: an edge is open only while every beach side listing it is on, and a beach only
+            // ever switches edges that are navigable in the ppd (FUN_1812013e0 masks its entry with them). There is no
+            // move-type table in these searches (FUN_180538bd0 checks the navigation bit only).
+            var state = new Dictionary<int, bool>();
             foreach (var (a, l, ent, lev) in _beaches)
             {
                 var onE = cc != ce && a == cc;
                 var onL = cc != ce && l == cc;
                 foreach (var (h, m) in ent)
                     for (var d = 0; d < 6; d++)
-                        if ((m >> d & 1) != 0) e[h * 6 + d] = onE ? (byte)(e[h * 6 + d] | 0x80) : (byte)(e[h * 6 + d] & 0x7F);
+                        if ((m >> d & 1) != 0 && _open[h * 6 + d]) state[h * 6 + d] = (!state.TryGetValue(h * 6 + d, out var o) || o) && onE;
                 foreach (var (h, m) in lev)
                     for (var d = 0; d < 6; d++)
-                        if ((m >> d & 1) != 0) e[h * 6 + d] = onL ? (byte)(e[h * 6 + d] | 0x80) : (byte)(e[h * 6 + d] & 0x7F);
+                        if ((m >> d & 1) != 0 && _open[h * 6 + d]) state[h * 6 + d] = (!state.TryGetValue(h * 6 + d, out var o) || o) && onL;
             }
+            foreach (var (k, on) in state)
+                e[k] = on ? (byte)(e[k] | 0x80) : (byte)(e[k] & 0x7F);
             // impassable hexes stay closed whatever the beach state (their edges were cut when the grid was built)
             for (var h = 0; h < Types.Length; h++)
             {
@@ -177,14 +193,6 @@ public sealed class AiPathGrid
                     if (nb >= 0) e[nb * 6 + (d + 3) % 6] &= 0x7F;
                 }
             }
-            // the move-type table (FUN_1805d3a70 / FUN_1805fa120) gates every step as well: e.g. no bridge -> sea
-            if (Environment.GetEnvironmentVariable("HLP_MASKALL") != "0")
-                for (var h = 0; h < Types.Length; h++)
-                for (var d = 0; d < 6; d++)
-                {
-                    var nb = Neighbour[h * 6 + d];
-                    if (nb >= 0 && (CampaignPathGrid.TypeMask[Types[h]] >> Types[nb] & 1) == 0) e[h * 6 + d] &= 0x7F;
-                }
             _gated[(zero, cc, ce)] = e;
             return e;
         }

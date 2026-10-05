@@ -44,6 +44,7 @@ static class AiPathfindingCommands
                 File.WriteAllBytes(dump + ".fwd", System.Runtime.InteropServices.MemoryMarshal.AsBytes(grid.Forward.AsSpan()).ToArray());
                 File.WriteAllBytes(dump + ".types", grid.Types);
                 File.WriteAllBytes(dump + ".edges", grid.EdgeBytes);
+                File.WriteAllBytes(dump + ".areas", System.Runtime.InteropServices.MemoryMarshal.AsBytes(regions.AreaMap.AsSpan()).ToArray());
                 File.WriteAllLines(dump + ".regions.txt", regions.Regions.Select((r, i) =>
                     $"{i}\t{r.Key}\t{r.IsSea}\t{r.Settlement}\t{r.Port}\t{string.Join(";", r.PrimarySlot)}\t{string.Join(";", r.PortSlot)}"));
             }
@@ -69,7 +70,7 @@ static class AiPathfindingCommands
             {
                 LegacyStlOrder = a.Contains("--legacy-stl"),
                 CentrePathZero = !a.Contains("--centre-blocked"),
-                RefineThreshold = float.Parse(Option(a, "--threshold") ?? "0.4", CultureInfo.InvariantCulture),
+                RefineThreshold = float.Parse(Option(a, "--threshold") ?? "0", CultureInfo.InvariantCulture),
                 MaxThreads = threads,
             };
             var hlp = HlpBuilder.Build(ppd, regions, settings, refHlp?.Timestamp ?? ts, Console.WriteLine, opt);

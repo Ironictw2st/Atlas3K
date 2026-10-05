@@ -50,7 +50,7 @@ public class HlpSpdTests
     }
 
     /// <summary>The native hlp_data.esf is not byte-identical yet; guard the field-level parity reached on the vanilla
-    /// maps (2026-10-05: dlc07 317/334 areas identical, 2372/2398 transitions with the same hexes, target and cost).</summary>
+    /// maps (2026-10-05: dlc07 328/334 areas identical, 2393/2398 transitions with the same hexes, target and cost).</summary>
     [Fact]
     public void Hlp_NativeBuild_FieldParityOnVanilla()
     {
@@ -76,8 +76,8 @@ public class HlpSpdTests
                 matched += r.Transitions.Count(t => a.Transitions.Any(m =>
                     (m.X, m.Y, m.OtherX, m.OtherY, m.TargetArea, m.Cost) == (t.X, t.Y, t.OtherX, t.OtherY, t.TargetArea, t.Cost)));
             }
-            Assert.True(same >= areas * 0.93, $"{dir}: {same}/{areas} identical areas");
-            Assert.True(matched >= transitions * 0.98, $"{dir}: {matched}/{transitions} transitions");
+            Assert.True(same >= areas * 0.97, $"{dir}: {same}/{areas} identical areas");
+            Assert.True(matched >= transitions * 0.995, $"{dir}: {matched}/{transitions} transitions");
         }
         if (Directory.Exists(Extracted)) Assert.True(maps >= 2, $"only {maps} maps found");
     }

@@ -22,9 +22,9 @@ public static class HlpBuilder
 {
     public sealed record Options
     {
-        /// <summary>refine_path's tolerance: a segment is kept when no hex of its path is further than this (squared
+        /// <summary>refine_path tolerance (0 = the game value: the half hex height, compared with squared distances). A segment is kept when no hex of its path is further than this (squared
         /// world units) from the segment's line.</summary>
-        public float RefineThreshold { get; init; } = 0.4f;
+        public float RefineThreshold { get; init; }
         /// <summary>Settlement handling for the centre-to-centre paths (true = slot edges cost 0, false = slots blocked).</summary>
         public bool CentrePathZero { get; init; } = true;
         /// <summary>Pre-2020 STL (VS2017) unordered_map: insert first, then rehash (dlc04 / 8p files); else VS2019 (rehash first).</summary>
@@ -179,7 +179,7 @@ public static class HlpBuilder
                     var d = LineDistance2(ax, ay, fx, fy, g.WorldX[h], g.WorldY[h]);
                     if (worst < d) { worst = d; far = h; }
                 }
-                if (worst <= options.RefineThreshold || far < 0)
+                if (worst <= (options.RefineThreshold > 0 ? options.RefineThreshold : g.HalfRow) || far < 0)
                 {
                     stack.RemoveAt(stack.Count - 1);
                     for (var i = 0; i < path.Count - 1; i++) result.Add(path[i]);
@@ -235,6 +235,9 @@ public static class HlpBuilder
                     if (t.Border.Contains(h)) p = h;
                     if (q < 0 && s.Border.Contains(h)) q = h;
                 }
+            var dbg = Environment.GetEnvironmentVariable("HLP_DEBUG_PAIR") == $"{e.Aid},{f.Aid}";
+            string H(int h) => $"({h % W},{h / W})";
+            if (dbg) Console.Error.WriteLine($"pair {e.Aid}->{f.Aid}: path p {(p >= 0 ? H(p) : "-")} q {(q >= 0 ? H(q) : "-")}\n  S(in f, found by e) {string.Join(" ", s.Border.Select(H))}\n  T(in e, found by f) {string.Join(" ", t.Border.Select(H))}");
             var copyA = new HashSet<int>(s.Border);
             var copyB = new HashSet<int>(t.Border);
             if (p >= 0 && q >= 0)
@@ -264,6 +267,7 @@ public static class HlpBuilder
                 var cy = (int)(sy / cluster.Count);
                 var c = cy * W + cx;
                 var bc = Nearest(copyA, c);
+                if (dbg) Console.Error.WriteLine($"  cluster last {H(last)} n {cluster.Count} centroid {H(c)}");
                 var ac = Nearest(copyB, c);
                 var ok = false;
                 if (bc >= 0 && ac >= 0)
@@ -366,7 +370,7 @@ public static class HlpBuilder
         else
         {
             var inv = 1f / len;
-            var u = (py - ay) * inv * fy * inv + (px - ax) * inv * fx * inv;
+            var u = (py - ay) * inv * inv * fy + (px - ax) * inv * inv * fx;
             t = u < 0f ? 0f : u >= 1f ? 1f : u;
         }
         var dy = fy * t + ay - py;
