@@ -5,7 +5,7 @@
     <Company>Atlas3K</Company>
     <Copyright>Atlas3K contributors</Copyright>
     <VersionPrefix>0.1.0</VersionPrefix>
-    <VersionSuffix>alpha.1</VersionSuffix>
+    <VersionSuffix>alpha.2</VersionSuffix>
     <!-- appends +<commit> to InformationalVersion when built from git -->
     <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
