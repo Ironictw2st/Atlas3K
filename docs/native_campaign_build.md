@@ -39,7 +39,7 @@ The `terry` MCP server also edits the props in the kit's region layers (`<map>.<
 | `tile_list` | Tilemap | native | **byte-identical to BOB on vanilla** (2026-10-04: `tile_list.bin`, and `global_map\` with it). Fixes: `TILE_DATABASE::sort` runs before link targets are loaded (all 0), so the DB order is area then name; `calculate_flow` neither flows nor queues a tile with no TLT_EQUALS entry link. main190 (BOB 2026-10-03): every record field identical; only low/high differ because that BOB run had no lf (all records +/-FLT_MAX sentinels). Evidence: Frida dumps `research/bob_re/frida_out`, `research/sim_first_divergence.py`, `research/tilelist_fields.py` |
 | `global_map` | Global Mesh (`global_map\` part) | native | `global_blend.dds`, `texture_arrays.xml`, `global_map\tile_list.bin` byte-identical |
 | `global_mesh` | Global Mesh (`land_mesh_N`, `sea_mesh_N`) | native (game-valid) | same mesh count and positions (170 land, 125 sea); holes identical (coverage IoU 1.0); land triangles 1.06× vanilla, sea 1.00×; surface-to-lf error equal to vanilla's (p99 ≈ 0.1–0.25); compressed-map holes agree on 97–99.7% of grid points |
-| `rivers` | Terry file (river models, height patches) | native (game-valid) | same 24 rivers and numbering as vanilla (checked by shape); land-mesh river holes left uncovered: 78 px map-wide (vanilla 0, BOB 732). vs BOB main190: no file identical yet; BOB's spline sampler is reverse-engineered and prototyped (8 of 24 rivers get BOB's exact vertex count, xz positions up to 87% exact), see *Rivers vs BOB* |
+| `rivers` | Terry file (river models, height patches) | native (game-valid) | same 24 rivers and numbering as vanilla (checked by shape); land-mesh river holes left uncovered: 78 px map-wide (vanilla 0, BOB 732). vs BOB main190 (prototype): spline, lengths and sample lists bit-exact, index lists identical on 21/24, exact vertex positions 90.4%, 0/24 whole files; see *Rivers vs BOB* |
 | `global_props` | Terry file (`global_props.bin`) | native (near byte-identical to BOB) | main190 against BOB (2026-10-05): 12,429 of 12,461 common bodies byte-identical; BOB has 4 more entries (12,465). Remaining differences are listed under "global_props.bin vs BOB" below. main190 checked in game 2026-10-04 |
 | `camera_heightmap` | Generate Camera Height Map | native (close, not byte-identical) | correlation 0.94, 73% of pixels within 0.1 units |
 | `trees` | Campaign Trees (`trees.campaign_tree_list`) | native | byte-identical when the CampaignTree map is the one decoded from vanilla (`trees-decode`) and heights are reused; heights computed from scratch (`TileHfHeight`): 205,765 of 205,767 vanilla trees bit-exact |
@@ -171,44 +171,50 @@ The decompiled algorithm is written up in `docs/bob_re_global_mesh.md`. Native v
 
 #### Rivers vs BOB (2026-10-05, work in progress)
 
-Reference: BOB's main190 "Terry file" output (`output/bob_runs/20261004_230523_frida_trees_main190/bob_terrain_out`),
-built from the kit river layer `3k_190e_expanded_map.1972bd217a4938e.layer`, which is still unchanged. Prototype:
-`research/rivers/bob_spline.py`. Measured by `research/rivers/river_match.py` and `river_cmp.py`. No native code changed
-yet; the native step stays game-valid (its wider water covers the tile holes BOB leaves).
+**Status:**
+- **Test:** the Python prototype (`research/rivers/bob_spline.py`) against BOB's main190 "Terry file" output, measured with `research/rivers/exact_cmp.py`, `mesh_tail.py` and `dump_cmp.py`.
+- **Reference:** `output/bob_runs/frida_rivers_main190_bob_terrain/models`. Its vertex positions and indices are identical to the 2026-10-04 23:05 BOB run; other vertex fields differ between the two runs.
+- **Native step unchanged:** still the wider game-valid geometry, because BOB's own rivers leave 732 px of land-mesh holes.
 
-BOB's pipeline (tooldatabuilder `process_river_spline` → `FUN_1800d99e0`):
-- **Spline** (`FUN_18016e440`, utilitydll `SEGMENTED_SPLINE_3`):
-  - one cubic Bézier per point pair (p_i, p_i + tangent_out, p_i+1 + tangent_in, p_i+1);
-  - basis matrix rows (−1,3,−3,1), (3,−6,3,0), (−3,3,0,0), (1,0,0,0);
-  - segment length = Σ|B′(u)|·du with 1000 steps of du = 1/1000, where the derivative is the basis applied to (3u², 2u, 1, 0);
-  - a degenerate segment (p0 = p1 and p2 = p3) uses the straight-line distance.
-- **Evaluation:** `FUN_1800a4990` finds the segment by Σ len/total, then u = (total·t − start)/len. Two sum orders:
-  - `FUN_1800b13b0` (used by `optimise_spline`) adds ((w3·P3 + w2·P2) + w1·P1) + w0·P0;
-  - `FUN_1801884d0` (used by the sections) adds w0·P0 + w1·P1 + w2·P2 + w3·P3.
-- **Samples:** `SEGMENTED_SPLINE_3::optimise_spline(out, 20, extra, 0.02)` runs a greedy direction filter:
-  - **Candidates:** N = trunc(20·length ± 0.5) parameters.
-  - **Filter:** keep t_(k−1) when dot(norm(P(t_last) − P(t_prev_kept)), norm(P(t_k) − P(t_(k−1)))) < 0.98; then add 1.0.
-  - **Extras:** merge the 7 extras k/8 (k = 0..6) and sort.
-  - **Unique bug:** BOB's in-place unique never shrinks the count, so the old tail values stay in the list. With this, 8 of 24 rivers get exactly BOB's vertex count.
-- **Cross-section** (`FUN_18015e9e0`):
-  - position = P(t); direction = the xz derivative, normalised (z² + x²);
-  - width = lerp of the segment's start/end widths (record +0x48/+0x4c);
-  - 5 vertices at off = j·0.25·w − 0.5·w, x = dz·off + px, z = −(dx·off) + pz, y = py;
-  - each component goes through BOB's own float→half (`FUN_1803811a0`) into a 32-byte intermediate vertex: half x, y, z, v = off·C, u = len·C·t, world uv.
-- **Why the vertices look snapped to 0.25:** they're half-precision world coordinates (the half step is 0.25 between 256 and 512).
-- **Later stages:** `FUN_180146460`, then VERTEX_LIST_CLEANER `FUN_1800d0700`, then MESH_SPLITTER `FUN_1800d0f80`, then `MODEL_PROCESSOR::write`.
-- **BOB's .wsmodel** uses LF line ends. CA's shipped vanilla files use CRLF.
+Verified bit-exact against a Frida dump of BOB (`research/bob_re/frida_rivers.js`, `frida_out/frida_rivers_main190.jsonl`):
+- **Spline input** (all 451 of 451 segments identical: raw input points, stored control points, lengths):
+  - world point = float32(local + entity position) (yaw 0 on main190);
+  - control points = world(p_i) + tangent_out and world(p_i+1) + tangent_in, in float32.
+- **Degenerate segments** (`FUN_18016e440`):
+  - p0 = p1 → p1 = (p2 + p0)·0.5;
+  - p2 = p3 → p2 = (p1 + p3)·0.5;
+  - both → p1 = p2 = (p3 + p0)·0.5;
+  - every degenerate segment uses the straight-line length |p0 − p3|.
+- **Length:** Σ|B′(u)|·du over 1000 steps; the derivative is the basis applied to (3u², 2u, 1, 0), summed w0·P0 + w1·P1 + w2·P2 + w3·P3.
+- **Samples** (`SEGMENTED_SPLINE_3::optimise_spline`, identical on 24 of 24 rivers):
+  - N = trunc(20·total + 0.5) candidates at k/(N−1);
+  - greedy keep of t_(k−1) when the direction dot product < 1 − 0.02, with the evaluator summed w0·P0 + w1·P1 + w2·P2 + w3·P3 left to right (**not** the order Ghidra prints for `FUN_1800b13b0`);
+  - then add 1.0, add the 7 extras k/8, `std::sort`;
+  - BOB's in-place unique never shrinks the list, so the old tail stays in.
+- **Cross-sections:**
+  - P(t) and the xz derivative;
+  - width = lerp of the segment's two point widths;
+  - 5 vertices at off = j·0.25·w − 0.5·w, x = dz·off + px, z = −(dx·off) + pz;
+  - each component goes through BOB's own float→half (`FUN_1803811a0`, ported as `half_bob`).
+- **Mesh:**
+  - triangles per section pair: (n_j, c_j, n_(j+1)) and (c_j, c_(j+1), n_(j+1));
+  - vertices renumbered by first use, then written with flipped winding (a, c, b);
+  - pivot = bounding-box centre of the half world positions;
+  - vertex = half world − pivot (float32).
 
-**Where it stands:**
-- **xz agreement:** the vertex positions with the prototype (half-quantised, translation-aligned) reach 87% on the best river, 1–58% elsewhere; 0 of 24 rivers are exact.
-- **y:** differs by about one half-quantum, so BOB's water height isn't the plain spline y.
+**Numbers:**
+- index lists identical on 21 of 24 rivers;
+- vertex counts equal on 21 of 24;
+- exact vertex positions 90.4% (4,252 of 4,695 on the 21 rivers);
+- whole river files identical: 0 of 24.
 
-**Next:**
-1. the y source;
-2. the remaining one-quantum xz differences: the float op order in the segment search and the width lerp;
-3. the index order and the cleaner/splitter, which make BOB's vertex order section-interleaved;
-4. the 48-byte writer and pivot;
-5. the height patches (88 BOB vs 108 native files).
+**Remaining, with evidence:**
+1. **y on coincident vertices:** where vertices from different sections fall on the same half-quantised (x, z), BOB writes one shared y, taken from one member of the group. Its own y is right 91.4% of the time. The chosen member isn't simply the first, last, min or max, and averaging is worse.
+
+   A second Frida pass that would dump the raw 32-byte half vertices from `FUN_18015e9e0` (`frida_rivers2.js`) was refused twice by BOB's GUI: ticking "Terry file" also ticked dependencies. It needs another attempt, to tell whether the shared y already exists in the section builder or is applied later.
+2. **x/z:** 120 x and 103 z single half-step differences remain, probably from the same mechanism; they follow the same groups.
+3. **Three rivers with odd counts** (`river_23` 129 vertices / 573 indices, `river_12` 334 / 1575, `river_3` 292 / 1368): BOB drops or adds vertices that aren't a whole cross-section, so some extra pass, a weld or degenerate-triangle removal, applies there. None of the simple rules (same position, zero area) reproduce it without breaking the 21 rivers that already match.
+4. **Not started:** the 48-byte vertex fields (uv, normal, tangent, bitangent), the header, and the height patches (BOB 88 files vs native 108). The river numbering is BOB's (not plain descending entity id: `river_3` and `river_4` swap on main190) and is handled by the props-finish worker.
 
 ### global_props.bin (`GlobalPropsBuilder`)
 

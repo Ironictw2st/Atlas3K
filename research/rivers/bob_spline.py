@@ -6,8 +6,8 @@ import math, re, sys
 import xml.etree.ElementTree as ET
 import numpy as np
 F = np.float32
-WORLD_F32 = False
-CTRL_MODE = 'local'   # 'local': W(p + t) ; 'world': W(p) + t
+WORLD_F32 = True
+CTRL_MODE = 'world'   # 'local': W(p + t) ; 'world': W(p) + t
 B = [[-1, 3, -3, 1], [3, -6, 3, 0], [-3, 3, 0, 0], [1, 0, 0, 0]]
 
 
@@ -17,9 +17,11 @@ def weights(u3, u2, u1, u0):
 
 
 def eval_seg(P, u):
+    """FUN_1800a4990 -> FUN_1800b13b0: w0*P0 + w1*P1 + w2*P2 + w3*P3 left to right (verified: optimise_spline sample
+    lists identical to BOB's on 24/24 rivers; Ghidra's printed order is misleading)."""
     u = F(u); u2 = F(u * u); u3 = F(u2 * u)
     w = weights(u3, u2, u, F(1))
-    return [F(F(F(F(w[3] * P[3][k]) + F(w[2] * P[2][k])) + F(P[1][k] * w[1])) + F(P[0][k] * w[0])) for k in range(3)]
+    return [F(F(F(F(w[0] * P[0][k]) + F(w[1] * P[1][k])) + F(w[2] * P[2][k])) + F(w[3] * P[3][k])) for k in range(3)]
 
 
 def eval_seg_fwd(P, u):

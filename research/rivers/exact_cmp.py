@@ -5,7 +5,8 @@ sys.path.insert(0, '.')
 from bob_spline import *
 import river_cmp, xml.etree.ElementTree as ET
 L = "C:/Program Files (x86)/Steam/steamapps/common/Total War THREE KINGDOMS/assembly_kit_190E/raw_data/terrain/campaigns/3k_190e_expanded_map/3k_190e_expanded_map.1972bd217a4938e.layer"
-B = river_cmp.summary(r"Z:/Claude/TerryClone/output/bob_runs/20261004_230523_frida_trees_main190/bob_terrain_out/models")
+import os
+B = river_cmp.summary(os.environ.get("RIVER_REF", r"Z:/Claude/TerryClone/output/bob_runs/frida_rivers_main190_bob_terrain/models"))
 rs = sorted(rivers(L), key=lambda r: -int(r[0], 16))
 wmap = {}
 for ent in ET.parse(L).getroot().iter('entity'):
