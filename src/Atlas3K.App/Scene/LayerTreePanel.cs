@@ -3,6 +3,8 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
+using Atlas3K.Core.Editing;
 using Atlas3K.Formats.Terry;
 
 namespace Atlas3K.App.Scene;
@@ -11,6 +13,8 @@ namespace Atlas3K.App.Scene;
 /// Terry's scene tree: file layers, then (lazily, on expand) the folder/tag layers, groups and entities inside them.
 /// Layers have visibility and lock toggles; right-click gives the layer/entity commands; entities can be dragged onto
 /// a layer to move them there. The panel raises requests; the window turns them into entity ops.
+/// The bar on top filters the tree (name, region, type, saved visibility; <see cref="LayerTreeFilter"/>, view only) and
+/// shows / hides every layer, or only the filtered ones, as one undoable edit.
 /// </summary>
 public sealed class LayerTreePanel : DockPanel
 {
@@ -35,6 +39,20 @@ public sealed class LayerTreePanel : DockPanel
     public event Action<Node, string, bool>? StateToggled;        // node, "visible"|"frozen", value
     public event Action<Node, string>? Command;                   // node, command name
     public event Action<IReadOnlyList<string>, Node>? DropRequested; // entity ids, target layer node
+    /// <summary>Set the saved visibility of many layers as one edit: (layer id, visible) pairs and an undo label.</summary>
+    public event Action<IReadOnlyList<(string Id, bool Visible)>, string>? BulkVisibility;
+
+    private LayerTreeFilter _filter = LayerTreeFilter.None;
+    private readonly TextBox _nameBox = new() { MinWidth = 60, Margin = new Thickness(2), ToolTip = "Filter by layer or entity name, label or id (case-insensitive)" };
+    private readonly TextBox _regionBox = new() { MinWidth = 60, Margin = new Thickness(2), ToolTip = "Filter layers by region: part of the layer name, e.g. 3k_main_luoyang" };
+    private readonly ComboBox _typeBox = new() { MinWidth = 90, Margin = new Thickness(2), ToolTip = "Only entities of this type (and the layers that hold them)" };
+    private readonly ComboBox _visBox = new() { MinWidth = 70, Margin = new Thickness(2), ToolTip = "Only layers that are visible / hidden in the saved project state" };
+    private readonly TextBlock _filterNote = new() { Margin = new Thickness(4, 0, 4, 2), FontSize = 11 };
+    private readonly DispatcherTimer _filterTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private bool _fillingTypes;
+
+    /// <summary>The tree filter in effect (view only).</summary>
+    public LayerTreeFilter Filter => _filter;
 
     public LayerTreePanel()
     {
@@ -64,7 +82,131 @@ public sealed class LayerTreePanel : DockPanel
             if (ItemAt(e.OriginalSource) is { Tag: Node { IsLayer: true } target } && e.Data.GetData("terry-ids") is string[] ids)
                 DropRequested?.Invoke(ids, target);
         };
+        var bar = FilterBar();
+        SetDock(bar, Dock.Top);
+        Children.Add(bar);
         Children.Add(_tree);
+    }
+
+    // ---------------------------------------------------------------- filter bar and bulk visibility
+
+    private UIElement FilterBar()
+    {
+        _filterNote.Foreground = Theme.Brush("DimText");
+        _visBox.Items.Add("All");
+        _visBox.Items.Add("Visible");
+        _visBox.Items.Add("Hidden");
+        _visBox.SelectedIndex = 0;
+        _typeBox.Items.Add("All types");
+        _typeBox.SelectedIndex = 0;
+        _filterTimer.Tick += (_, _) => { _filterTimer.Stop(); ApplyFilter(); };
+        _nameBox.TextChanged += (_, _) => { _filterTimer.Stop(); _filterTimer.Start(); };
+        _regionBox.TextChanged += (_, _) => { _filterTimer.Stop(); _filterTimer.Start(); };
+        _typeBox.SelectionChanged += (_, _) => { if (!_fillingTypes) ApplyFilter(); };
+        _visBox.SelectionChanged += (_, _) => ApplyFilter();
+
+        TextBlock Lbl(string t) => new() { Text = t, Foreground = Theme.Brush("DimText"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
+        var grid = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        void Put(UIElement e, int row, int col)
+        {
+            while (grid.RowDefinitions.Count <= row) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(e, row);
+            Grid.SetColumn(e, col);
+            grid.Children.Add(e);
+        }
+        Put(Lbl("Name"), 0, 0); Put(_nameBox, 0, 1); Put(Lbl("Region"), 0, 2); Put(_regionBox, 0, 3);
+        Put(Lbl("Type"), 1, 0); Put(_typeBox, 1, 1); Put(Lbl("Show"), 1, 2); Put(_visBox, 1, 3);
+
+        Button Btn(string text, string tip, Action click)
+        {
+            var b = new Button { Content = text, ToolTip = tip, Margin = new Thickness(2), Padding = new Thickness(6, 1, 6, 1) };
+            b.Click += (_, _) => click();
+            return b;
+        }
+        var buttons = new WrapPanel();
+        buttons.Children.Add(Btn("Show all", "Make every layer visible (locked layers are left as they are). One undo step.", () => SetAll(true)));
+        buttons.Children.Add(Btn("Hide all", "Hide every file layer (locked layers are left as they are). One undo step.", () => SetAll(false)));
+        buttons.Children.Add(Btn("Show only filtered", "Show the file layers the filter keeps and hide the rest (locked layers are left as they are). One undo step.", ShowOnlyFiltered));
+        buttons.Children.Add(Btn("Clear filter", "Clear the name, region, type and visibility filters", ClearFilter));
+
+        var panel = new StackPanel { Background = Theme.Brush("Panel") };
+        panel.Children.Add(grid);
+        panel.Children.Add(buttons);
+        panel.Children.Add(_filterNote);
+        return panel;
+    }
+
+    private void ApplyFilter()
+    {
+        var type = _typeBox.SelectedIndex > 0 ? _typeBox.SelectedItem as string : null;
+        var vis = (LayerVisibilityFilter)Math.Max(0, _visBox.SelectedIndex);
+        _filter = new LayerTreeFilter(_nameBox.Text.Trim(), _regionBox.Text.Trim(), type, vis);
+        Rebuild();
+    }
+
+    private void ClearFilter()
+    {
+        _nameBox.Text = "";
+        _regionBox.Text = "";
+        _typeBox.SelectedIndex = 0;
+        _visBox.SelectedIndex = 0;
+        _filterTimer.Stop();
+        ApplyFilter();
+    }
+
+    private void FillTypes()
+    {
+        if (_model is null) return;
+        var current = _typeBox.SelectedIndex > 0 ? _typeBox.SelectedItem as string : null;
+        var types = _model.Layers.SelectMany(l => _model.EntitiesOf(l.Id)).Select(e => e.Type)
+            .Where(t => !TerryEntityTypes.IsLayerType(t)).Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+        _fillingTypes = true;
+        _typeBox.Items.Clear();
+        _typeBox.Items.Add("All types");
+        foreach (var t in types) _typeBox.Items.Add(t);
+        _typeBox.SelectedIndex = current is not null && types.Contains(current) ? types.IndexOf(current) + 1 : 0;
+        _fillingTypes = false;
+    }
+
+    private bool KeepLayer(string id, string name) =>
+        _filter.IsEmpty || _filter.KeepFileLayer(name, _model!.Invisible.Contains(id),
+            _filter.FiltersEntities ? _model.EntitiesOf(id).Select(e => (e, Label(e))) : []);
+
+    private void SetAll(bool visible)
+    {
+        if (_model is null) return;
+        var changes = new List<(string, bool)>();
+        if (visible)
+        {
+            foreach (var id in _model.Invisible)
+                if (!_model.Frozen.Contains(id)) changes.Add((id, true));
+        }
+        else
+        {
+            foreach (var l in _model.Layers)
+                if (!_model.Frozen.Contains(l.Id) && !_model.Invisible.Contains(l.Id)) changes.Add((l.Id, false));
+        }
+        if (changes.Count > 0) BulkVisibility?.Invoke(changes, visible ? "show all layers" : "hide all layers");
+    }
+
+    private void ShowOnlyFiltered()
+    {
+        if (_model is null || _filter.IsEmpty) return;
+        var changes = new List<(string, bool)>();
+        foreach (var l in _model.Layers)
+        {
+            if (_model.Frozen.Contains(l.Id)) continue;
+            var keep = _filter.KeepFileLayer(l.Name, false, _filter.FiltersEntities ? _model.EntitiesOf(l.Id).Select(e => (e, Label(e))) : []);
+            var hidden = _model.Invisible.Contains(l.Id);
+            if (keep && hidden) changes.Add((l.Id, true));
+            else if (!keep && !hidden) changes.Add((l.Id, false));
+        }
+        if (changes.Count > 0) BulkVisibility?.Invoke(changes, "show only filtered layers");
     }
 
     private static TreeViewItem? ItemAt(object source)
@@ -91,6 +233,7 @@ public sealed class LayerTreePanel : DockPanel
     public void Attach(SceneModel model)
     {
         _model = model;
+        FillTypes();
         Rebuild();
     }
 
@@ -103,14 +246,18 @@ public sealed class LayerTreePanel : DockPanel
         var selected = (_tree.SelectedItem as TreeViewItem)?.Tag as Node;
 
         _tree.Items.Clear();
+        var kept = 0;
         foreach (var layer in _model.Layers)
         {
+            if (!KeepLayer(layer.Id, layer.Name)) continue;
+            kept++;
             var count = _model.EntitiesOf(layer.Id).Count(e => !TerryEntityTypes.IsLayerType(e.Type));
             var node = new Node("file", layer.Id, null);
             var label = layer.Name + (layer.Export ? "" : "  (not exported)");
             _tree.Items.Add(MakeItem(node, label, $"{count}", true, _model.Invisible.Contains(layer.Id), _model.Frozen.Contains(layer.Id),
                                      active: _model.ActiveLayer == layer.Id));
         }
+        _filterNote.Text = _filter.IsEmpty ? "" : $"filter: {kept} of {_model.Layers.Count} layers";
         Reexpand(_tree.Items, expanded, selected);
     }
 
@@ -198,6 +345,8 @@ public sealed class LayerTreePanel : DockPanel
             "group" => all.Where(e => e.Group == node.Id),
             _ => [],
         };
+        if (!_filter.IsEmpty)
+            children = children.Where(e => _filter.KeepChild(e, Label(e), all, Label, id => _model.Invisible.Contains(id)));
         var list = children.OrderBy(e => TerryEntityTypes.IsLayerType(e.Type) ? 0 : 1).ToList();
         foreach (var e in list.Take(MaxChildren))
         {

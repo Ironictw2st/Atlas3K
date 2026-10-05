@@ -330,6 +330,7 @@ public sealed partial class SceneWindow : Window
         _tree.StateToggled += (n, what, value) => Run($"{what} {value}", new JsonObject { ["op"] = "layer_state", ["id"] = n.TargetId, [what] = value });
         _tree.Command += TreeCommand;
         _tree.DropRequested += DropOnLayer;
+        _tree.BulkVisibility += SetLayersVisible;
         _inspector.FieldEdited += FieldEdited;
         _inspector.NameEdited += name => Run("rename", new JsonObject { ["op"] = "set", ["ids"] = Ids(_selection), ["name"] = name });
         _inspector.ComponentAdded += c => Run($"add {c}", new JsonObject { ["op"] = "add_component", ["ids"] = Ids(_selection), ["component"] = c });
@@ -708,6 +709,16 @@ public sealed partial class SceneWindow : Window
                 if (TerryEntityTypes.IsLayerType(e.Type) && e.Parents.Any(layers.Contains) && layers.Add(e.Id)) grew = true;
         } while (grew);
         return all.Where(e => !TerryEntityTypes.IsLayerType(e.Type) && e.Parents.Any(layers.Contains)).Select(e => e.Id);
+    }
+
+    /// <summary>Layer panel Show all / Hide all / Show only filtered: every change as one layer_state batch (one undo).</summary>
+    private void SetLayersVisible(IReadOnlyList<(string Id, bool Visible)> changes, string label)
+    {
+        var ops = changes.Select(c => new JsonObject { ["op"] = "layer_state", ["id"] = c.Id, ["visible"] = c.Visible }).ToArray();
+        if (Run($"{label} ({ops.Length})", ops) is null) return;
+        _tree.Rebuild();
+        _view.Refresh();
+        _view3d.Refresh();
     }
 
     private void DropOnLayer(IReadOnlyList<string> ids, LayerTreePanel.Node target)
