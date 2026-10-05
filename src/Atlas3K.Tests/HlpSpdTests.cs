@@ -28,6 +28,27 @@ public class HlpSpdTests
         }
     }
 
+    /// <summary>Vanilla maps whose pathfinding.ppd and map_data.esf generated the shipped spd_data.esf.</summary>
+    public static IEnumerable<string> VanillaMapDirs() =>
+        MapDirs().Where(d => !d.Contains("190e") && File.Exists(Path.Combine(d, "pathfinding.ppd")) && File.Exists(Path.Combine(d, "map_data.esf")));
+
+    [Fact]
+    public void Spd_NativeBuild_MatchesVanillaByteForByte()
+    {
+        var maps = 0;
+        foreach (var dir in VanillaMapDirs())
+        {
+            maps++;
+            var reference = File.ReadAllBytes(Path.Combine(dir, "spd_data.esf"));
+            var grid = new Atlas3K.Core.Campaign.AiPathfinding.CampaignPathGrid(
+                Atlas3K.Formats.Maps.PathfindingPpd.Read(Path.Combine(dir, "pathfinding.ppd")),
+                Atlas3K.Core.Campaign.AiPathfinding.MapDataRegions.Read(Path.Combine(dir, "map_data.esf")));
+            var built = Atlas3K.Core.Campaign.AiPathfinding.SpdBuilder.Build(grid, SpdData.Read(reference).Timestamp).ToBytes();
+            Assert.True(reference.AsSpan().SequenceEqual(built), $"{dir}: spd_data.esf differs");
+        }
+        if (Directory.Exists(Extracted)) Assert.True(maps >= 5, $"only {maps} vanilla maps found");
+    }
+
     [Fact]
     public void Spd_RoundTripsByteIdentical()
     {
