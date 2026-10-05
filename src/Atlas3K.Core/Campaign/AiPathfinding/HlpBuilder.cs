@@ -16,7 +16,8 @@ namespace Atlas3K.Core.Campaign.AiPathfinding;
 ///     transition; then clusters of the remaining border hexes (sets ordered by descending x, y) give more transitions,
 ///     each erasing border hexes closer than 10 hexes. A transition's cost is the path cost between its two hexes.
 ///  4. Per area the transitions sit in an MSVC unordered_multimap keyed by hex (hash y·1016 + x), whose iteration order
-///     is the file order; the matrix holds the path costs between the transitions' inside hexes.
+///     is the file order; the matrix holds the path costs between the transitions' inside hexes, searched inside the
+///     area itself (other areas of the same region are closed).
 /// </summary>
 public static class HlpBuilder
 {
@@ -328,7 +329,7 @@ public static class HlpBuilder
                     {
                         remaining.Remove(h);
                         return remaining.Count == 0 ? AiSearch.Visit.Stop : AiSearch.Visit.Continue;
-                    }, blocked: BlockedExcept(blocked, others), regionOf: regions.AreaMap, region: e.Region);
+                    }, blocked: BlockedExcept(blocked, others), regionOf: regions.AreaMap, region: e.Aid, regionMask: 0xFFFF);
                 for (var j = 0; j < n; j++)
                     if (j != i) e.Matrix.Add(byIdx[i].P == byIdx[j].P ? 0 : search.Cost(byIdx[j].P));
             }
