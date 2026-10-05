@@ -26,7 +26,7 @@ identical to BOB's own output for the same inputs, checked byte by byte (`Atlas3
 | `rasters` | `lf_height_map` / `lf_sea_height_map` (`.compressed_map`, `.dds`), `climate_map.cm` | height maps, climate map | 100% | vanilla |
 | `tile_list` | `tile_list.bin` | Tilemap | 100% | vanilla |
 | `global_map` | `global_map\global_blend.dds`, `texture_arrays.xml`, `tile_list.bin` | Global Mesh (global map part) | 100% | vanilla |
-| `global_mesh` | `global_meshes\land_mesh_N`, `sea_mesh_N` (`.rigid_model_v2`, `.compressed_map`) | Global Mesh | 100% (494 / 494 files)* | main190 |
+| `global_mesh` | `global_meshes\land_mesh_N`, `sea_mesh_N` (`.rigid_model_v2`, `.compressed_map`) | Global Mesh | 100% (494 / 494 files main190, 465 / 465 vanilla)* | main190, vanilla |
 | `rivers` | `models\river_N` (`.wsmodel`, `.rigid_model_v2`), `height_patches\` | Terry file (rivers) | 100% (24 / 24 rivers, 87 / 87 height patches)* | main190 |
 | `global_props` | `global_props.bin` | Terry file (props) | 100% (24,778,485 bytes, 12,465 entries) | main190 |
 | `camera_heightmap` | `campaign_maps\<map>\camera_heightmap.png` | Generate Camera Height Map | 100% (2,506,520 / 2,506,520 cells) | vanilla |
@@ -36,7 +36,8 @@ identical to BOB's own output for the same inputs, checked byte by byte (`Atlas3
 \* Not counting the few bytes BOB leaves uninitialised (leftover memory). Those bytes differ between two BOB runs of
 the same input too, so the parity tool masks them.
 
-**Not ported yet:** BOB's mesh splitter. A map that needs a global mesh split stops with an error.
+Meshes over BOB's 65,000-vertex limit are split the way BOB's mesh splitter does it, into extra meshes of the same
+model.
 
 ## Install
 
