@@ -5,8 +5,8 @@
 - **Start positions are not built.** `startpos.esf` still comes from the game (RPFM's start-position build, for
   example). Add it as a custom step after Pack if you need it.
 - **Tile list:**
-  - The native `tile_list` places the same tiles the game shows, but it is not byte-identical to BOB's on every map.
-    A few tie-broken placements can differ.
+  - The native `tile_list` is close to BOB's but not yet byte-identical. On the vanilla map it differs only in the
+    river-flow bit of 4 river tiles (BOB's flow pass is not fully reproduced yet).
   - A map whose hex width is not a multiple of 4 reports `layout.mesh_columns`. Accept it in the profile to build
     anyway; BOB would also leave notches beside road tiles there.
 - **Prepare game data** extracts one map at a time. Run it again for another map.
