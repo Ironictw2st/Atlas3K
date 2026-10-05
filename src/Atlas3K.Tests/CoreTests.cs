@@ -9,7 +9,7 @@ namespace Atlas3K.Tests;
 
 public class CoreTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
 
     [Fact]
     public void TreeList_RoundTrips_Synthetic()

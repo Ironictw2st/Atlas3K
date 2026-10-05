@@ -6,7 +6,7 @@ namespace Atlas3K.Tests;
 
 public class TerrySchemaTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
 
     private const string Config = """
         <configuration version="1">

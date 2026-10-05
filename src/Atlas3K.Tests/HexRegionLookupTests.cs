@@ -10,7 +10,7 @@ public class HexRegionLookupTests
     private static readonly ProjectPaths Kit190E = new ProjectPaths
     {
         MapName = "3k_190e_expanded_map",
-        AssemblyKitRoot = @"C:\Program Files (x86)\Steam\steamapps\common\Total War THREE KINGDOMS\assembly_kit_190E",
+        AssemblyKitRoot = TestKits.Expanded,
     };
 
     [Fact]

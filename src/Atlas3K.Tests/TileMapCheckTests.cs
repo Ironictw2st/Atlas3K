@@ -7,7 +7,7 @@ namespace Atlas3K.Tests;
 
 public class TileMapCheckTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
     private static string DatabaseDir =>
         Path.Combine(Path.GetDirectoryName(Paths.VanillaRoot)!, "terrain", "tiles", "campaign", "_tile_database");
     private static string VanillaMapDir => Path.Combine(Path.GetDirectoryName(Paths.VanillaRoot)!, "3k_dlc07_main_map");

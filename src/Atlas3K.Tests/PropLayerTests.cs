@@ -7,7 +7,7 @@ namespace Atlas3K.Tests;
 
 public class PropLayerTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
 
     [Fact]
     public void MetaTags_Decode_UsesFlagsAndMask_InNaturalOrder()

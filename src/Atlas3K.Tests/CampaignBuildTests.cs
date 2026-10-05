@@ -8,7 +8,7 @@ namespace Atlas3K.Tests;
 /// <summary>Native replacements for BOB's campaign actions, byte-compared against vanilla 3k_dlc07_main_map.</summary>
 public class CampaignBuildTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
     private static string Vanilla(params string[] relative) => Path.Combine([Paths.TerrainDir, .. relative]);
 
     [Fact]

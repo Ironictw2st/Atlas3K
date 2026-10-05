@@ -8,7 +8,7 @@ namespace Atlas3K.Tests;
 
 public class LayerDocumentTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
 
     private static string Sample()
     {

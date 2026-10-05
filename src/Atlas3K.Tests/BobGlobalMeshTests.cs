@@ -13,10 +13,10 @@ public class BobGlobalMeshTests
 {
     private static readonly ProjectPaths Main190 = new()
     {
-        AssemblyKitRoot = new ProjectPaths().AssemblyKitRoot + "_190E",
+        AssemblyKitRoot = TestKits.Expanded,
         MapName = "3k_190e_expanded_map",
     };
-    private static readonly ProjectPaths Vanilla = new() { MapName = "3k_dlc07_main_map" };
+    private static readonly ProjectPaths Vanilla = new() { MapName = "3k_dlc07_main_map", AssemblyKitRoot = TestKits.Vanilla };
 
     /// <summary>Bytes BOB leaves uninitialised: 0x148..0x14B on every mesh (material block), 0xA5..0xA7 on sea meshes
     /// (LOD padding); they differ between BOB runs.</summary>

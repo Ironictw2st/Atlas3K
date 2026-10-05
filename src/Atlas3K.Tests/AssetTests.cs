@@ -9,7 +9,7 @@ namespace Atlas3K.Tests;
 
 public class AssetTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
     private static readonly Lazy<ModelLibrary?> Library = new(() => Directory.Exists(Paths.GameDataDir) ? ModelLibrary.ForGame(Paths) : null);
 
     private const string Tree = "rigidmodels/campaign/vegetation/temperate/temperate_tree_metasequoia_harvest_large_2.wsmodel";

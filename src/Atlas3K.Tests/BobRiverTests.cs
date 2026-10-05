@@ -13,7 +13,7 @@ public class BobRiverTests
 {
     private static readonly ProjectPaths Main190 = new()
     {
-        AssemblyKitRoot = new ProjectPaths().AssemblyKitRoot + "_190E",
+        AssemblyKitRoot = TestKits.Expanded,
         MapName = "3k_190e_expanded_map",
     };
     private static string BobRun => Path.Combine(Main190.OutputRoot, "bob_runs", "frida_rivers2_main190_bob_terrain");
@@ -53,7 +53,7 @@ public class BobRiverTests
     [Fact]
     public void Vanilla_RotatedRelativeAndReversedRivers_MatchBob()
     {
-        var vanilla = new ProjectPaths { MapName = "3k_dlc07_main_map" };
+        var vanilla = new ProjectPaths { MapName = "3k_dlc07_main_map", AssemblyKitRoot = TestKits.Vanilla };
         var run = Path.Combine(vanilla.OutputRoot, "bob_runs", "river_variants_vanilla_bob");
         var layer = Path.Combine(run, "scratch_river_layer.layer");
         if (!File.Exists(layer) || BobRiver.MapBounds(vanilla) is not { } bounds) return;

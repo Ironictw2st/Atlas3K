@@ -27,7 +27,7 @@ public class MapAuditTests
     [Fact]
     public void VanillaDlc07_HasNoMountainOrAssetWarnings()
     {
-        var paths = new ProjectPaths();
+        var paths = TestKits.VanillaPaths;
         if (!Directory.Exists(paths.AkTerrainDir) || !Directory.Exists(paths.GameDataDir)) return;
         var audit = new MapAudit(paths);
         audit.Run(["floating-mountain", "asset"]);

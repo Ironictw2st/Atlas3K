@@ -11,7 +11,7 @@ namespace Atlas3K.Tests;
 /// <summary>BOB's campaign tree placement, checked against vanilla 3k_dlc07_main_map.</summary>
 public class CampaignTreeGeneratorTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
     private static readonly HexGrid VanillaGrid = HexGrid.ForTreeMap(1784, 1405, 595.1f);
 
     private static bool HaveVanilla =>

@@ -8,7 +8,7 @@ namespace Atlas3K.Tests;
 
 public class PrefabTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
 
     // ---------------------------------------------------------------- transforms
 

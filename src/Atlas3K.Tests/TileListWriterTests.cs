@@ -8,7 +8,7 @@ namespace Atlas3K.Tests;
 /// <summary>tile_list.bin writing (flow, low/high, record order, tables, header), checked on vanilla 3k_dlc07.</summary>
 public class TileListWriterTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
     private static string Vanilla(string name) => Path.Combine(Paths.TerrainDir, name);
 
     /// <summary>Vanilla's own placement, read back from tile_list.bin: layer 2 = generic_sea/beach records lying inside

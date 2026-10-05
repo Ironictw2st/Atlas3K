@@ -7,7 +7,7 @@ namespace Atlas3K.Tests;
 
 public class EntityEditingTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
 
     private const string Layer = """
         <?xml version="1.0" encoding="UTF-8"?>

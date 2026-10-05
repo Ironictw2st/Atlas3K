@@ -6,7 +6,7 @@ namespace Atlas3K.Tests;
 
 public class CompiledExportTests
 {
-    private static readonly ProjectPaths Paths = new();
+    private static readonly ProjectPaths Paths = TestKits.VanillaPaths;
     private static string Vanilla(string relative) => Path.Combine(Paths.TerrainDir, relative);
 
     [Fact]
