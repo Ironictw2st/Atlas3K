@@ -1891,14 +1891,63 @@
     "ECAISeparator": {
       "Name": "ECAISeparator",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "type",
+          "Type": "Enum",
+          "Count": 0,
+          "Default": "PALT_GENERIC",
+          "Values": [
+            "PALT_NONE",
+            "PALT_GENERIC",
+            "PALT_FORT"
+          ],
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
     "ECBattleCatchmentArea": {
       "Name": "ECBattleCatchmentArea",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "type",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        },
+        {
+          "Name": "redirect_to",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        },
+        {
+          "Name": "ambient_light_environments",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        },
+        {
+          "Name": "culture",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        },
+        {
+          "Name": "procedural",
+          "Type": "Bool",
+          "Count": 0,
+          "Default": "false",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
@@ -1919,7 +1968,22 @@
     "ECBattleCatchmentAreaInTile": {
       "Name": "ECBattleCatchmentAreaInTile",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "type",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        },
+        {
+          "Name": "culture",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
@@ -1940,28 +2004,88 @@
     "ECBuildingDestructionLevel": {
       "Name": "ECBuildingDestructionLevel",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "damage_threshold",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
     "ECBuildingSlot": {
       "Name": "ECBuildingSlot",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "slot_id",
+          "Type": "Int",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        },
+        {
+          "Name": "group",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
     "ECBuildingSlotPreview": {
       "Name": "ECBuildingSlotPreview",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "level",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
     "ECCamera": {
       "Name": "ECCamera",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "vertical_fov",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "60",
+          "Source": "decompile"
+        },
+        {
+          "Name": "aspect_ratio",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "1",
+          "Source": "decompile"
+        },
+        {
+          "Name": "near_clip",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "1",
+          "Source": "decompile"
+        },
+        {
+          "Name": "far_clip",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "30000",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
@@ -1975,7 +2099,29 @@
     "ECBox": {
       "Name": "ECBox",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "width",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        },
+        {
+          "Name": "height",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        },
+        {
+          "Name": "depth",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
@@ -1989,28 +2135,111 @@
     "ECEnvironmentVolume": {
       "Name": "ECEnvironmentVolume",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "lighting_file",
+          "Type": "Path",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
     "ECDoubleSphere": {
       "Name": "ECDoubleSphere",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "inner_radius",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        },
+        {
+          "Name": "outer_radius",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
     "ECDoubleCylinder": {
       "Name": "ECDoubleCylinder",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "inner_radius",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        },
+        {
+          "Name": "outer_radius",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        },
+        {
+          "Name": "height",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
     "ECEFLine": {
       "Name": "ECEFLine",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "formation_purpose",
+          "Type": "Enum",
+          "Count": 0,
+          "Default": "EFP_BOARDING",
+          "Values": [
+            "EFP_LOW_WALL",
+            "EFP_HIGH_WALL",
+            "EFP_WINDOW",
+            "EFP_OVER_FLOW",
+            "EFP_MARINES",
+            "EFP_SEAMEN",
+            "EFP_GUNNERS_OVERFLOW",
+            "EFP_CAPTAIN",
+            "EFP_OFFICER1",
+            "EFP_BOARDING",
+            "EFP_FIRING_STAND",
+            "EFP_FIRING_CROUCH",
+            "EFP_FIRING_STAND_360",
+            "EFP_PERIMETER",
+            "EFP_TREE",
+            "EFP_ENTRANCE_DEFENCE",
+            "EFP_OFFICER2",
+            "EFP_OFFICER3",
+            "EFP_CRENEL_LEFT_OUTER",
+            "EFP_CRENEL_LEFT_INNER",
+            "EFP_CRENEL_RIGHT_INNER",
+            "EFP_CRENEL_RIGHT_OUTER",
+            "EFP_ENGINE_PLACEMENT",
+            "EFP_SECONDARY_ENGINE_PLACEMENT",
+            "EFP_DISEMBARK_LEFT",
+            "EFP_DISEMBARK_RIGHT",
+            "EFP_NUM_PURPOSES",
+            "EFP_INVALID_PURPOSE"
+          ],
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
@@ -2024,7 +2253,22 @@
     "ECFlatLowFrequencyArea": {
       "Name": "ECFlatLowFrequencyArea",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "blend_margin",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "100",
+          "Source": "decompile"
+        },
+        {
+          "Name": "strength",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "100",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
@@ -2052,7 +2296,22 @@
     "ECMarker": {
       "Name": "ECMarker",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "type",
+          "Type": "Enum",
+          "Count": 0,
+          "Default": null,
+          "Source": "decompile"
+        },
+        {
+          "Name": "data",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
@@ -2080,21 +2339,122 @@
     "ECSpotLight": {
       "Name": "ECSpotLight",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "colour",
+          "Type": "Colour",
+          "Count": 0,
+          "Default": "255 255 255 255",
+          "Source": "decompile"
+        },
+        {
+          "Name": "intensity",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "21000",
+          "Source": "decompile"
+        },
+        {
+          "Name": "length",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "10",
+          "Source": "decompile"
+        },
+        {
+          "Name": "inner_angle",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "10",
+          "Source": "decompile"
+        },
+        {
+          "Name": "outer_angle",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "20",
+          "Source": "decompile"
+        },
+        {
+          "Name": "falloff",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "1",
+          "Source": "decompile"
+        },
+        {
+          "Name": "volumetric",
+          "Type": "Bool",
+          "Count": 0,
+          "Default": "false",
+          "Source": "decompile"
+        },
+        {
+          "Name": "gobo",
+          "Type": "Path",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
     "ECUnit": {
       "Name": "ECUnit",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "unit",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        },
+        {
+          "Name": "width",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        },
+        {
+          "Name": "count",
+          "Type": "Int",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        },
+        {
+          "Name": "script_name",
+          "Type": "String",
+          "Count": 0,
+          "Default": "",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
     "ECLineOfSight": {
       "Name": "ECLineOfSight",
       "Count": 0,
-      "Fields": [],
+      "Fields": [
+        {
+          "Name": "active",
+          "Type": "Bool",
+          "Count": 0,
+          "Default": "true",
+          "Source": "decompile"
+        },
+        {
+          "Name": "range",
+          "Type": "Float",
+          "Count": 0,
+          "Default": "0",
+          "Source": "decompile"
+        }
+      ],
       "Children": {},
       "InConfiguration": true
     },
