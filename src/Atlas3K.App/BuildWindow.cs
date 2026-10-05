@@ -181,6 +181,10 @@ public sealed class BuildWindow : Window
         tools.Children.Add(Theme.IconButton(Theme.Glyph.Folder, "Log file", (_, _) => Reveal(_lastLogFile), "Show the last build's log file"));
         tools.Children.Add(Theme.IconButton(Theme.Glyph.Folder, "Output", (_, _) => Reveal(_project is null ? null : _project.OutputDir(Paths())), "Open the compile output folder"));
         tools.Children.Add(Theme.IconButton(Theme.Glyph.Package, "Pack", (_, _) => Reveal(PackPath()), "Show the pack"));
+        _showTileErrors = Theme.IconButton(Theme.Glyph.Warning, "Show tile errors", (_, _) => ShowTileErrors(),
+            "Open the tile map editor in error mode: every tile-map error highlighted, with recommended fixes");
+        _showTileErrors.Visibility = Visibility.Collapsed;
+        tools.Children.Add(_showTileErrors);
         DockPanel.SetDock(tools, Dock.Top);
         dock.Children.Add(tools);
         dock.Children.Add(_log);
@@ -363,6 +367,8 @@ public sealed class BuildWindow : Window
         if (segment == BuildSegment.Custom) text.FontStyle = FontStyles.Italic;
         var header = new StackPanel { Orientation = Orientation.Horizontal, Children = { check, icon, text, info }, ToolTip = tooltip };
         var item = new TreeViewItem { Header = header, Padding = new Thickness(2, 3, 2, 3) };
+        if (id is "validate" or "compile:tile_list")
+            item.MouseDoubleClick += (_, e) => { if (_showTileErrors.Visibility == Visibility.Visible) { ShowTileErrors(); e.Handled = true; } };
         parent.Add(item);
         var row = new Row { Id = id, Segment = segment, Check = check, StatusIcon = icon, Info = info, Item = item };
         _rows[id] = row;
@@ -453,6 +459,7 @@ public sealed class BuildWindow : Window
             return;
         }
         foreach (var r in _rows.Values) SetStatus(r.Id, "pending");
+        _showTileErrors.Visibility = Visibility.Collapsed;
         _lines.Clear();
         RefreshLog();
         _running = true;
@@ -525,8 +532,23 @@ public sealed class BuildWindow : Window
                 AddLine(e.Id, $"— {r.Status} in {Duration(r.Seconds)}");
                 foreach (var p in r.Problems) AddLine(e.Id, "! " + p);
                 foreach (var n in r.Notes) AddLine(e.Id, BuildRunner.NoteLine(n));
+                if (HasTileErrors(e.Id, r)) _showTileErrors.Visibility = Visibility.Visible;
                 break;
         }
+    }
+
+    private Button _showTileErrors = null!;
+
+    /// <summary>Validate found tile-map problems, or tile_list left holes: worth opening the tile error mode.</summary>
+    private static bool HasTileErrors(string id, BuildRunner.ItemResult r) =>
+        (id == "validate" && r.Problems.Concat(r.Notes).Any(n => n.Contains("tile map ") && !n.Contains("accepted tile map")))
+        || (id == "compile:tile_list" && r.Notes.Any(n => n.Contains("got no tile")));
+
+    private void ShowTileErrors()
+    {
+        if (_project is null) return;
+        try { new CampaignTileWindow(Paths(), null, errorMode: true).Show(); }
+        catch (Exception e) { ErrorDialog.Show(this, "Could not open the tile map editor.", e); }
     }
 
     private void AddLine(string id, string text)

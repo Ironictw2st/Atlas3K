@@ -11,7 +11,7 @@ namespace Atlas3K.App;
 /// Pan/zoom canvas for a campaign tile_map.png (same controls as <see cref="MapView"/>): right/middle drag pans, wheel
 /// zooms around the cursor, left button goes to the window's tool callbacks as hexes. View pixels are tile-map pixels
 /// (2×2 per hex, top row = north). Hex overlays: 1 = changed (white tint), 2 = warning (orange), 3 = blocking (red),
-/// 4 = pending stroke (cyan).
+/// 4 = pending stroke (cyan); error mode: 5 = error (red), 6 = warning (amber), 7 = hole (magenta).
 /// </summary>
 public sealed class CampaignTileView : FrameworkElement
 {
@@ -30,6 +30,12 @@ public sealed class CampaignTileView : FrameworkElement
     public Viewport View { get; private set; } = new(0, 0, 1);
     /// <summary>Brush radius in hexes, for the cursor ring (−1 = no ring).</summary>
     public int BrushRadius { get; set; } = -1;
+    /// <summary>Error mode: a fix preview, hex index → colour, drawn over the map.</summary>
+    public Dictionary<int, uint>? Ghost { get; set; }
+    /// <summary>Error mode: the selected error's hex, ringed.</summary>
+    public (int Col, int Row)? Selected { get; set; }
+    /// <summary>Error mode: every error hex with its overlay code, drawn as dots when zoomed out too far to see hexes.</summary>
+    public IReadOnlyList<(int Col, int Row, byte Kind)>? Markers { get; set; }
     /// <summary>Line tool waypoints, drawn as a polyline.</summary>
     public List<(int Col, int Row)> LinePoints { get; } = [];
 
@@ -115,6 +121,7 @@ public sealed class CampaignTileView : FrameworkElement
         }
         var map = Map;
         var overlay = Overlay;
+        var ghost = Ghost;
         var view = View;
         var buffer = _buffer;
         var showGrid = view.Scale < 0.2;   // > 10 screen px per hex: draw hex edges darker
@@ -131,7 +138,9 @@ public sealed class CampaignTileView : FrameworkElement
                     var rgb = map.Pixels[py * map.PixelWidth + px];
                     var col = px / 2;
                     var row = (2 * map.Height - py - (col & 1)) / 2;
-                    var o = row >= 0 && row < map.Height && 2 * map.Height - py - (col & 1) >= 0 ? overlay[row * map.Width + col] : (byte)0;
+                    var inHex = row >= 0 && row < map.Height && 2 * map.Height - py - (col & 1) >= 0;
+                    var o = inHex ? overlay[row * map.Width + col] : (byte)0;
+                    if (ghost != null && inHex && ghost.TryGetValue(row * map.Width + col, out var after)) { rgb = after; o = 8; }
                     uint r = rgb >> 16 & 0xff, g = rgb >> 8 & 0xff, b = rgb & 0xff;
                     (r, g, b) = o switch
                     {
@@ -139,6 +148,10 @@ public sealed class CampaignTileView : FrameworkElement
                         2 => ((r + 255) / 2, (g + 150) / 2, b / 2),
                         3 => ((r + 255 * 3) / 4, g / 4, b / 4),
                         4 => (r / 2, (g + 255) / 2, (b + 255) / 2),
+                        5 => ((r + 255 * 3) / 4, g / 4, b / 4),
+                        6 => ((r + 255 * 2) / 3, (g + 190 * 2) / 3, b / 3),
+                        7 => ((r + 255 * 3) / 4, g / 4, (b + 255 * 3) / 4),
+                        8 => (r, g, b),                                     // fix preview: the new colour as is
                         _ => (r, g, b),
                     };
                     if (showGrid)
@@ -171,6 +184,36 @@ public sealed class CampaignTileView : FrameworkElement
             for (var i = 1; i < LinePoints.Count; i++)
                 dc.DrawLine(pen, HexToScreen(LinePoints[i - 1].Col, LinePoints[i - 1].Row), HexToScreen(LinePoints[i].Col, LinePoints[i].Row));
             foreach (var p in LinePoints) dc.DrawEllipse(Brushes.Cyan, null, HexToScreen(p.Col, p.Row), 3, 3);
+        }
+        if (Markers is { Count: > 0 } markers && View.Scale > 0.6)
+        {
+            // zoomed out: single hexes are sub-pixel, so mark each error with a dot
+            var brushes = new Dictionary<byte, Brush> { [5] = Brushes.Red, [6] = Brushes.Orange, [7] = Brushes.Magenta };
+            var size = new Rect(0, 0, ActualWidth, ActualHeight);
+            var outline = new Pen(Brushes.Black, 1);
+            foreach (var (c, r, kind) in markers.Take(20000))
+            {
+                var at = HexToScreen(c, r);
+                if (size.Contains(at)) dc.DrawEllipse(brushes.GetValueOrDefault(kind, Brushes.Red), outline, at, 3, 3);
+            }
+        }
+        if (Ghost is { Count: > 0 } ghost && View.Scale < 1)
+        {
+            // outline the hexes a fix would repaint
+            var pen = new Pen(Brushes.Cyan, 1.5) { DashStyle = DashStyles.Dash };
+            var half = 1 / View.Scale / _dpiScale;    // a hex is 2x2 tile-map pixels
+            foreach (var index in ghost.Keys)
+            {
+                var at = HexToScreen(index % Map.Width, index / Map.Width);
+                dc.DrawRectangle(null, pen, new Rect(at.X - half, at.Y, 2 * half, 2 * half));
+            }
+        }
+        if (Selected is { } sel)
+        {
+            var at = HexToScreen(sel.Col, sel.Row);
+            var radius = Math.Max(9, 3 / View.Scale / _dpiScale);
+            dc.DrawEllipse(null, new Pen(Brushes.Black, 3.5), at, radius, radius);
+            dc.DrawEllipse(null, new Pen(Brushes.Yellow, 2), at, radius, radius);
         }
         if (BrushRadius >= 0 && IsMouseOver)
         {

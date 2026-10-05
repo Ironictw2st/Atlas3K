@@ -11,7 +11,7 @@ A campaign map editor and builder for **Total War: THREE KINGDOMS**. It works on
 | Part | What for |
 |---|---|
 | **Scene editor** | Props, entities, prefabs and layers of the campaign `.terry`, in a 2D top view and a 3D view (forests, water, rivers, seasons). |
-| **Tile map** | Paint the campaign `tile_map.png` hex by hex. Every stroke is validated against BOB's tile-matching rules. |
+| **Tile map** | Paint the campaign `tile_map.png` hex by hex. Every stroke is validated against BOB's tile-matching rules. The **Errors** tab (F8) highlights every tile-map error and recommends a fix for it (details below). |
 | **Terrain painter** | Heights, ground textures and trees on the compiled map. |
 | **Build** | Compile the map (rasters, tile list, global map and meshes, rivers, global props, camera heightmap, trees, lookup), run your own steps, pack and install. One click, or one step at a time. |
 
@@ -75,6 +75,28 @@ Use them for CAIME, an RPFM start-position build, your own Python fix-ups, and s
 `ATLAS3K_PROJECT` and `ATLAS3K_CLI` (the command-line tool).
 
 A step's output goes to the build log. A non-zero exit stops the build unless *Continue on error* is ticked.
+
+## Fixing tile-map errors
+
+Open the tile map editor's **Errors** tab (F8). The Build window also offers *Show tile errors* when Validate or
+`tile_list` finds problems.
+
+**What it shows**
+- Every problem hex is highlighted: red for errors, amber for warnings, magenta for holes. When zoomed out, each one
+  is drawn as a dot.
+- The list groups errors by type.
+- **Find holes** runs BOB's tile matching on the whole map (1–3 minutes) to find spots that would get no tile in game.
+
+**Working through it**
+- Select an error (or press N / Shift+N). The map centres on it, and the recommended repaint is previewed with a
+  dashed outline.
+- Before you can apply a fix, Atlas3K runs BOB's tile matching on the area around it to check it opens no new hole.
+  Fixes that would open a hole are dropped; the next-best one is offered, or the error is marked *manual* with advice.
+- **Apply fix** (Enter) applies the fix. **Fix all of this type** and **Fix all safe** apply many fixes as one stroke.
+- Every fix is an ordinary unsaved stroke: Ctrl+Z undoes it, and Ctrl+S saves it to the journal.
+
+On the command line, use `tiles-errors [--simulate] [--codes a,b] [--ops-out fixes.json]` and
+`tiles-fix [--codes a,b] [--dry-run]`.
 
 ## Command line
 

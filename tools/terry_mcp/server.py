@@ -591,6 +591,43 @@ def validate_tiles(rect: list[int] | None = None, map_name: str = "3k_dlc07_main
 
 
 @mcp.tool()
+def tile_errors(map_name: str = "3k_dlc07_main_map", simulate: bool = False, codes: list[str] | None = None,
+                rect: list[int] | None = None, limit: int = 200, fast: bool = False, tile_map: str | None = None,
+                ak_root: str | None = None) -> dict:
+    """Tile error mode: every tile-map error, one per hex, each with a recommended fix (the same engine as the app's
+    Errors tab). Returns counts by code (count, fixable, advice), a list of errors (code, severity, hex [c, r], message,
+    and either fix {summary, verified, score_before, score_after, ops} or advice), and whole-map problems (layout,
+    climate, kit inputs). Every fix is checked with BOB's tile matching on a window around it (no new holes; rule-only
+    fixes opened holes on main190); fast=True skips that (rules only, ~5x faster, NOT safe to apply blindly).
+    simulate=True also lists existing holes (whole-map tile matching, 1-3 min). codes / rect narrow it.
+    Fix ops are ordinary edit_tiles ops: apply one with edit_tiles, or all of them with fix_tiles."""
+    args = ["--limit", str(limit)]
+    if fast: args.append("--fast")
+    if simulate: args.append("--simulate")
+    if codes: args += ["--codes", ",".join(codes)]
+    if rect: args += ["--rect", _csv(rect)]
+    return _tiles("tiles-errors", map_name, ak_root, tile_map, *args)
+
+
+@mcp.tool()
+def fix_tiles(map_name: str = "3k_dlc07_main_map", codes: list[str] | None = None, verified_only: bool = True,
+              dry_run: bool = False, simulate: bool = False, rect: list[int] | None = None,
+              tile_map: str | None = None, ak_root: str | None = None) -> dict:
+    """Apply the recommended fixes for tile errors as ONE journaled edit (undo with tile_undo). Run tile_checkpoint
+    first. Each fix is checked with BOB's tile matching around it first; verified_only (default) applies only fixes that
+    open no hole (False also applies rule-only fixes: risky). codes / rect limit which errors are fixed;
+    dry_run reports without writing. Returns the edit result plus fixed / skipped counts and rule errors before → after.
+    Re-run tile_errors(simulate=True) afterwards to confirm holes."""
+    args = []
+    if codes: args += ["--codes", ",".join(codes)]
+    if not verified_only: args.append("--all")
+    if dry_run: args.append("--dry-run")
+    if simulate: args.append("--simulate")
+    if rect: args += ["--rect", _csv(rect)]
+    return _tiles("tiles-fix", map_name, ak_root, tile_map, *args)
+
+
+@mcp.tool()
 def preview_tiles(rect: list[int] | None = None, center: list[int] | None = None, size: int = 30, width: int = 1024,
                   show_edits: bool = True, show_issues: bool = True, map_name: str = "3k_dlc07_main_map",
                   tile_map: str | None = None, ak_root: str | None = None):

@@ -6,7 +6,7 @@ namespace Atlas3K.App;
 
 /// <summary>
 /// Opens the start page, or straight into one editor: <c>--scene [project.terry]</c> (default: the campaign map's
-/// .terry), <c>--tile-editor [tile_map.png]</c> (default: the kit's), <c>--battle &lt;source folder&gt;</c>,
+/// .terry), <c>--tile-editor [tile_map.png]</c> (default: the kit's), <c>--tile-errors [tile_map.png]</c> (the same, in error mode), <c>--battle &lt;source folder&gt;</c>,
 /// <c>--painter</c> (terrain painter), <c>--build [project.atlas3k]</c>; plus the usual <c>--map</c> / <c>--ak</c> /
 /// <c>--root</c>. The first start shows the setup dialog. Developer mode adds the test flags (--selftest, tours, --shots).
 /// </summary>
@@ -38,7 +38,7 @@ public partial class App : Application
         var paths = ProjectPaths.FromArgs(e.Args, out var rest);
         int Flag(string name) => Array.FindIndex(rest, a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
         string? Value(int i) => i >= 0 && i + 1 < rest.Length && !rest[i + 1].StartsWith("--") ? rest[i + 1] : null;
-        int battle = Flag("--battle"), tiles = Flag("--tile-editor"), scene = Flag("--scene"), build = Flag("--build"), painter = Flag("--painter");
+        int battle = Flag("--battle"), tiles = Flag("--tile-editor"), tileErrors = Flag("--tile-errors"), scene = Flag("--scene"), build = Flag("--build"), painter = Flag("--painter");
 
         if (build >= 0)
         {
@@ -49,6 +49,7 @@ public partial class App : Application
         MainWindow = scene >= 0 ? new Scene.SceneWindow(paths, Value(scene) is { } s ? Path.GetFullPath(s) : null)
             : battle >= 0 && Value(battle) is { } b ? new BattleWindow(b, paths)
             : tiles >= 0 ? new CampaignTileWindow(paths, Value(tiles) is { } t ? Path.GetFullPath(t) : null)
+            : tileErrors >= 0 ? new CampaignTileWindow(paths, Value(tileErrors) is { } te ? Path.GetFullPath(te) : null, errorMode: true)
             : painter >= 0 ? new MainWindow(paths)
             : new StartWindow(paths);
         MainWindow.Show();

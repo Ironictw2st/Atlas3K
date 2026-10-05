@@ -199,15 +199,21 @@ public sealed class TileMapEditor
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         map ??= Load();
-        var own = Path.GetDirectoryName(TileMapPath)!;
-        var climateDir = Directory.EnumerateFiles(own, "climate_map*.png").Any() ? own : _paths.AkTerrainDir;
-        var climate = TileMapValidator.ClimateIndices(map, climateDir, Database);
-        var result = new TileMatchSimulator(Database).Run(map, climate);
+        var result = new TileMatchSimulator(Database).Run(map, Climate(map));
         var hexes = result.NoTileHexes(map);
         var edited = EditedHexes(sinceSeq);
         if (extraEdited is not null) edited.UnionWith(extraEdited);
         var inEdited = hexes.Where(h => edited.Contains((h[0], h[1]))).ToList();
         return new SimulationResult(result.Summary, result.NoTile.Count, hexes, inEdited, sw.Elapsed);
+    }
+
+    /// <summary>Per-pixel climate indices for <paramref name="map"/> (the tile map's size): from the climate map next to
+    /// the tile map, else the kit's. For <see cref="TileMatchSimulator"/> and hole-checked fixes.</summary>
+    public byte[] Climate(HexTileMap map)
+    {
+        var own = Path.GetDirectoryName(TileMapPath)!;
+        var climateDir = Directory.EnumerateFiles(own, "climate_map*.png").Any() ? own : _paths.AkTerrainDir;
+        return TileMapValidator.ClimateIndices(map, climateDir, Database);
     }
 
     /// <summary>The hexes changed by journaled batches after <paramref name="sinceSeq"/> (to tell holes in edited

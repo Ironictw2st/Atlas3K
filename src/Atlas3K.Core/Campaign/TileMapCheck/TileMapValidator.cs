@@ -54,7 +54,7 @@ public static class TileMapValidator
     private const double HexX = 0.668, HexZ = 0.772;
 
     // hex categories, as research/main190/tile_repair.py CAT
-    private const int Black = 0, Sea = 1, Beach = 2, Cliff = 3, CliffEnd = 4, River = 5, Start = 6, Mouth = 7, Crossing = 8,
+    internal const int Black = 0, Sea = 1, Beach = 2, Cliff = 3, CliffEnd = 4, River = 5, Start = 6, Mouth = 7, Crossing = 8,
         Road = 9, Area = 10, Canal = 11;
 
     public static int Category(string? tileSet) => tileSet switch
@@ -473,7 +473,7 @@ public static class TileMapValidator
     private const int SystematicColourHexes = 10, SystematicNearColourHexes = 500, NearColour = 8;
 
     /// <summary>Closest placement colour by largest channel difference, as "name rrggbb".</summary>
-    private static (string Name, int Distance) Nearest(uint colour, Dictionary<uint, string> groups)
+    internal static (string Name, int Distance) Nearest(uint colour, Dictionary<uint, string> groups)
     {
         var best = (Name: "", Distance: int.MaxValue);
         foreach (var (rgb, set) in groups)
@@ -497,11 +497,11 @@ public static class TileMapValidator
     // ---------------------------------------------------------------- hex rules
 
     /// <summary>What CA's own tile map uses: its 7-hex neighbourhood patterns and its tile sets.</summary>
-    private sealed record VanillaReference(HashSet<long> Patterns, HashSet<string> Sets);
+    internal sealed record VanillaReference(HashSet<long> Patterns, HashSet<string> Sets);
 
     private static readonly ConcurrentDictionary<string, VanillaReference> VanillaReferences = new(StringComparer.OrdinalIgnoreCase);
 
-    private static int[] Categories(HexTileMap map, uint[] colours, Dictionary<uint, string> setOf)
+    internal static int[] Categories(HexTileMap map, uint[] colours, Dictionary<uint, string> setOf)
     {
         var cats = new int[colours.Length];
         for (var i = 0; i < cats.Length; i++)
@@ -510,7 +510,7 @@ public static class TileMapValidator
     }
 
     /// <summary>Base-12 key of a hex's category and its 6 neighbours' (0 off the map), as tile_repair.py keys().</summary>
-    private static long PatternKey(HexTileMap map, int[] cats, int c, int r)
+    internal static long PatternKey(HexTileMap map, int[] cats, int c, int r)
     {
         long k = cats[map.Index(c, r)];
         for (var d = 0; d < 6; d++)
@@ -518,7 +518,7 @@ public static class TileMapValidator
         return k;
     }
 
-    private static VanillaReference? LoadVanilla(string path, CampaignTileDatabase db) =>
+    internal static VanillaReference? LoadVanilla(string path, CampaignTileDatabase db) =>
         !File.Exists(path) ? null : VanillaReferences.GetOrAdd(path, p =>
         {
             var map = HexTileMap.Read(p);
@@ -532,11 +532,11 @@ public static class TileMapValidator
             return new VanillaReference(set, colours.Distinct().Where(groups.ContainsKey).Select(v => groups[v]).ToHashSet());
         });
 
-    private static readonly int[] RiverFamily = [River, Start, Mouth, Crossing];
+    internal static readonly int[] RiverFamily = [River, Start, Mouth, Crossing];
     private static readonly int[] RoadFamily = [Road, Crossing];
 
     // crossing layouts BOB tiles: (river sides, road sides) rotated to the smallest description (tile_repair.py GOOD_X)
-    private static readonly HashSet<string> GoodCrossings =
+    internal static readonly HashSet<string> GoodCrossings =
     [
         "0,3|1,4", "0,3|1,5", "0,3|2,5", "0,2|1,5", "0,2|1,3", "0,3|1,2,4", "0|1,4",
     ];
@@ -625,7 +625,7 @@ public static class TileMapValidator
     }
 
     /// <summary>tile_repair.py x_sig: the crossing's river and road sides, rotated to the smallest description.</summary>
-    private static string CrossingLayout(HexTileMap map, int[] cats, int c, int r)
+    internal static string CrossingLayout(HexTileMap map, int[] cats, int c, int r)
     {
         var rv = new List<int>();
         var rd = new List<int>();

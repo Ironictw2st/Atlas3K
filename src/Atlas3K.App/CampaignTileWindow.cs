@@ -19,11 +19,12 @@ namespace Atlas3K.App;
 /// hexes and in the list. Save goes through <see cref="TileMapEditor"/>, so it shares the undo journal and ops log with
 /// the MCP tools, and is refused while blocking issues remain unless forced.
 /// </summary>
-public sealed class CampaignTileWindow : Window
+public sealed partial class CampaignTileWindow : Window
 {
     private enum Tool { Navigate, Paint, Erase, Line, Fill, Pick }
 
-    private sealed record Stroke(JsonObject Op, Dictionary<(int Col, int Row), uint[]> Old);
+    /// <summary>One undoable stroke: an op, or (a recommended fix) an array of ops applied together.</summary>
+    private sealed record Stroke(JsonNode Op, Dictionary<(int Col, int Row), uint[]> Old);
 
     private readonly ProjectPaths _paths;
     private readonly string? _tileMapPath;
@@ -58,10 +59,11 @@ public sealed class CampaignTileWindow : Window
     private readonly Dictionary<Tool, RadioButton> _toolButtons = [];
     private Tool _tool = Tool.Navigate;
 
-    public CampaignTileWindow(ProjectPaths paths, string? tileMapPath = null)
+    public CampaignTileWindow(ProjectPaths paths, string? tileMapPath = null, bool errorMode = false)
     {
         _paths = paths;
         _tileMapPath = tileMapPath;
+        _startInErrorMode = errorMode;
         Title = AppInfo.Title($"Campaign tile map — {paths.MapName}");
         Width = 1500;
         Height = 950;
@@ -144,9 +146,13 @@ public sealed class CampaignTileWindow : Window
             Text = "Right/middle drag pans, wheel zooms. Double-click an issue to go to it. After saving, build the map (Ctrl+B: " +
                    "tile_list, then global_map + global_mesh) and check holes (tiles-holes / check_tile_holes).",
         });
-        var scroll = new ScrollViewer { Width = 320, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Background = Theme.Brush("Panel"), Content = panel };
-        DockPanel.SetDock(scroll, Dock.Left);
-        dock.Children.Add(scroll);
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Background = Theme.Brush("Panel"), Content = panel };
+        _tabs.Items.Add(new TabItem { Header = "Paint", Content = scroll });
+        _tabs.Items.Add(new TabItem { Header = "Errors (F8)", Content = BuildErrorsPanel() });
+        _tabs.SelectionChanged += (_, e) => { if (ReferenceEquals(e.OriginalSource, _tabs)) SetErrorMode(_tabs.SelectedIndex == 1); };
+        _tabs.Width = 340;
+        DockPanel.SetDock(_tabs, Dock.Left);
+        dock.Children.Add(_tabs);
         dock.Children.Add(_view);
         return dock;
     }
@@ -183,6 +189,8 @@ public sealed class CampaignTileWindow : Window
             RefreshHistory();
             RefreshIssues();
             _status.Text = $"{editor.TileMapPath}   {disk.Width} x {disk.Height} hexes";
+            if (_startInErrorMode) { _startInErrorMode = false; _tabs.SelectedIndex = 1; }
+            else if (_errorMode) FindErrors();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
@@ -329,6 +337,7 @@ public sealed class CampaignTileWindow : Window
         _strokes.Add(stroke);
         foreach (var h in stroke.Old.Keys) UpdatePending(h);
         Validate();
+        if (_errorMode) FindErrors();
     }
 
     private void UndoStroke()
@@ -338,6 +347,7 @@ public sealed class CampaignTileWindow : Window
         _strokes.RemoveAt(_strokes.Count - 1);
         foreach (var (h, px) in s.Old) { Restore(h, px); UpdatePending(h); }
         Validate();
+        if (_errorMode) FindErrors();
     }
 
     private uint[] OldPixels((int Col, int Row) h) => Pixels(_map!.Pixels, h);
@@ -400,6 +410,7 @@ public sealed class CampaignTileWindow : Window
     private void RefreshOverlay()
     {
         if (_map == null) return;
+        if (_errorMode) { RefreshErrorOverlay(); return; }
         Array.Clear(_view.Overlay);
         foreach (var h in _pending) _view.Overlay[_map.Index(h.Col, h.Row)] = 1;
         foreach (var h in _simHexes)
@@ -475,8 +486,10 @@ public sealed class CampaignTileWindow : Window
             var r = t.Result;
             _simHexes = r.NoTileHexes;
             _simInEdits = r.InEdited.Select(h => (h[0], h[1])).ToHashSet();
+            _holesCheckedAt = DateTime.Now;
             RefreshOverlay();
             RefreshIssues();
+            if (_errorMode) FindErrors();
             _status.Text = $"Simulation ({r.Elapsed.TotalSeconds:F0} s): {r.Summary.Placed:N0} tiles placed; {r.NoTileHexes.Count} hexes get no tile, " +
                            $"{r.InEdited.Count} of them in edited hexes.";
         }, TaskScheduler.FromCurrentSynchronizationContext());
@@ -490,8 +503,8 @@ public sealed class CampaignTileWindow : Window
         if (_pending.Count == 0) { _status.Text = "Nothing to save."; return; }
         var nowHash = File.Exists(_editor.TileMapPath) ? FileJournal.Hash(File.ReadAllBytes(_editor.TileMapPath)) : "";
         if (nowHash != _diskHash && !Rebase()) return;
-        var ops = new JsonArray(_strokes.Select(s => s.Op.DeepClone()).ToArray());
-        var label = $"GUI: {string.Join(", ", _strokes.GroupBy(s => s.Op["op"]?.ToString()).Select(g => $"{g.Key} x{g.Count()}"))}";
+        var ops = new JsonArray(_strokes.SelectMany(s => s.Op is JsonArray many ? many.Select(o => o!.DeepClone()) : [s.Op.DeepClone()]).ToArray());
+        var label = $"GUI: {string.Join(", ", _strokes.GroupBy(s => s.Op is JsonArray ? "fix" : s.Op["op"]?.ToString()).Select(g => $"{g.Key} x{g.Count()}"))}";
         var result = _editor.Save(new HexTileMap(_map.PixelWidth, _map.PixelHeight, (uint[])_map.Pixels.Clone()), _pending, ops, label, force, AllowWarnings);
         if (!result.Written)
         {
@@ -511,6 +524,11 @@ public sealed class CampaignTileWindow : Window
         RefreshIssues();
         RefreshHistory();
         _status.Text = $"Saved as edit #{result.Seq} ({result.Changed.Count} hexes). Build tile_list (Ctrl+B) to rebuild tile_list.bin.";
+        if (_errorMode)
+        {
+            FindErrors();
+            if (_holesCheckedAt is not null) Simulate();     // holes were checked before: re-check them on the saved map
+        }
     }
 
     /// <summary>The file changed on disk since it was loaded (an MCP edit, a builder): reload it and re-apply the
@@ -529,7 +547,9 @@ public sealed class CampaignTileWindow : Window
         _view.Load(_map);
         _strokes.Clear();
         _pending.Clear();
-        foreach (var op in strokes) Apply(op, null);
+        foreach (var op in strokes)
+            if (op is JsonArray many) ApplyOps(many, null);
+            else Apply((JsonObject)op, null);
         RefreshHistory();
         return true;
     }
@@ -559,12 +579,15 @@ public sealed class CampaignTileWindow : Window
         else if (e.Key == System.Windows.Input.Key.S && Keyboard.Modifiers == ModifierKeys.Control) { Save(false); e.Handled = true; }
         else if (e.Key == System.Windows.Input.Key.Enter && _tool == Tool.Line) { FinishLine(); e.Handled = true; }
         else if (e.Key == System.Windows.Input.Key.Escape && _tool == Tool.Line) { _view.LinePoints.Clear(); _view.InvalidateVisual(); e.Handled = true; }
+        else if (e.Key == System.Windows.Input.Key.F8) { _tabs.SelectedIndex = _errorMode ? 0 : 1; e.Handled = true; }
+        else if (_errorMode && Keyboard.FocusedElement is not TextBox) ErrorKey(e);
     }
 
     private void Hover((int Col, int Row)? hex)
     {
         if (_ops == null || hex is not { } h) return;
         var (wx, wz) = TileMapEditor.HexToWorld(h.Col, h.Row);
+        if (_errorMode) { ErrorHover(h); return; }
         var issue = _issues.FirstOrDefault(f => f.AllHexes.Any(x => x[0] == h.Col && x[1] == h.Row));
         _status.Text = $"hex [{h.Col},{h.Row}]  {_ops.SetAt(h.Col, h.Row) ?? $"#{_ops.Colour(h.Col, h.Row):x6} (no tile set)"}   world x {wx:F2} z {wz:F2}" +
                        $"   |   zoom {2 / _view.View.Scale:F1} px/hex   |   unsaved: {_pending.Count} hexes, {_strokes.Count} strokes" +

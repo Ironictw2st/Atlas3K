@@ -153,6 +153,13 @@
         <Setter Property="Foreground" Value="{StaticResource Text}"/>
         <Setter Property="Background" Value="{StaticResource Bg}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Style.Resources>
+            <!-- selected items: the theme's selection colour, focused or not (the system default is light) -->
+            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="{StaticResource SelectionColor}"/>
+            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="White"/>
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="{StaticResource SelectionColor}"/>
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="White"/>
+        </Style.Resources>
     </Style>
     <Style TargetType="TreeViewItem">
         <Setter Property="Foreground" Value="{StaticResource Text}"/>

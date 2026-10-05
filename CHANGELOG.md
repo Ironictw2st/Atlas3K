@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+- **Tile error mode** (tile map editor › Errors tab, F8):
+  - Every tile-map error is highlighted and listed by type, each with a recommended fix.
+  - The fix is previewed on the map and applied in one click, or applied in bulk.
+  - Before it is offered, each fix is checked with BOB's tile matching around it, so it cannot open new holes.
+- **Find holes:** whole-map tile matching, available to everyone, not just in developer mode.
+- **Command line and MCP:** `tiles-errors` and `tiles-fix`; terry MCP tools `tile_errors` and `fix_tiles`.
+- **Build window:** *Show tile errors* when Validate or `tile_list` reports tile-map problems.
+
 ## 0.1.0-alpha.1 (2026-10)
 
 First alpha. This project was developed internally as "TerryClone".
