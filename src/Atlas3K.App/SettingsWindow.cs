@@ -20,6 +20,7 @@ public sealed class SettingsWindow : Window
     private readonly ComboBox _map = new() { MinWidth = 240, IsEditable = true };
     private readonly TextBox _log = new() { IsReadOnly = true, Height = 110, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, FontSize = 11 };
     private readonly Button _prepare;
+    private readonly TileMapSourcePanel _tileMap;
 
     public SettingsWindow(bool firstRun = false)
     {
@@ -57,6 +58,10 @@ public sealed class SettingsWindow : Window
                                    p => File.Exists(Path.Combine(p, "campaign_tree_ids_tables", "data__.tsv")), "Tree DB tables (Prepare game data fills it, or an RPFM TSV export)"));
         panel.Children.Add(PathRow("Output", _output, _s.OutputFolder, Defaults.LocalData + "\\output", _ => true, "Edit journals, build logs, previews"));
         panel.Children.Add(PathRow("Cache", _cache, _s.CacheFolder, Defaults.LocalData + "\\cache", _ => true, "Texture cache"));
+
+        panel.Children.Add(Theme.Header("Tile map source"));
+        _tileMap = new TileMapSourcePanel(_s.TileMap, () => new ProjectPaths());
+        panel.Children.Add(_tileMap);
 
         panel.Children.Add(Theme.Header("Prepare game data"));
         var prep = new StackPanel { Orientation = Orientation.Horizontal };
@@ -185,6 +190,7 @@ public sealed class SettingsWindow : Window
         _s.OutputFolder = _output.Text.Trim();
         _s.CacheFolder = _cache.Text.Trim();
         _s.DeveloperMode = _dev.IsChecked == true;
+        _s.TileMap = _tileMap.StoredValue;
         try
         {
             _s.Save();

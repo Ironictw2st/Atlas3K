@@ -83,7 +83,7 @@ To open it:
 
 | Part | What it does |
 |---|---|
-| **Layer tree** (`LayerTreePanel`) | Lists file layers with entity counts. Folder and tag layers, groups and entities inside them load when you expand a node, at most 400 children per node, so the campaign map's ~70k entities stay fast. Layers have a visibility checkbox and a lock toggle. |
+| **Layer tree** (`LayerTreePanel`) | Lists file layers with entity counts. Folder and tag layers, groups and entities inside them load when you expand a node, at most 400 children per node, so the campaign map's ~70k entities stay fast. Layers have a visibility checkbox and a lock toggle. A filter bar on top narrows the tree by name (layer or entity name, label, id), region (part of the layer name), entity type and saved visibility; parents of matches stay, and filtering never changes visibility. **Show all**, **Hide all** and **Show only filtered** set many layers at once as one undo step and leave locked layers alone. |
 | **Scene view** (`SceneView`) | A top-down view: x to the right, z up. Campaign projects get the shaded height TIF behind them; battle projects get a world grid. Entities show as markers coloured by type. Polylines, river splines, rectangles and circles are drawn through each entity's transform. Hidden layers are not drawn; locked entities are dimmed and cannot be picked. |
 | **Inspector** (`InspectorPanel`) | Generated from the component schema (see the field editors below). |
 | **Find box** | Free text (name, asset, id), `type:Prop`, `layer:<name>`, or field filters such as `ECMesh.model_path~metasequoia`. **Select all results** turns any query into a bulk edit in the inspector. |

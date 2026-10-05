@@ -281,7 +281,7 @@ public partial class MainWindow : Window
         if (Path.GetFileName(dialog.FileName).Equals("tile_map.png", StringComparison.OrdinalIgnoreCase)
             && Path.GetFileName(campaigns ?? "").Equals("campaigns", StringComparison.OrdinalIgnoreCase)
             && Path.GetFileName(rawData ?? "").Equals("raw_data", StringComparison.OrdinalIgnoreCase))
-            new CampaignTileWindow(_paths with { AssemblyKitRoot = Path.GetDirectoryName(rawData)!, MapName = Path.GetFileName(mapDir) }).Show();
+            new CampaignTileWindow(_paths with { AssemblyKitRoot = Path.GetDirectoryName(rawData)!, MapName = Path.GetFileName(mapDir), TileMap = Atlas3K.Core.Campaign.TileMapCheck.TileMapSource.Kit }).Show();
         else
             new CampaignTileWindow(_paths, dialog.FileName).Show();
     }

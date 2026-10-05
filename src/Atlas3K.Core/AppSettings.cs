@@ -17,6 +17,8 @@ public sealed class AppSettings
     public string CompiledRoot { get; set; } = "";
     public string OutputFolder { get; set; } = "";
     public string CacheFolder { get; set; } = "";
+    /// <summary>Default tile map source (kit, file or pack) when no project sets one; null = the kit.</summary>
+    public Campaign.TileMapCheck.TileMapSource? TileMap { get; set; }
     public List<string> RecentProjects { get; set; } = [];
     public bool DeveloperMode { get; set; }
     public Dictionary<string, WindowPlacement> Windows { get; set; } = [];

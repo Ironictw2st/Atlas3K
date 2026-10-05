@@ -20,14 +20,23 @@ public sealed class TileListStep : ICampaignBuildStep
     public IReadOnlyList<string> CheckInputs(CampaignBuildContext ctx)
     {
         var missing = new List<string>();
-        foreach (var f in new[] { "tile_map.png", "lf_heights.tif", "lf_sea_heights.tif" })
+        foreach (var f in new[] { "lf_heights.tif", "lf_sea_heights.tif" })
             if (!File.Exists(Path.Combine(ctx.Paths.AkTerrainDir, f))) missing.Add($"missing {Path.Combine(ctx.Paths.AkTerrainDir, f)}");
+        string tileMap;
+        try { tileMap = TileMapInput(ctx, out _); }
+        catch (Exception e) when (e is IOException or InvalidDataException) { missing.Add($"tile map ({ctx.Paths.TileMap.Describe(ctx.Paths)}): {e.Message}"); return missing; }
+        if (!File.Exists(tileMap)) missing.Add($"missing {tileMap}");
         if (missing.Count > 0) return missing;
-        missing.AddRange(TileMapValidator.Run(ctx.Paths).Findings
+        missing.AddRange(TileMapValidator.Run(ctx.Paths, new TileMapCheckOptions { TileMap = tileMap }).Findings
             .Where(f => f.Severity == TileMapFinding.Error && !ctx.AcceptedTileMapIssues.Contains(f.Code))
             .Select(f => $"tile map {f.Code}: {f.Message}"));
         return missing;
     }
+
+    /// <summary>The tile_map.png to build from (<see cref="ProjectPaths.TileMap"/>): a pack entry is extracted to
+    /// &lt;target&gt;\_atlas3k_inputs\&lt;map&gt; first.</summary>
+    private static string TileMapInput(CampaignBuildContext ctx, out string note) =>
+        ctx.Paths.TileMap.BuildInput(ctx.Paths, Path.Combine(ctx.TargetRoot, "_atlas3k_inputs", ctx.MapName), out note);
 
     public StepResult Run(CampaignBuildContext ctx)
     {
@@ -35,7 +44,10 @@ public sealed class TileListStep : ICampaignBuildStep
         var notes = new List<string>();
         var dir = ctx.Paths.AkTerrainDir;
         var db = TileMapValidator.LoadDatabase(ctx.Paths);
-        var map = HexTileMap.Read(Path.Combine(dir, "tile_map.png"));
+        var tileMapPath = TileMapInput(ctx, out var source);
+        ctx.Log(source);
+        notes.Add(source);
+        var map = HexTileMap.Read(tileMapPath);
         ctx.Log("placing tiles...");
         var sim = new TileMatchSimulator(db) { Log = ctx.Log, Cancel = ctx.Cancel }.Run(map, TileMapValidator.ClimateIndices(map, dir, db));
         var byLocation = db.Tiles.GroupBy(t => t.Variations[0].Location, StringComparer.OrdinalIgnoreCase)

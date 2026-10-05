@@ -46,6 +46,11 @@ public sealed class BuildProfileEditor : ScrollViewer
         form.Children.Add(Field("Mod packs", () => string.Join("; ", _project.ModPacks), v => _project.ModPacks = Split(v, ';'),
                                 tip: "Packs searched before vanilla for assets, highest priority first; separate with ;"));
 
+        form.Children.Add(Theme.Header("Tile map source"));
+        var tileMap = new TileMapSourcePanel(_project.TileMap, _paths);
+        tileMap.Changed += () => { _project.TileMap = tileMap.StoredValue; _changed(); };
+        form.Children.Add(tileMap);
+
         form.Children.Add(Theme.Header("Compile"));
         form.Children.Add(Field("Output", () => b.Output, v => b.Output = v, Browse.Folder,
                                 "Where Compile writes, laid out like working_data. {ak}\\working_data replaces the kit's output in place, as BOB did."));

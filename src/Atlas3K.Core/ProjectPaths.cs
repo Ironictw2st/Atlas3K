@@ -17,6 +17,9 @@ public sealed record ProjectPaths
     /// vanilla packs for assets, and, for the map's compiled files (tile_list.bin, texture_arrays.xml), before the
     /// kit's working_data and the vanilla folder.</summary>
     public IReadOnlyList<string> ModPacks { get; init; } = [];
+    /// <summary>Where the tile map editor and the tile_list step read tile_map.png (kit, a file, or a pack entry) and
+    /// where the editor saves it.</summary>
+    public Campaign.TileMapCheck.TileMapSource TileMap { get; init; } = Defaults.TileMap;
 
     public string TerrainDir => Path.Combine(VanillaRoot, "terrain", "campaigns", MapName);
     public string CampaignMapDir => Path.Combine(VanillaRoot, "campaign_maps", MapName);
@@ -77,6 +80,7 @@ public static class Defaults
     public static string CompiledRoot => Or(AppSettings.Current.CompiledRoot, Path.Combine(LocalData, "vanilla"));
     public static string DbTsv => Or(AppSettings.Current.DbTsvFolder, Path.Combine(LocalData, "db"));
     public static string Output => Or(AppSettings.Current.OutputFolder, Path.Combine(LocalData, "output"));
+    public static Campaign.TileMapCheck.TileMapSource TileMap => AppSettings.Current.TileMap ?? Campaign.TileMapCheck.TileMapSource.Kit;
     public static string Cache => Or(AppSettings.Current.CacheFolder, Path.Combine(LocalData, "cache"));
 
     private static string Or(string setting, string fallback) => string.IsNullOrWhiteSpace(setting) ? fallback : setting;

@@ -14,6 +14,24 @@ There is also a **web editor** for the iPad and Apple Pencil (`src/Atlas3K.Web`)
 
 All of them share one undo journal per tile map: `output/tile_edits/<map>/` (snapshots, `journal.jsonl`, `checkpoints.json` and `ops.jsonl`). A GUI save and an MCP edit therefore show up in the same history.
 
+## Tile map source
+
+By default the tile map is the kit's `raw_data/terrain/campaigns/<map>/tile_map.png`, edited in place. **File > Tile map source…** in the tile map window, **Settings > Tile map source** (the default) and the `.atlas3k` project's **Tile map source** (Build window, Profile tab; JSON field `tileMap`) can read it instead from:
+
+| Kind | Reads | Saves edits to |
+|---|---|---|
+| Kit (default) | the kit's map folder | the same file |
+| File | a `tile_map.png`, or a folder holding one | the same file, or `tile_map.png` in **Save edits to** |
+| Pack | an entry in a `.pack` (default `terrain/campaigns/{map}/tile_map.png`) | `tile_map.png` in **Save edits to** (default: the kit's map folder) |
+
+The pack is never written. When the save target is not the source, the editor first copies the source there, as one journaled step that *Undo last saved batch* reverts, and records that in `source.json` beside that target's journal. Each target has its own journal (`output/tile_edits/<map>/custom_<hash>/` for anything other than the kit file).
+
+The build's `tile_list` step reads the same setting. It uses the editor's copy once the editor has seeded it from this source. Otherwise it reads the source, extracting a pack entry to `<build output>/_atlas3k_inputs/<map>/tile_map.png` first. The build log names the file it used.
+
+```json
+"tileMap": { "kind": "Pack", "path": "{game}\\my_map.pack", "internalPath": "", "saveFolder": "{project}\\tile_map" }
+```
+
 ## Coordinates
 
 - Hexes are `[col, row]` and row 0 is **south**. The image is `2W × (2H+1)` pixels at 2×2 px per hex, and odd columns sit half a hex north (`HexTileMap`).

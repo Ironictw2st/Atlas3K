@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Scene editor
+- **Layer filters:** filter the layer tree by name, region, entity type and visible / hidden. Parents of matches stay in the tree, and filtering never changes visibility.
+- **Show all / Hide all / Show only filtered:** each is one undo step, and locked layers are left as they are.
+
+### Tile map
+- **Tile map source:** read `tile_map.png` from the kit (default), any file or folder, or an entry inside a `.pack`. Set it in *File > Tile map source…*, in Settings, or in the `.atlas3k` project (`tileMap`).
+  - Packs are never written. Edits save to a loose `tile_map.png` in a chosen folder (default: the kit's map folder), with one journal per target.
+  - The build's `tile_list` step reads the same source. It extracts a pack entry to the build output first and logs which file it used.
+
 ## 0.1.0-alpha.2 (2026-10-05)
 
 ### Native build: byte-identical to BOB

@@ -21,6 +21,9 @@ public sealed class BuildProject
     public string CompiledRoot { get; set; } = "";
     /// <summary>Mod packs searched before the vanilla packs (highest priority first).</summary>
     public List<string> ModPacks { get; set; } = [];
+    /// <summary>Where tile_map.png is read (kit, a file, or a pack entry) and where the editor saves it; null = the
+    /// app setting (default the kit).</summary>
+    public Campaign.TileMapCheck.TileMapSource? TileMap { get; set; }
     public BuildProfile Build { get; set; } = new();
 
     [JsonIgnore] public string? FilePath { get; private set; }
@@ -82,6 +85,7 @@ public sealed class BuildProject
         if (GameData.Length > 0) p = p with { GameDataDir = Resolve(GameData, p) };
         if (CompiledRoot.Length > 0) p = p with { VanillaRoot = Resolve(CompiledRoot, p) };
         if (ModPacks.Count > 0) p = p with { ModPacks = ModPacks.Select(m => Resolve(m, p)).ToList() };
+        if (TileMap is { } tm) { var q = p; p = p with { TileMap = tm.ResolvePaths(v => Resolve(v, q)) }; }
         return p;
     }
 

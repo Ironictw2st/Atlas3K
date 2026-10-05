@@ -9,7 +9,8 @@ using Atlas3K.Formats.Maps;
 namespace Atlas3K.Core.Campaign.TileMapCheck;
 
 /// <summary>
-/// Validated editing of a campaign tile_map.png (default: the kit's raw_data\terrain\campaigns\&lt;map&gt;\tile_map.png).
+/// Validated editing of a campaign tile_map.png (default: the kit's raw_data\terrain\campaigns\&lt;map&gt;\tile_map.png;
+/// <see cref="TileMapSource"/> can read it from another file or a pack and save to a chosen folder).
 /// A batch of <see cref="TileMapOps"/> ops is applied in memory, the changed hexes (+ ring) are checked with
 /// <see cref="TileMapValidator.CheckMap"/>, and only issues the edit introduced count: any new error blocks the write
 /// unless forced. Written batches are journaled (<see cref="FileJournal"/>, output\tile_edits\&lt;map&gt;) with their ops
@@ -27,11 +28,54 @@ public sealed class TileMapEditor
     {
         _paths = paths;
         _db = db;
-        TileMapPath = Path.GetFullPath(tileMapPath ?? Path.Combine(paths.AkTerrainDir, "tile_map.png"));
+        Source = tileMapPath is null ? paths.TileMap : new TileMapSource { Kind = TileMapSourceKind.File, Path = tileMapPath };
+        TileMapPath = Path.GetFullPath(tileMapPath ?? Source.EditPath(paths));
+        Journal = new FileJournal(JournalDirFor(paths, TileMapPath));
+    }
+
+    /// <summary>output\tile_edits\&lt;map&gt;, plus custom_&lt;hash&gt; for any tile map other than the kit's: one journal per
+    /// save target.</summary>
+    public static string JournalDirFor(ProjectPaths paths, string tileMapPath)
+    {
         var dir = FileJournal.EditDir(paths, "tile_edits");
-        if (tileMapPath is not null && !TileMapPath.Equals(Path.GetFullPath(Path.Combine(paths.AkTerrainDir, "tile_map.png")), StringComparison.OrdinalIgnoreCase))
-            dir = Path.Combine(dir, "custom_" + Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(TileMapPath.ToLowerInvariant())))[..8].ToLowerInvariant());
-        Journal = new FileJournal(dir);
+        var full = Path.GetFullPath(tileMapPath);
+        if (!full.Equals(Path.GetFullPath(Path.Combine(paths.AkTerrainDir, "tile_map.png")), StringComparison.OrdinalIgnoreCase))
+            dir = Path.Combine(dir, "custom_" + Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(full.ToLowerInvariant())))[..8].ToLowerInvariant());
+        return dir;
+    }
+
+    /// <summary>Where the tile map is read from (<see cref="ProjectPaths.TileMap"/>, or a file passed in).</summary>
+    public TileMapSource Source { get; }
+
+    /// <summary>True when the save target needs seeding from the source: it is missing, or it was not seeded from this
+    /// source and differs from it. Always false when the source is the save target.</summary>
+    public bool NeedsSeed(out string reason)
+    {
+        reason = "";
+        if (!Source.SeparateTarget(_paths)) return false;
+        if (!File.Exists(TileMapPath)) { reason = $"{TileMapPath} does not exist yet"; return true; }
+        if (Source.SeededFromThis(Journal.Dir, _paths)) return false;
+        var same = FileJournal.Hash(Source.Read(_paths)) == FileJournal.Hash(File.ReadAllBytes(TileMapPath));
+        if (same) { Source.WriteSeedMarker(Journal.Dir, _paths, File.ReadAllBytes(TileMapPath)); return false; }
+        reason = $"{TileMapPath} differs from {Source.Describe(_paths)}";
+        return true;
+    }
+
+    /// <summary>Copies the source (e.g. a pack entry) to the save target as one journaled batch (undoable) and records
+    /// the seed. The pack is only read.</summary>
+    public int SeedFromSource()
+    {
+        var bytes = Source.Read(_paths);
+        Directory.CreateDirectory(Path.GetDirectoryName(TileMapPath)!);
+        var seq = Journal.Commit([(TileMapPath, p => File.WriteAllBytes(p, bytes))], "load " + Source.Describe(_paths));
+        try { Load(); }
+        catch (Exception e) when (e is InvalidDataException or IOException)
+        {
+            Journal.Undo(1, force: true);
+            throw;
+        }
+        Source.WriteSeedMarker(Journal.Dir, _paths, bytes);
+        return seq;
     }
 
     public string TileMapPath { get; }
