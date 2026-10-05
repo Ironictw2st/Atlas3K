@@ -63,6 +63,9 @@ switch (command)
     case "gp-props-raw":
         GpPropsRaw(args.Skip(1).ToArray());
         break;
+    case "gp-model-box":
+        GpModelBox(args.Skip(1).ToArray());
+        break;
     case "bmd-stats":
         BmdStats(paths);
         break;
@@ -339,6 +342,21 @@ static void GpDiff(string[] a)
 }
 
 // gp-props-raw <gp> <out.csv>: every prop record's entry, model path, x/z and its 9 matrix floats as raw hex.
+static void GpModelBox(string[] a)
+{
+    // per-LOD mesh header bounds and vertex bounds of an .rigid_model_v2 (global_props quadtree box research)
+    var rm = Atlas3K.Formats.Models.RigidModel.Read(File.ReadAllBytes(a[0]));
+    static string F(float v) => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "(" + BitConverter.SingleToInt32Bits(v).ToString("X8") + ")";
+    for (var l = 0; l < rm.Lods.Count; l++)
+        foreach (var m in rm.Lods[l].Meshes)
+        {
+            float[] lo = [float.MaxValue, float.MaxValue, float.MaxValue], hi = [float.MinValue, float.MinValue, float.MinValue];
+            for (var i = 0; i < m.Positions.Length; i += 3)
+                for (var k = 0; k < 3; k++) { lo[k] = Math.Min(lo[k], m.Positions[i + k]); hi[k] = Math.Max(hi[k], m.Positions[i + k]); }
+            Console.WriteLine($"lod {l} hdr min {string.Join(",", m.BoundsMin.Select(F))} max {string.Join(",", m.BoundsMax.Select(F))} | vtx min {string.Join(",", lo.Select(F))} max {string.Join(",", hi.Select(F))} n {m.VertexCount}");
+        }
+}
+
 static void GpPropsRaw(string[] a)
 {
     using var w = new StreamWriter(a[1]);

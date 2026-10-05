@@ -57,6 +57,12 @@ public sealed class GlobalPropsBuilder
     /// <summary>Optional trace: one line per object written (entry, kind, entity id, season mask).</summary>
     public Action<string>? Debug { get; init; }
 
+    /// <summary>River records reference river_N by the entity name (CA's shipped vanilla files) instead of BOB's numbering
+    /// (<see cref="Rivers.RiverNumbering.Bob"/>, used whenever a region lookup is given). Keep in step with RiversStep.</summary>
+    public bool RiverNumbersByName { get; init; }
+
+    private Dictionary<string, int>? _riverNumbers;
+
     public GlobalPropsBuilder(PackSet packs, double worldWidth, double worldHeight)
     {
         _packs = packs;
@@ -73,6 +79,11 @@ public sealed class GlobalPropsBuilder
                                                   Func<double, double, string?>? regionAt = null)
     {
         var prefix = $"terrain/campaigns/{mapName}/bmd_objects";
+        var layerList = layers.ToList();
+        layers = layerList;
+        _riverNumbers = regionAt is not null && !RiverNumbersByName
+            ? Rivers.RiverNumbering.Bob(Rivers.RiverNumbering.Read(layerList.Select(l => l.LayerPath)), regionAt)
+            : null;
         var entries = new List<(string, byte[])>();
         var root = BmdBody.Dynamic(_t.Framing);
         // several layers can end up in one region (e.g. every layer the map has no region for)
@@ -236,7 +247,22 @@ public sealed class GlobalPropsBuilder
             try
             {
                 var rm = Atlas3K.Formats.Models.RigidModel.Read(bytes);
-                var meshes = rm.Lods.SelectMany(l => l.Meshes).ToList();
+                var variant = Environment.GetEnvironmentVariable("ATLAS3K_GP_AABB") ?? "";
+                if (variant == "lod0vtx" || variant == "allvtx")
+                {
+                    var src = variant == "lod0vtx" ? rm.Lods.Take(1) : rm.Lods;
+                    var ps = src.SelectMany(l => l.Meshes).SelectMany(q => q.Positions).ToArray();
+                    if (ps.Length >= 3)
+                    {
+                        float[] lo = [float.MaxValue, float.MaxValue, float.MaxValue], hi = [float.MinValue, float.MinValue, float.MinValue];
+                        for (var i = 0; i < ps.Length; i += 3)
+                            for (var a = 0; a < 3; a++) { lo[a] = Math.Min(lo[a], ps[i + a]); hi[a] = Math.Max(hi[a], ps[i + a]); }
+                        box = (lo, hi);
+                    }
+                    _aabb[path] = box;
+                    return box;
+                }
+                var meshes = (variant == "lod0hdr" ? rm.Lods.Take(1) : rm.Lods).SelectMany(l => l.Meshes).ToList();
                 if (meshes.Count > 0)
                     box = ([meshes.Min(q => q.BoundsMin[0]), meshes.Min(q => q.BoundsMin[1]), meshes.Min(q => q.BoundsMin[2])],
                            [meshes.Max(q => q.BoundsMax[0]), meshes.Max(q => q.BoundsMax[1]), meshes.Max(q => q.BoundsMax[2])]);
@@ -319,7 +345,8 @@ public sealed class GlobalPropsBuilder
             if (e.Element("ECRiver") is not null)
             {
                 var name = (string?)e.Attribute("name") ?? "river_0";
-                var number = int.TryParse(name.Split('_').Last(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 0;
+                var number = _riverNumbers is not null && _riverNumbers.TryGetValue(name, out var bobNumber)
+                    ? bobNumber : Rivers.RiverNumbering.ByName(name, 0);
                 var riverPath = $"terrain/campaigns/{mapName}/models/river_{number}.wsmodel";
                 // vanilla and BOB: river flag set, cast shadow on, season bucket 16
                 var river = PropObj(riverPath, (0, 0, 0), Identity, 1e9, tags, seasons, decal: false, applyToTerrain: true,

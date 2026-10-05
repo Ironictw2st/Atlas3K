@@ -15,6 +15,10 @@ public sealed class RiversStep : ICampaignBuildStep
     public string ReplacesBobAction => "Terrain / Terry file (models\\river_N, height_patches)";
     public IReadOnlyList<string> DependsOn => ["rasters"];
 
+    /// <summary>Number river_N by the entity names (CA's shipped vanilla files) instead of BOB's numbering. Keep in step
+    /// with GlobalPropsBuilder.RiverNumbersByName.</summary>
+    public bool RiverNumbersByName { get; init; }
+
     public IReadOnlyList<string> CheckInputs(CampaignBuildContext ctx)
     {
         var missing = new List<string>();
@@ -37,6 +41,16 @@ public sealed class RiversStep : ICampaignBuildStep
         double Terrain(double x, double z) => sampler.Height((float)x, (float)(z * terrainH / worldH));
 
         var rivers = RiverLayers(ctx).SelectMany(RiverBuilder.ReadLayer).OrderBy(r => r.Number).ToList();
+        // BOB's river_N numbering (by region, RiverNumbering.Bob) whenever the region lookup is available, as global_props
+        var why = "";
+        if (!RiverNumbersByName && Props.HexRegionLookup.ForMap(ctx.Paths, out why) is { } lookup)
+        {
+            var numbers = RiverNumbering.Bob(RiverNumbering.Read(RiverLayers(ctx)),
+                (x, z) => lookup.RegionAt(x, z) ?? Props.GlobalPropsStep.NonPlayable);
+            rivers = rivers.Select(r => numbers.TryGetValue(r.Name, out var n) ? r with { Number = n } : r).OrderBy(r => r.Number).ToList();
+            notes.Add("river_N numbered as BOB (by region)");
+        }
+        else notes.Add("river_N numbered by entity name (vanilla files)" + (RiverNumbersByName ? "" : $"; no region lookup ({why})"));
         var duplicates = rivers.GroupBy(r => r.Number).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
         if (duplicates.Count > 0) throw new InvalidDataException($"river numbers used twice (entity names river_N): {string.Join(", ", duplicates)}");
 
