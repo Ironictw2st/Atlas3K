@@ -54,6 +54,15 @@ switch (command)
     case "gp-bodies":
         GpBodies(args.Skip(1).ToArray());
         break;
+    case "gp-diff":
+        GpDiff(args.Skip(1).ToArray());
+        break;
+    case "gp-body":
+        GpBody(args.Skip(1).ToArray());
+        break;
+    case "gp-props-raw":
+        GpPropsRaw(args.Skip(1).ToArray());
+        break;
     case "bmd-stats":
         BmdStats(paths);
         break;
@@ -293,6 +302,90 @@ static void GpBodies(string[] a)
             b.PolyMeshes.Count, b.Sounds.Count, b.CompositeScenes.Count, "\"" + string.Join(" ", b.EnumTypes.Select(t => t.Name)) + "\"", "\"" + string.Join(" ", b.Seasons) + "\""));
     }
     Console.WriteLine(a[1]);
+}
+
+// Section-level diff of two global_props.bin files over their common entries: per section, equal / same records in another
+// order / different records; plus prop path tables. Lists up to 12 example entries per class.
+static void GpDiff(string[] a)
+{
+    var A = Atlas3K.Formats.Props.GlobalProps.Load(a[0]).Bodies().ToDictionary(x => x.Name, x => x.Body);
+    var B = Atlas3K.Formats.Props.GlobalProps.Load(a[1]).Bodies().ToDictionary(x => x.Name, x => x.Body);
+    var stats = new SortedDictionary<string, int>(); var examples = new Dictionary<string, List<string>>();
+    void Count(string k, string entry) { stats[k] = stats.GetValueOrDefault(k) + 1; if (!examples.TryGetValue(k, out var l)) examples[k] = l = []; if (l.Count < 6) l.Add(entry.Split("bmd_objects.").Last()); }
+    static string Cmp(List<byte[]> x, List<byte[]> y)
+    {
+        if (x.Count == y.Count && x.Zip(y).All(p => p.First.AsSpan().SequenceEqual(p.Second))) return "equal";
+        var hx = x.Select(Convert.ToHexString).OrderBy(h => h, StringComparer.Ordinal).ToList();
+        var hy = y.Select(Convert.ToHexString).OrderBy(h => h, StringComparer.Ordinal).ToList();
+        return hx.SequenceEqual(hy) ? "reordered" : (x.Count == y.Count ? "differ" : "count differs");
+    }
+    foreach (var (name, ba) in A)
+    {
+        if (!B.TryGetValue(name, out var bb)) continue;
+        if (ba.AsSpan().SequenceEqual(bb)) { Count("body identical", name); continue; }
+        var x = Atlas3K.Formats.Props.BmdBody.Parse(ba); var y = Atlas3K.Formats.Props.BmdBody.Parse(bb);
+        if (!x.Preamble.AsSpan().SequenceEqual(y.Preamble)) Count("preamble differs", name);
+        if (!x.PropPaths.SequenceEqual(y.PropPaths)) Count(x.PropPaths.OrderBy(p => p).SequenceEqual(y.PropPaths.OrderBy(p => p)) ? "prop paths reordered" : "prop paths differ", name);
+        foreach (var (sec, sx, sy) in new[] { ("nested", x.Nested, y.Nested), ("props", x.Props, y.Props), ("vfx", x.Vfx, y.Vfx), ("lights", x.PointLights, y.PointLights),
+                                               ("sounds", x.Sounds, y.Sounds), ("scenes", x.CompositeScenes, y.CompositeScenes), ("probes", x.LightProbes, y.LightProbes), ("polys", x.PolyMeshes, y.PolyMeshes) })
+        {
+            var c = Cmp(sx, sy);
+            if (c != "equal") Count($"{sec} {c}", name);
+        }
+    }
+    foreach (var (k, v) in stats) Console.WriteLine($"{v,7} {k,-26} e.g. {string.Join(" ", examples[k])}");
+}
+
+// gp-props-raw <gp> <out.csv>: every prop record's entry, model path, x/z and its 9 matrix floats as raw hex.
+static void GpPropsRaw(string[] a)
+{
+    using var w = new StreamWriter(a[1]);
+    w.WriteLine("entry,path,x,z,m");
+    var ci = System.Globalization.CultureInfo.InvariantCulture;
+    foreach (var (name, body) in Atlas3K.Formats.Props.GlobalProps.Load(a[0]).Bodies())
+    {
+        var b = Atlas3K.Formats.Props.BmdBody.Parse(body);
+        foreach (var p in b.Props)
+        {
+            var path = b.PropPaths[(int)BitConverter.ToUInt32(p, 2)];
+            w.WriteLine(string.Join(",", name, path, BitConverter.ToSingle(p, 60).ToString("R", ci), BitConverter.ToSingle(p, 68).ToString("R", ci),
+                Convert.ToHexString(p, 24, 36)));
+        }
+    }
+}
+
+// One body of a global_props.bin: prop path table, then each prop record's path index, matrix translation (x, z) and
+// raw bytes 0..24 (index, tags) and matrix, and the other sections' record counts; with a second file, where each
+// record differs.
+static void GpBody(string[] a)
+{
+    var body = Atlas3K.Formats.Props.GlobalProps.Load(a[0]).Bodies().First(x => x.Name.EndsWith(a[1], StringComparison.Ordinal)).Body;
+    var b = Atlas3K.Formats.Props.BmdBody.Parse(body);
+    Console.WriteLine($"types: {string.Join(" ", b.EnumTypes.Select(t => t.Name))} | seasons: {string.Join(" ", b.Seasons)}");
+    for (var i = 0; i < b.PropPaths.Count; i++) Console.WriteLine($"  path[{i}] {b.PropPaths[i]}");
+    foreach (var p in b.Props)
+    {
+        var idx = BitConverter.ToUInt32(p, 2);
+        var x = BitConverter.ToSingle(p, 24 + 36); var z = BitConverter.ToSingle(p, 24 + 44);
+        Console.WriteLine($"  prop idx {idx} x? {x:R} z? {z:R}  head {Convert.ToHexString(p, 0, 24)} m {Convert.ToHexString(p, 24, 48)}");
+    }
+    Console.WriteLine($"vfx {b.Vfx.Count} lights {b.PointLights.Count} scenes {b.CompositeScenes.Count} sounds {b.Sounds.Count}");
+    if (a.Length < 3) return;
+    // gp-body <a> <entry> <b>: byte offsets where each section's records differ
+    var o = Atlas3K.Formats.Props.BmdBody.Parse(Atlas3K.Formats.Props.GlobalProps.Load(a[2]).Bodies().First(x => x.Name.EndsWith(a[1], StringComparison.Ordinal)).Body);
+    void Cmp(string what, List<byte[]> x, List<byte[]> y)
+    {
+        for (var i = 0; i < Math.Min(x.Count, y.Count); i++)
+        {
+            if (x[i].AsSpan().SequenceEqual(y[i])) continue;
+            var offs = Enumerable.Range(0, Math.Min(x[i].Length, y[i].Length)).Where(k => x[i][k] != y[i][k]).ToList();
+            Console.WriteLine($"  {what}[{i}] len {x[i].Length}/{y[i].Length} differ at {string.Join(",", offs.Take(24))}");
+            foreach (var k in offs.Take(6)) Console.WriteLine($"      @{k}: {Convert.ToHexString(x[i], Math.Max(0, k - 4), Math.Min(12, x[i].Length - Math.Max(0, k - 4)))} | {Convert.ToHexString(y[i], Math.Max(0, k - 4), Math.Min(12, y[i].Length - Math.Max(0, k - 4)))}");
+        }
+        if (x.Count != y.Count) Console.WriteLine($"  {what} count {x.Count}/{y.Count}");
+    }
+    Cmp("prop", b.Props, o.Props); Cmp("vfx", b.Vfx, o.Vfx); Cmp("light", b.PointLights, o.PointLights);
+    Cmp("scene", b.CompositeScenes, o.CompositeScenes); Cmp("sound", b.Sounds, o.Sounds);
 }
 
 // Every prop with the bmd it sits in (for working out BOB's cell / bucket assignment).

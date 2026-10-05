@@ -28,7 +28,11 @@ public sealed class GlobalPropsBuilder
     /// <param name="EntityX">The entity's ECTransform position, which BOB's region lookup uses (differs from X/Z for
     /// river models, placed at the origin, and polygon meshes).</param>
     private sealed record Obj(string Kind, double X, double Z, double Radius, string SeasonMask, Func<BmdBody, byte[]> Build, string? PropPath,
-                              double? EntityX = null, double? EntityZ = null, int? Bucket = null, float[]? Box = null);
+                              double? EntityX = null, double? EntityZ = null, int? Bucket = null, float[]? Box = null)
+    {
+        /// <summary>The entity's id (hex u64): BOB writes each body's records in ascending id order.</summary>
+        public ulong Id { get; init; }
+    }
 
     private readonly Templates _t;
     private readonly PackSet _packs;
@@ -85,7 +89,8 @@ public sealed class GlobalPropsBuilder
                 foreach (var bucket in cell.GroupBy(o => o.Bucket ?? (o.Kind is "prop" or "vfx" ? Bucket(o.SeasonMask) : 16)).OrderBy(g => g.Key))
                 {
                     var body = BmdBody.Dynamic(_t.Framing);
-                    foreach (var o in bucket) Add(body, o);
+                    // BOB iterates the scene's entities by ascending id (every main190 body checked 2026-10-04)
+                    foreach (var o in bucket.OrderBy(o => o.Id)) Add(body, o);
                     var name = $"{prefix}.{region}.{cell.Key}.{bucket.Key}.bin";
                     entries.Add((name, body.ToBytes()));
                     cellBody.Nested.Add(BmdRecords.Nested(_t.Nested, name, 0, region));   // vanilla and BOB: 0 for every bucket
@@ -266,6 +271,15 @@ public sealed class GlobalPropsBuilder
         var objects = new List<Obj>();
         foreach (var (e, tags) in flat)
         {
+            var before = objects.Count;
+            ReadEntity(e, tags);
+            var id = ulong.TryParse((string?)e.Attribute("id"), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var v) ? v : 0;
+            for (var i = before; i < objects.Count; i++) objects[i] = objects[i] with { Id = id };
+        }
+        return objects;
+
+        void ReadEntity(XElement e, string tags)
+        {
             var tr = Transform(e.Element("ECTransform"));
             var cp = e.Element("ECCampaignProperties");
             var seasons = (string?)cp?.Attribute("season_mask") ?? "";
@@ -284,13 +298,13 @@ public sealed class GlobalPropsBuilder
                     Build = b => { var rec = river.Build(b); rec[BmdRecords.PropRiver] = 1; return rec; },
                     EntityX = tr.Position.X, EntityZ = tr.Position.Z, Bucket = 16,
                 });
-                continue;
+                return;
             }
             if (e.Element("ECPropMesh") is not null || e.Element("ECDecal") is not null)
             {
                 var decal = e.Element("ECDecal");
                 var model = (string?)(decal ?? e.Element("ECMesh"))?.Attribute("model_path") ?? "";
-                if (model.Length == 0) continue;
+                if (model.Length == 0) return;
                 var rs = e.Element("ECMeshRenderSettings");
                 var hp = e.Element("ECPropHeightPatch");
                 // cell by position only: BOB's main190 cells match a radius-0 point for 92% of objects; the model radius
@@ -301,7 +315,7 @@ public sealed class GlobalPropsBuilder
                     (string?)hp?.Attribute("apply_height_patch") == "true");
                 // BOB bounds (FUN_18005e050): ECMesh entities use the transformed model box; decals (no ECMesh) a point
                 objects.Add(decal is null && e.Element("ECMesh") is not null ? propObj with { Box = MeshBox(model, tr.Matrix, tr.Position) } : propObj);
-                continue;
+                return;
             }
             if (e.Element("ECVFX") is { } vfx)
             {
@@ -312,7 +326,7 @@ public sealed class GlobalPropsBuilder
                     var (f, m) = b.EncodeTags(tags);
                     return BmdRecords.Vfx(_t.Vfx, name, tr.Matrix, tr.Position, instance, b.EncodeSeasons(seasons), f, m);
                 }, null));
-                continue;
+                return;
             }
             if (e.Element("ECPointLight") is { } light)
             {
@@ -324,8 +338,10 @@ public sealed class GlobalPropsBuilder
                 var probesOnly = (string?)light.Attribute("for_light_probes_only") == "true";
                 // FUN_18005e050: radius x (sum of the 3 matrix column lengths / 3) x 0.5 around the position
                 var mm = tr.Matrix;
-                var avg = (MathF.Sqrt((float)(mm[3] * mm[3] + mm[0] * mm[0] + mm[6] * mm[6])) + MathF.Sqrt((float)(mm[4] * mm[4] + mm[1] * mm[1] + mm[7] * mm[7]))
-                           + MathF.Sqrt((float)(mm[5] * mm[5] + mm[2] * mm[2] + mm[8] * mm[8]))) * 0.33333334f;
+                float M(int k) => (float)mm[k];
+                // column norms with rows in BOB's order 1, 0, 2 (row-major world matrix)
+                var avg = (MathF.Sqrt(M(3) * M(3) + M(0) * M(0) + M(6) * M(6)) + MathF.Sqrt(M(4) * M(4) + M(1) * M(1) + M(7) * M(7))
+                           + MathF.Sqrt(M(5) * M(5) + M(2) * M(2) + M(8) * M(8))) * 0.33333334f;
                 var lr = A("radius", 1) * avg * 0.5f;
                 float lx = (float)tr.Position.X, lz = (float)tr.Position.Z;
                 objects.Add(new Obj("light", tr.Position.X, tr.Position.Z, 0, seasons, b =>
@@ -335,7 +351,7 @@ public sealed class GlobalPropsBuilder
                         A("colour_scale", 1), anim, speed.ElementAtOrDefault(0), speed.ElementAtOrDefault(1), A("colour_min", 0),
                         A("random_offset", 0), falloff, probesOnly, f, m, b.EncodeSeasons(seasons));
                 }, null) { Box = [lx - lr, lz - lr, lx + lr, lz + lr] });
-                continue;
+                return;
             }
             if (e.Element("ECCompositeScene") is { } scene)
             {
@@ -345,7 +361,7 @@ public sealed class GlobalPropsBuilder
                     var (f, m) = b.EncodeTags(tags);
                     return BmdRecords.CompositeScene(_t.Scene, tr.Matrix, tr.Position, path2, f, m, b.EncodeSeasons(seasons));
                 }, null));
-                continue;
+                return;
             }
             if (e.Element("ECSoundMarker") is { } sound)
             {
@@ -359,26 +375,25 @@ public sealed class GlobalPropsBuilder
                 float? radius = sphere is null ? null : float.Parse((string?)sphere.Attribute("radius") ?? "0", CultureInfo.InvariantCulture);
                 var template = shape == "SST_MULTI_POINT" ? _t.SoundMulti : _t.SoundPoint;
                 objects.Add(new Obj("sound", tr.Position.X, tr.Position.Z, 0, "", _ => BmdRecords.Sound(template, key, shape, pts, radius), null));
-                continue;
+                return;
             }
             if (e.Element("ECLightProbe") is not null)
             {
                 var radius = float.Parse((string?)e.Element("ECSphere")?.Attribute("radius") ?? "1", CultureInfo.InvariantCulture);
                 objects.Add(new Obj("probe", tr.Position.X, tr.Position.Z, 0, "", _ => BmdRecords.LightProbe(_t.Probe, tr.Position, radius), null));
-                continue;
+                return;
             }
             if (e.Element("ECPolygonMesh") is { } poly && _t.Poly is not null)
             {
                 var material = (string?)poly.Attribute("material") ?? "";
                 var outline = e.Descendants("point").Select(p => (A3(p, "x"), A3(p, "y"))).ToList();
-                if (outline.Count < 3) continue;
+                if (outline.Count < 3) return;
                 var vertices = outline.Select(p => (p.Item1, tr.Position.Y, p.Item2)).ToList();
                 var indices = Triangulate(outline);
                 objects.Add(new Obj("poly", vertices.Average(v => v.Item1), vertices.Average(v => v.Item3), 1e9, "",
                     _ => BmdRecords.PolyMesh(_t.Poly, vertices, indices, material), null, tr.Position.X, tr.Position.Z));
             }
         }
-        return objects;
 
         Obj PropObj(string model, (double X, double Y, double Z) position, double[] matrix, double radius, string tags, string seasons,
             bool decal, bool applyToTerrain, bool applyToObjects, Func<string, bool, bool> cp, bool castShadow, bool hasHp, bool applyHp) =>
@@ -406,7 +421,8 @@ public sealed class GlobalPropsBuilder
         var p = Floats((string?)t?.Attribute("position") ?? "0 0 0");
         var r = Floats((string?)t?.Attribute("rotation") ?? "0 0 0");
         var s = Floats((string?)t?.Attribute("scale") ?? "1 1 1");
-        var matrix = CameraHeightmapStep.Matrix(new PropTransform(p[0], p[1], p[2], r[0], r[1], r[2], s[0], s[1], s[2]));
+        // BOB's float matrix bit for bit (QTU::ECTransform quaternion path)
+        var matrix = QtuTransform.Matrix(r[0], r[1], r[2], s[0], s[1], s[2], p[0], p[1], p[2]);
         return (matrix, (p[0], p[1], p[2]), Math.Max(Math.Abs(s[0]), Math.Max(Math.Abs(s[1]), Math.Abs(s[2]))));
     }
 
