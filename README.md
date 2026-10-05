@@ -10,7 +10,7 @@ A campaign map editor and builder for **Total War: THREE KINGDOMS**. It works on
 
 | Part | What for |
 |---|---|
-| **Scene editor** | Props, entities, prefabs and layers of the campaign `.terry`, in a 2D top view and a 3D view (forests, water, rivers, seasons). The **Terrain & trees** tab paints the kit's land and sea height maps and the CampaignTree map, with undo and save. |
+| **Scene editor** | Props, entities, prefabs and layers of the campaign `.terry`, in a 2D top view and a 3D view (forests, water, rivers, seasons). The **Terrain & trees** tab paints the kit's land and sea height maps and the CampaignTree map, with undo and save. The **Props** tab places new props from the game's models by clicking in either view, and clamps floating props to BOB's ground height ([docs](docs/scene_props_tools.md)). |
 | **Tile map** | Paint the campaign `tile_map.png` hex by hex. Every stroke is validated against BOB's tile-matching rules. The **Errors** tab (F8) highlights every tile-map error and recommends a fix for it (details below). The tile map can be read from the kit, any file, or a `.pack` (*File > Tile map source…*); edits always save to a loose file. |
 | **Terrain painter** | Heights, ground textures and trees on the compiled map. |
 | **Build** | Compile the map (rasters, tile list, global map and meshes, rivers, global props, camera heightmap, trees, lookup), run your own steps, pack and install. One click, or one step at a time. |

@@ -64,6 +64,7 @@ public sealed partial class SceneWindow : Window
         menu.Items.Add(MenuOf("_File",
             ("_Open Terry project…", (Action)OpenProject, "Ctrl+O"),
             ("Open _campaign map", () => _ = Switch(null), ""),
+            ("_Save terrain and tree edits", SaveAll, "Ctrl+S"),
             ("_Reload from disk", () => _ = LoadAsync(), "F5"),
             (null, null, null),
             ("_Close", Close, "")));
@@ -77,10 +78,16 @@ public sealed partial class SceneWindow : Window
             ("_Expand selected prefabs", ExpandSelection, "Ctrl+E"),
             ("_Make prefab from selection…", MakePrefab, ""),
             ("De_lete selection", DeleteSelection, "Del"),
-            ("Select _none", () => SetSelection([], SceneView.SelectMode.Replace), "Esc")));
+            ("Select _none", () => SetSelection([], SceneView.SelectMode.Replace), "Esc"),
+            (null, null, null),
+            ("Clamp selected to _ground", () => _ = ClampAsync("selected"), "Ctrl+G"),
+            ("Clamp all in active _layer", () => _ = ClampAsync("layer"), ""),
+            ("Clamp all in _view", () => _ = ClampAsync("view"), ""),
+            ("Find _floating props", () => _ = FindFloatingAsync(), "")));
         menu.Items.Add(MenuOf("_Create",
             ("_Entity…", () => AddEntity(null), "Ctrl+N"),
             ("_Prefab…", () => PlacePrefab(null), "Ctrl+P"),
+            ("Prop from _asset browser…", ShowPropsTab, ""),
             ("New _file layer…", NewFileLayer, "")));
         menu.Items.Add(MenuOf("_View",
             ("_Fit all", () => { if (Is3D) _view3d.FrameAll(); else _view.FitToContent(); }, "Home"),
@@ -347,6 +354,7 @@ public sealed partial class SceneWindow : Window
             }
         };
         WireTerrainTools();
+        WirePropTools();
         PreviewKeyDown += OnKey;
     }
 
@@ -362,6 +370,7 @@ public sealed partial class SceneWindow : Window
             case Key.P when ctrl: PlacePrefab(null); break;
             case Key.E when ctrl && !typing: ExpandSelection(); break;
             case Key.O when ctrl: OpenProject(); break;
+            case Key.S when ctrl: SaveAll(); break;
             case Key.F5: _ = LoadAsync(); break;
             case Key.Delete when !typing: DeleteSelection(); break;
             case Key.Escape when !typing: SetSelection([], SceneView.SelectMode.Replace); break;
@@ -387,15 +396,16 @@ public sealed partial class SceneWindow : Window
             model.Changed += ModelChanged;
             model.ModelBoundsReady += () => Dispatcher.BeginInvoke(() => { _view.Refresh(); _view3d.Refresh(); Status($"Model footprints loaded ({model.ModelBounds.Count} models)."); });
             _ = model.LoadModelBoundsAsync();
-            Title = AppInfo.Title($"Scene — {Path.GetFileName(model.TerryPath)} ({model.Project.Database} {model.Project.ProjectType})");
             _view.Attach(model);
             _view3d.Attach(model);
             TerrainTools.Attach(model);
+            AttachPropTools(model);
             _tree.Attach(model);
             _selection.RemoveWhere(id => model.Find(id) is null);
             ShowSelection();
             Status($"{model.Layers.Count} layers, {model.All.Count()} entities. Edits save immediately; Ctrl+Z undoes. History: {model.Editor.HistoryDir}");
             _loadedOnce = true;
+            UpdateTitle();
         }
         catch (Exception ex)
         {

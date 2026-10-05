@@ -61,6 +61,9 @@ public sealed class TerrainToolsPanel : ScrollViewer, SceneView.ITool
 
     public bool HasUnsaved => _session?.IsDirty() == true;
 
+    /// <summary>Raised after every edit, undo, redo, save or project change (the window title shows a * while unsaved).</summary>
+    public event Action? DirtyChanged;
+
     private KitTarget? Target => _target.SelectedIndex switch { 1 => KitTarget.Land, 2 => KitTarget.Sea, 3 => KitTarget.Trees, _ => null };
 
     public TerrainToolsPanel(ProjectPaths paths, SceneView view, Viewport3D.Viewport3DControl view3d)
@@ -244,12 +247,16 @@ public sealed class TerrainToolsPanel : ScrollViewer, SceneView.ITool
     public bool ConfirmDiscard(Window owner)
     {
         if (!HasUnsaved) return true;
-        var answer = MessageBox.Show(owner, "Save the terrain / tree edits before leaving?\n" + DirtyList(), "Unsaved terrain edits",
-                                     MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
-        if (answer == MessageBoxResult.Cancel) return false;
-        if (answer == MessageBoxResult.Yes) return Save();
+        var answer = Prompt.AskSave(owner, "Unsaved terrain edits",
+            "You have unsaved Terrain & trees edits in " + DirtyList() + ".\n\nSave them to the kit before leaving? "
+            + "Don't save drops them; the files stay as they were at the last save. (Entity edits are already saved.)");
+        if (answer == Prompt.SaveChoice.Cancel) return false;
+        if (answer == Prompt.SaveChoice.Save) return Save();
         return true;
     }
+
+    /// <summary>Saves the unsaved terrain / tree edits (File > Save, Ctrl+S). False when the save failed or was declined.</summary>
+    public bool SaveEdits() => !HasUnsaved || Save();
 
     private string DirtyList() => _session is null ? "" :
         string.Join(", ", new[] { KitTarget.Land, KitTarget.Sea, KitTarget.Trees }.Where(_session.IsDirty).Select(t => Path.GetFileName(_session.PathOf(t))));
@@ -569,6 +576,7 @@ public sealed class TerrainToolsPanel : ScrollViewer, SceneView.ITool
 
     private void UpdateState()
     {
+        DirtyChanged?.Invoke();
         _undo.IsEnabled = _session?.CanUndo == true;
         _redo.IsEnabled = _session?.CanRedo == true;
         _undo.ToolTip = _session?.UndoName is { } u ? $"Undo {u} (Ctrl+Z while this tab is shown)" : "Nothing to undo";

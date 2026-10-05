@@ -61,6 +61,9 @@ public partial class App : Application
         var terrainTest = Flag("--terrain-selftest");
         if (terrainTest >= 0 && Value(terrainTest) is { } terrainDir)
             _ = sceneWindow.TerrainSelfTestAsync(Path.GetFullPath(terrainDir));
+        var propsTest = Flag("--props-selftest");
+        if (propsTest >= 0 && Value(propsTest) is { } propsDir)
+            _ = sceneWindow.PropsSelfTestAsync(Path.GetFullPath(propsDir));
         foreach (var kind in new[] { "city", "region" })
         {
             var ti = Flag($"--{kind}-tour");

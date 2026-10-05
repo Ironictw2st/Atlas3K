@@ -13,6 +13,22 @@
   - Undo and redo work per stroke.
   - Save writes only the changed TIFs, in their own format: height TIFs are patched in place, so only pixel bytes change. The originals are backed up in `output\terrain_edits`.
   - The tab warns when the build output is older than the sources. See `docs/terry_entity_editing.md`.
+- **Add props (Props tab):** an asset browser over the game packs and linked packs (16,440 models on vanilla). It has search, a flat-shaded preview with size and source pack, and campaign models only unless *All models* is ticked.
+  - Pick a model, then click on the terrain in the 2D or 3D view to place a Terry campaign Prop (the same components as Terry's) in the active layer, standing on the ground.
+  - Placement settings: yaw or random yaw, scale with ± % jitter, a y offset, and origin or model base on the ground.
+  - Repeat mode keeps placing until Esc. Each placement is one undo step.
+- **Clamp to ground:** *Edit › Clamp selected to ground* (Ctrl+G), *Clamp all in active layer* and *Clamp all in view* move props onto the ground as one undo step. The status line reports how many were lowered or raised and the largest move.
+  - Ground sources:
+    - BOB's scene height, the default: the byte-identical camera height field, with global mesh, tile, river and prop height patches. A prop's own patch is ignored.
+    - The bare lf + tile hf.
+    - The kit lf map.
+  - A build of another map or an old build is detected and skipped.
+  - Modes: origin on the ground, model base on the ground, or vanilla sink. Vanilla sink buries mountain and rock meshes by their per-model depth, learnt from the map or loaded from a JSON table.
+  - Other options: an offset, and *only lower*. LF-offset mountains (y stored relative to the terrain) are handled.
+- **Find floating props:** selects props whose lowest point is more than a threshold above the ground. Settlement pieces are skipped by default.
+- **Unsaved edits:** the title shows `*` while Terrain & trees edits are unsaved, and *File › Save terrain and tree edits* (Ctrl+S) saves them. Closing the window or switching project asks *Save / Don't save / Cancel*.
+  - A value typed into the inspector is committed before the window closes.
+  - Entity edits are written to their layer files as they are made, so they never need saving. See `docs/scene_props_tools.md`.
 
 ### Tile map
 - **Tile map source:** read `tile_map.png` from the kit (default), any file or folder, or an entry inside a `.pack`. Set it in *File > Tile map source…*, in Settings, or in the `.atlas3k` project (`tileMap`).

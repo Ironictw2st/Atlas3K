@@ -117,6 +117,10 @@ public sealed class Viewport3DControl : Grid
     public event Action<Key, ModifierKeys>? KeyCommand;
     public event Action<string>? HoverText;
 
+    /// <summary>Placement mode (scene editor Props tab): a left click calls this with the ground point under the mouse
+    /// instead of selecting; null = normal selection.</summary>
+    public Action<Vector3>? PlaceAt { get; set; }
+
     public Viewport3DControl()
     {
         Children.Add(_host);
@@ -1888,6 +1892,9 @@ public sealed class Viewport3DControl : Grid
                 break;
             case MouseButton.Left when Keyboard.Modifiers.HasFlag(ModifierKeys.Alt):
                 _orbitFrom = p;
+                break;
+            case MouseButton.Left when PlaceAt is { } place:
+                if (GroundUnder(p) is { } ground) place(ground);
                 break;
             case MouseButton.Left:
                 if (GizmoHit(p) is { } part) { BeginGizmoDrag(part, p); break; }

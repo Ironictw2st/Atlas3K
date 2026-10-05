@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -23,6 +24,7 @@ public sealed partial class SceneWindow
             Header = "Terrain & trees", Content = TerrainTools,
             ToolTip = "Edit the kit's land / sea height maps and the CampaignTree map (brushes, fills, undo, save)",
         });
+        tabs.Items.Add(new TabItem { Header = "Props", Content = PropTools }.Card("scene.props.add"));
         tabs.SelectionChanged += (_, e) =>
         {
             if (!ReferenceEquals(e.OriginalSource, tabs)) return;
@@ -50,10 +52,29 @@ public sealed partial class SceneWindow
                 _ => false,
             };
         };
+        TerrainTools.DirtyChanged += UpdateTitle;
         Closing += (_, e) =>
         {
+            // a value typed into the inspector but not yet committed (Enter / focus loss) is saved first
+            if (Keyboard.FocusedElement is TextBox or ComboBox) Keyboard.ClearFocus();
             if (!TerrainTools.ConfirmDiscard(this)) e.Cancel = true;
         };
         static bool Do(Action a) { a(); return true; }
+    }
+
+    /// <summary>Title: project, database and type, with a leading * while Terrain &amp; trees edits are unsaved (entity
+    /// edits are written to their layer files at once, so they never leave the scene unsaved).</summary>
+    private void UpdateTitle()
+    {
+        if (!_loadedOnce) return;
+        var dirty = _terrainTools?.HasUnsaved == true ? "*" : "";
+        Title = dirty + AppInfo.Title($"Scene — {Path.GetFileName(_model.TerryPath)} ({_model.Project.Database} {_model.Project.ProjectType})");
+    }
+
+    /// <summary>File > Save (Ctrl+S): the Terrain &amp; trees edits; entity edits are already on disk.</summary>
+    private void SaveAll()
+    {
+        if (_terrainTools?.HasUnsaved != true) { Status("Nothing to save: entity edits are written as you make them; no unsaved terrain or tree edits."); return; }
+        TerrainTools.SaveEdits();
     }
 }

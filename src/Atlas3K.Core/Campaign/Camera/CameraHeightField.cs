@@ -88,9 +88,13 @@ public sealed class CameraHeightField
     private int CellZ(float z) => Math.Clamp((int)MathF.Floor((z - _pcz0) / PatchCell), 0, _pch - 1);
 
     /// <summary>FUN_18034cf20: the scene height at a world point.</summary>
-    public float Height(float x, float z)
+    public float Height(float x, float z) => Height(x, z, null);
+
+    /// <summary>The scene height ignoring the patches <paramref name="skip"/> picks (e.g. a prop's own height patch
+    /// when seating that prop).</summary>
+    public float Height(float x, float z, Func<Patch, bool>? skip)
     {
-        var p = PatchHeight(x, z);
+        var p = PatchHeight(x, z, skip);
         var zt = z / ZScale;
         var g = GlobalMeshHeight(x, zt);
         if (g == float.MinValue)
@@ -102,12 +106,15 @@ public sealed class CameraHeightField
     }
 
     /// <summary>FUN_180350320: the highest patch at the point, −FLT_MAX when none answers.</summary>
-    public float PatchHeight(float x, float z)
+    public float PatchHeight(float x, float z) => PatchHeight(x, z, null);
+
+    private float PatchHeight(float x, float z, Func<Patch, bool>? skip)
     {
         var best = float.MinValue;
         foreach (var i in _patchCells[CellZ(z) * _pcw + CellX(x)])
         {
             var o = Patches[i];
+            if (skip is not null && skip(o)) continue;
             var a = o.Aabb;
             if (!(a[0] <= x && x <= a[2] && a[1] <= z && z <= a[3])) continue;
             var inv = o.Inv;

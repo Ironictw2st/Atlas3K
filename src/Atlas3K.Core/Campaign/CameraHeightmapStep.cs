@@ -194,11 +194,13 @@ public sealed class CameraHeightmapStep : ICampaignBuildStep
     }
 
     /// <summary>The scene's height objects: global mesh blocks, height patches (rivers, tile props, global props) and the
-    /// tile terrain for the fallback.</summary>
-    public static CameraHeightField BuildField(CampaignBuildContext ctx, List<string> notes, out int tilesW, out int tilesH) =>
-        BuildField(ctx, new GameFiles(ctx), notes, out tilesW, out tilesH);
+    /// tile terrain for the fallback. <paramref name="globalProps"/> false leaves the map's own props' patches out (the
+    /// ground props stand on, for seating them).</summary>
+    public static CameraHeightField BuildField(CampaignBuildContext ctx, List<string> notes, out int tilesW, out int tilesH, bool globalProps = true) =>
+        BuildField(ctx, new GameFiles(ctx), notes, out tilesW, out tilesH, globalProps);
 
-    private static CameraHeightField BuildField(CampaignBuildContext ctx, GameFiles fs, List<string> notes, out int tilesW, out int tilesH)
+    private static CameraHeightField BuildField(CampaignBuildContext ctx, GameFiles fs, List<string> notes, out int tilesW, out int tilesH,
+                                                bool includeGlobalProps = true)
     {
         var dir = $"terrain/campaigns/{ctx.MapName}/";
         var maps = new Dictionary<string, CameraHeightField.HeightMap?>(StringComparer.OrdinalIgnoreCase);
@@ -286,7 +288,7 @@ public sealed class CameraHeightmapStep : ICampaignBuildStep
         }
 
         var globalProps = 0;
-        if (fs.Read(dir + "global_props.bin") is { } gpb)
+        if (includeGlobalProps && fs.Read(dir + "global_props.bin") is { } gpb)
             foreach (var region in GlobalProps.Read(gpb).ReadRegions(ctx.MapName))
                 for (var i = 0; i < region.Props.Count && i < region.PropMatrices.Count; i++)
                 {

@@ -16,6 +16,35 @@ public static class Prompt
         return Show(owner, title, label, combo, c => ((ComboBox)c).Text);
     }
 
+    public enum SaveChoice { Save, DontSave, Cancel }
+
+    /// <summary>Save / Don't save / Cancel (Esc or closing the box = Cancel).</summary>
+    public static SaveChoice AskSave(Window owner, string title, string message)
+    {
+        var dialog = new Window
+        {
+            Title = title, Owner = owner, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Theme.Brush("Panel"),
+        };
+        var result = SaveChoice.Cancel;
+        Button Make(string text, SaveChoice choice, bool isDefault = false, bool isCancel = false)
+        {
+            var b = new Button { Content = text, IsDefault = isDefault, IsCancel = isCancel, MinWidth = 90, Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0) };
+            b.Click += (_, _) => { result = choice; dialog.DialogResult = choice != SaveChoice.Cancel; };
+            return b;
+        }
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
+        buttons.Children.Add(Make("_Save", SaveChoice.Save, isDefault: true));
+        buttons.Children.Add(Make("_Don't save", SaveChoice.DontSave));
+        buttons.Children.Add(Make("Cancel", SaveChoice.Cancel, isCancel: true));
+        var panel = new StackPanel { Margin = new Thickness(14), MaxWidth = 520 };
+        panel.Children.Add(new TextBlock { Text = message, Foreground = Theme.Brush("Text"), TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(buttons);
+        dialog.Content = panel;
+        dialog.ShowDialog();
+        return result;
+    }
+
     private static string? Show(Window owner, string title, string label, Control input, Func<Control, string> read)
     {
         var dialog = new Window
