@@ -150,7 +150,8 @@ public static class HlpBuilder
             {
                 if (g.Types[path[i + 1]] != 5) continue;
                 uint steps = 0;
-                for (var k = i; k < i + 3 && k + 1 < path.Count; k++)
+                // (a step onto the bridge from a river hex still counts; from land or sea it does not)
+                for (var k = i + (g.Types[path[i]] == 6 ? 1 : 0); k < i + 3 && k + 1 < path.Count; k++)
                     steps += search0.Cost(path[k + 1]) - search0.Cost(path[k]);
                 cost = cost - steps + 500;
                 i += 2;
@@ -158,6 +159,7 @@ public static class HlpBuilder
             return cost;
         }
 
+        var DebugRefine = false;
         List<int>? CentrePath(int a, int b)
         {
             var edges = g.Gated(options.CentrePathZero, g.Hlci[a], g.Hlci[b]);
@@ -179,6 +181,7 @@ public static class HlpBuilder
                     var d = LineDistance2(ax, ay, fx, fy, g.WorldX[h], g.WorldY[h]);
                     if (worst < d) { worst = d; far = h; }
                 }
+                if (DebugRefine) Console.Error.WriteLine($"  seg ({sa % W},{sa / W})->({sb % W},{sb / W}) cost {cost} worst {worst} at ({far % W},{far / W}) path {string.Join(" ", path.Select(h => $"({h % W},{h / W})"))}");
                 if (worst <= (options.RefineThreshold > 0 ? options.RefineThreshold : g.HalfRow) || far < 0)
                 {
                     stack.RemoveAt(stack.Count - 1);
@@ -227,7 +230,9 @@ public static class HlpBuilder
         void Determine(Entry e, Seg s, Seg t, Entry f)
         {
             var f1 = (e.Type == 0) != (f.Type == 0);
+            DebugRefine = Environment.GetEnvironmentVariable("HLP_DEBUG_PAIR") == $"{e.Aid},{f.Aid}";
             var path = CentrePath(e.Centre, f.Centre);
+            DebugRefine = false;
             int q = -1, p = -1;
             if (path is not null)
                 foreach (var h in path)
@@ -237,6 +242,7 @@ public static class HlpBuilder
                 }
             var dbg = Environment.GetEnvironmentVariable("HLP_DEBUG_PAIR") == $"{e.Aid},{f.Aid}";
             string H(int h) => $"({h % W},{h / W})";
+            if (dbg) Console.Error.WriteLine($"centre path {string.Join(" ", path?.Select(H) ?? [])} halfrow {g.HalfRow} world {regions.WorldMin} {regions.WorldMax} grid {W}x{g.Height}");
             if (dbg) Console.Error.WriteLine($"pair {e.Aid}->{f.Aid}: path p {(p >= 0 ? H(p) : "-")} q {(q >= 0 ? H(q) : "-")}\n  S(in f, found by e) {string.Join(" ", s.Border.Select(H))}\n  T(in e, found by f) {string.Join(" ", t.Border.Select(H))}");
             var copyA = new HashSet<int>(s.Border);
             var copyB = new HashSet<int>(t.Border);
