@@ -27,6 +27,7 @@ public sealed class TileHfHeight
     private readonly TileInfo?[] _tileOfPath;
     private readonly HfMap?[] _hfOfPath;
     private readonly List<int>?[] _cells;
+    private readonly List<int>?[] _bobCells;      // ws_tile_instance_indices_at: a tile on its cells [X, X+w) x [Y, Y+h)
     private readonly int _tilesW, _tilesH;
     private readonly float _t, _invT, _f, _fLf, _maxX, _maxZ;
     private readonly HfMap _lf;
@@ -86,6 +87,52 @@ public sealed class TileHfHeight
                 for (var x = rec.X; x <= Math.Min(rec.X + w, _tilesW - 1); x++)
                     (_cells[y * _tilesW + x] ??= []).Add(r);
         }
+        _bobCells = new List<int>[_tilesW * _tilesH];
+        for (var r = 0; r < list.Records.Count; r++)
+        {
+            var rec = list.Records[r];
+            var tile = _tileOfPath[rec.Path];
+            if (tile is null) continue;
+            var (w, h) = Size(tile, rec.Orientation);
+            for (var y = rec.Y; y < Math.Min(rec.Y + h, _tilesH); y++)
+                for (var x = rec.X; x < Math.Min(rec.X + w, _tilesW); x++)
+                    (_bobCells[y * _tilesW + x] ??= []).Add(r);
+        }
+    }
+
+    /// <summary>
+    /// Campaign Trees' provider (qttoolutility FUN_18011f1d0): the cell is int(inverse world transform · point) of
+    /// the WORLD point (x, z), its tile instances (ws_tile_instance_indices_at) are each asked get_height at (x, z /
+    /// 1.15476), and the HIGHEST answering height wins (0 when none answers); lf comes from that tile.
+    /// Inverse transform coefficients: (ix, iz) with cell = (int(x · ix), int(z · iz)).
+    /// </summary>
+    public bool BobCells { get; init; }
+    public float CellScaleX { get; init; } = float.NaN;
+    public float CellScaleZ { get; init; } = float.NaN;
+
+    /// <summary>Tree height at the campaign world point as BOB's Campaign Trees provider computes it.</summary>
+    public float TreeHeight(float x, float zWorld)
+    {
+        var z = zWorld / 1.15476f;
+        if (!BobCells) return Height(x, z);
+        if (x < 0f || x > _maxX || z < 0f || z > _maxZ) return 0f;
+        var ix = float.IsNaN(CellScaleX) ? _invT : CellScaleX;
+        var iz = float.IsNaN(CellScaleZ) ? 1f / (_t * 1.15476f) : CellScaleZ;
+        int cx = (int)(x * ix), cy = (int)(zWorld * iz);
+        if (cx < 0 || cy < 0 || cx >= _tilesW || cy >= _tilesH || _bobCells[cy * _tilesW + cx] is not { } cell) return 0f;
+        var lf = Lf(x, z);
+        var tx = _invT * x;
+        var ty = _invT * z;
+        var best = float.MinValue;
+        var bestLf = 0f;
+        foreach (var r in cell)
+        {
+            if (!TileHeight(r, x, z, tx, ty, lf, out var hf)) continue;
+            var h = hf + lf;
+            if (best < h) { best = h; bestLf = lf; }
+        }
+        if (best == float.MinValue) return 0f;
+        return (best - bestLf) + bestLf;
     }
 
     private static (int W, int H) Size(TileInfo t, byte orientation) =>

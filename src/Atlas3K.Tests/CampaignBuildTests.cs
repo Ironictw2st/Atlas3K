@@ -359,4 +359,36 @@ public class CampaignBuildTests
         Assert.True(exact >= n - 2, $"bit-exact {exact} of {n}, within 1e-5 {close}; first misses: " + string.Join(" ; ", misses));
         Assert.True(close >= n - 1, $"within 1e-5 {close} of {n}");
     }
+
+    [Fact]
+    public void TileHfHeight_VanillaTrees_MatchBobOwnOutput()
+    {
+        // BOB's own fresh "Campaign Trees" output on the vanilla kit (2026-10-04 Frida run)
+        var bobList = Path.Combine(Paths.OutputRoot, "bob_runs", "frida_ctrees_vanilla1", "trees_bob.campaign_tree_list");
+        var gm = Vanilla(Path.Combine("global_map", "tile_list.bin"));
+        if (!File.Exists(Vanilla("tile_list.bin")) || !File.Exists(bobList) || !File.Exists(gm) || !Directory.Exists(Paths.GameDataDir)) return;
+        var packs = Atlas3K.Formats.Packs.PackSet.OpenVanilla(Paths.GameDataDir);
+        var prefix = Atlas3K.Formats.Packs.PackFile.Normalize(TileDatabase.Folder);
+        var db = TileDatabase.Load(packs.Packs.SelectMany(p => p.Entries.Keys).Where(k => k.StartsWith(prefix, StringComparison.Ordinal))
+            .Distinct().Select(k => packs.TryRead(k)).OfType<byte[]>());
+        var list = TileList.Read(Vanilla("tile_list.bin"));
+        var terrain = new Atlas3K.Core.Campaign.Terrain.TileHfHeight(list, db, packs.TryRead,
+            CompressedMap.Read(Vanilla("lf_height_map.compressed_map")), Atlas3K.Core.Campaign.GlobalMesh.GlobalMeshStep.TileSize)
+            { BobCells = true, CellScaleX = Env("ATLAS3K_TREE_IX"), CellScaleZ = Env("ATLAS3K_TREE_IZ") };
+        var trees = Atlas3K.Formats.Trees.CampaignTreeList.Load(bobList);
+        int n = 0, exact = 0;
+        var misses = new List<string>();
+        foreach (var t in trees.Types.SelectMany(type => type.Instances))
+        {
+            var y = terrain.TreeHeight(t.X, t.Z);
+            n++;
+            if (BitConverter.SingleToInt32Bits(y) == BitConverter.SingleToInt32Bits(t.Y)) exact++;
+            else if (misses.Count < 20) misses.Add(FormattableString.Invariant($"{t.X:R},{t.Z:R},{t.Y:R},{y:R}"));
+        }
+        Assert.True(exact == n, $"bit-exact {exact} of {n}; misses: " + string.Join(" ; ", misses));
+    }
+
+    private static float Env(string name) =>
+        float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float,
+                       System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : float.NaN;
 }

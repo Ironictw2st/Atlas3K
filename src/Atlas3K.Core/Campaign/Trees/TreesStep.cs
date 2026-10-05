@@ -66,7 +66,7 @@ public sealed class TreesStep : ICampaignBuildStep
         int reused = 0, sampled = 0;
         var list = CampaignTreeGenerator.Generate(colours, grid, db, (col, row, x, z) =>
         {
-            var ground = terrain?.Height(x, z / CampaignZScale) ?? lf?.Height(x, z / CampaignZScale);
+            var ground = terrain?.TreeHeight(x, z) ?? lf?.Height(x, z / CampaignZScale);
             // reuse only where the terrain is unchanged: same spot AND the reference y still on today's ground (lake
             // shaping / island flattening / terrain polish moved the ground under kept trees, 2026-10-04)
             if (reference != null && reference.TryGetValue((col, row), out var r) &&
@@ -111,7 +111,9 @@ public sealed class TreesStep : ICampaignBuildStep
             .Distinct().Select(k => packs.TryRead(k)).OfType<byte[]>());
         var lfMap = CompressedMap.Read(ctx.OutFile("lf_height_map.compressed_map"));
         notes.Add($"tree heights: lf + tile hf ({Path.GetFileName(Path.GetDirectoryName(tl))}/tile_list.bin)");
-        return new TileHfHeight(TileList.Read(tl), db, packs.TryRead, lfMap, GlobalMeshStep.TileSize);
+        // Campaign Trees' provider (qttoolutility FUN_18011f1d0): the tiles registered at the point's cell, highest
+        // answering height (vanilla: all 205,767 trees bit-exact against BOB's own output)
+        return new TileHfHeight(TileList.Read(tl), db, packs.TryRead, lfMap, GlobalMeshStep.TileSize) { BobCells = true };
     }
 
     /// <summary>The reference list's trees by hex (compiled root, then working_data), if it is on the same grid.</summary>
