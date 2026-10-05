@@ -18,6 +18,11 @@ public static class QtuTransform
         float f12 = 1f - x2 * x, zy2 = z * (y + y), f9 = w2 * x + zy2, l148 = zy2 - w2 * x;
         float f17 = w2 * y + z * x2;
         float m11 = f12 - zz2, m00 = (1f - yy2) - zz2, m22 = f12 - yy2;
+        // a "-0" position component is +0 in BOB's matrix (layer text "-0"; 2026-10-05: a building_boat at y = -0 gave a
+        // -0 rotation element natively, +0 in BOB)
+        if (px == 0f) px = 0f;
+        if (py == 0f) py = 0f;
+        if (pz == 0f) pz = 0f;
         float zx = px * 0f, zy = py * 0f, zz = pz * 0f;
         float[,] r =
         {

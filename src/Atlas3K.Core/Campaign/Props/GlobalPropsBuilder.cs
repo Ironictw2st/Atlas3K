@@ -32,6 +32,8 @@ public sealed class GlobalPropsBuilder
                               double? EntityX = null, double? EntityZ = null, int? Bucket = null, float[]? Box = null)
     {
         /// <summary>The entity's id (hex u64): BOB writes each body's records in ascending id order.</summary>
+        public bool IsDecal { get; init; }
+
         public ulong Id { get; init; }
 
         public string Tags { get; init; } = "";
@@ -124,7 +126,8 @@ public sealed class GlobalPropsBuilder
                     var body = BmdBody.Dynamic(_t.Framing);
                     // BOB iterates the scene's entities by ascending id (every main190 body checked 2026-10-04)
                     var name = $"{prefix}.{region}.{cell.Key}.{bucket.Key}.bin";
-                    foreach (var o in bucket.OrderBy(o => KindRank(o.Kind)).ThenBy(o => o.Id))
+                    // decals (ECDecal) come before the ECMesh props, each by id (2026-10-05: the 2 main190 bodies with both)
+                    foreach (var o in bucket.OrderBy(o => KindRank(o.Kind)).ThenBy(o => o.IsDecal ? 0 : 1).ThenBy(o => o.Id))
                     {
                         Add(body, o);
                         Debug?.Invoke($"{name},{o.Kind},{o.Id:x15},\"{o.SeasonMask}\",\"{o.Tags}\",{o.Seq}");
@@ -475,7 +478,7 @@ public sealed class GlobalPropsBuilder
                 }
                 if (model.Contains("_anim", StringComparison.OrdinalIgnoreCase)) rec[BmdRecords.PropAnimated] = 1;
                 return rec;
-            }, model);
+            }, model) { IsDecal = decal };
     }
 
     /// <summary>Decal parallax scale (bytes 80..83) and render above snow (byte 103) from the ECDecal, as BOB.</summary>
