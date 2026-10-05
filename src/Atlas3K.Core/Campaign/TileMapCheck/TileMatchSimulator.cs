@@ -148,12 +148,14 @@ public sealed class TileMatchSimulator
 
     private static string VariationKey(CampaignTile t, int v) => t.File + "#" + v;
 
-    /// <summary>TILE_DATABASE::sort comparator: larger area first, then more link targets, then name (ordinal).</summary>
+    /// <summary>TILE_DATABASE::sort comparator: larger area first, then more link targets, then name (ordinal).
+    /// BOB runs the sort before link targets are filled in: link_target_count() is 0 for every tile at that point
+    /// (Frida dump of a vanilla Tilemap run, 2026-10-04, research/bob_re/frida_out), so the targets term never
+    /// separates two tiles and the order is area, then name.</summary>
     private static bool DatabaseLess(Tile a, Tile b)
     {
         int areaA = a.W * a.H, areaB = b.W * b.H;
         if (areaA != areaB) return areaA > areaB;
-        if (a.Targets.Length != b.Targets.Length) return a.Targets.Length > b.Targets.Length;
         return string.CompareOrdinal(a.Source.Name, b.Source.Name) < 0;
     }
 

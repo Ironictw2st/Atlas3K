@@ -211,6 +211,10 @@ public static class TileListWriter
                     if (found < 0) continue;
                     var next = instances[found];
                     if (visited.Contains((next.X, next.Y))) continue;
+                    // calculate_flow counts the next tile's TLT_EQUALS links (any set) that are entries; with none, the
+                    // tile gets no flow and is not queued, so the walk stops there (e.g. river_crossing cross_5 on
+                    // vanilla: everything upstream of it keeps flow 0). Checked against BOB 2026-10-04.
+                    if (!next.Tile.Links.Any(l => l.TestEquals && l.IsEntry)) continue;
                     var swap = cur.Rotation is 0x20 or 0x80;
                     var box = (X0: cur.X, Y0: cur.Y, X1: cur.X + (swap ? t.Height : t.Width), Y1: cur.Y + (swap ? t.Width : t.Height));
                     var riverLinks = next.Tile.Links.Count(l => l.TestEquals && IsRiverSet(l.LinkSet));
