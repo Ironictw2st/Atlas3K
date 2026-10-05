@@ -356,10 +356,13 @@ public sealed class GlobalPropsBuilder
             if (e.Element("ECCompositeScene") is { } scene)
             {
                 var path2 = (string?)scene.Attribute("path") ?? "";
+                var autoplay = (string?)scene.Attribute("autoplay") != "false";
                 objects.Add(new Obj("scene", tr.Position.X, tr.Position.Z, 0, seasons, b =>
                 {
                     var (f, m) = b.EncodeTags(tags);
-                    return BmdRecords.CompositeScene(_t.Scene, tr.Matrix, tr.Position, path2, f, m, b.EncodeSeasons(seasons));
+                    var rec = BmdRecords.CompositeScene(_t.Scene, tr.Matrix, tr.Position, path2, f, m, b.EncodeSeasons(seasons));
+                    rec[^1] = autoplay ? (byte)1 : (byte)0;                 // last byte: ECCompositeScene autoplay (as BOB)
+                    return rec;
                 }, null));
                 return;
             }
@@ -410,6 +413,7 @@ public sealed class GlobalPropsBuilder
                     rec[BmdRecords.PropApplyToTerrain] = applyToTerrain ? (byte)0 : (byte)1;
                     rec[BmdRecords.PropApplyToObjects] = applyToObjects ? (byte)1 : (byte)0;
                 }
+                if (model.Contains("_anim", StringComparison.OrdinalIgnoreCase)) rec[BmdRecords.PropAnimated] = 1;
                 return rec;
             }, model);
     }

@@ -342,16 +342,19 @@ static void GpDiff(string[] a)
 static void GpPropsRaw(string[] a)
 {
     using var w = new StreamWriter(a[1]);
-    w.WriteLine("entry,path,x,z,m");
+    w.WriteLine("entry,path,x,z,m,flags");
     var ci = System.Globalization.CultureInfo.InvariantCulture;
     foreach (var (name, body) in Atlas3K.Formats.Props.GlobalProps.Load(a[0]).Bodies())
     {
         var b = Atlas3K.Formats.Props.BmdBody.Parse(body);
+        foreach (var sc in b.CompositeScenes)
+            w.WriteLine(string.Join(",", name, "scene:" + System.Text.Encoding.UTF8.GetString(sc, 52, BitConverter.ToUInt16(sc, 50)),
+                BitConverter.ToSingle(sc, 38).ToString("R", ci), BitConverter.ToSingle(sc, 46).ToString("R", ci), "", Convert.ToHexString(sc, sc.Length - 12, 12)));
         foreach (var p in b.Props)
         {
             var path = b.PropPaths[(int)BitConverter.ToUInt32(p, 2)];
             w.WriteLine(string.Join(",", name, path, BitConverter.ToSingle(p, 60).ToString("R", ci), BitConverter.ToSingle(p, 68).ToString("R", ci),
-                Convert.ToHexString(p, 24, 36)));
+                Convert.ToHexString(p, 24, 36), Convert.ToHexString(p, 72, 33)));
         }
     }
 }

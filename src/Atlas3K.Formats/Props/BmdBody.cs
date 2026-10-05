@@ -432,6 +432,9 @@ public static class BmdRecords
     /// <summary>Byte 91 (in the 7 bytes after override gbuffer normal): 1 on river props only (vanilla and BOB);
     /// without it the game culls the river water.</summary>
     public const int PropRiver = 91;
+    /// <summary>Byte 79 ("animated", after destruction outside): BOB sets it on every model whose path has "_anim" (716 of
+    /// 716 main190 props).</summary>
+    public const int PropAnimated = 79;
 
     public static void WriteStr(BinaryWriter w, string s)
     {
