@@ -461,7 +461,8 @@ public sealed class GlobalPropsBuilder
         var s = Floats((string?)t?.Attribute("scale") ?? "1 1 1");
         // BOB's float matrix bit for bit (QTU::ECTransform quaternion path)
         var matrix = QtuTransform.Matrix(r[0], r[1], r[2], s[0], s[1], s[2], p[0], p[1], p[2]);
-        return (matrix, (p[0], p[1], p[2]), Math.Max(Math.Abs(s[0]), Math.Max(Math.Abs(s[1]), Math.Abs(s[2]))));
+        // ECTransform::update_transform's translation is (position + delta) + pivot terms: a -0 component comes out +0
+        return (matrix, (p[0] + 0f, p[1] + 0f, p[2] + 0f), Math.Max(Math.Abs(s[0]), Math.Max(Math.Abs(s[1]), Math.Abs(s[2]))));
     }
 
     private static float[] Floats(string s) =>
