@@ -61,7 +61,7 @@ static class AiPathfindingCommands
             {
                 LegacyStlOrder = a.Contains("--legacy-stl"),
                 CentrePathZero = !a.Contains("--centre-blocked"),
-                RefineThreshold = float.Parse(Option(a, "--threshold") ?? "1", CultureInfo.InvariantCulture),
+                RefineThreshold = float.Parse(Option(a, "--threshold") ?? "0.4", CultureInfo.InvariantCulture),
                 MaxThreads = threads,
             };
             var hlp = HlpBuilder.Build(ppd, regions, settings, refHlp?.Timestamp ?? ts, Console.WriteLine, opt);
@@ -89,6 +89,8 @@ public static class HlpCompare
         int nodes = 0, areas = 0, areaSame = 0, centre = 0, a = 0, b = 0, trTotal = 0, trPq = 0, trCost = 0, trAll = 0, order = 0, mat = 0, matTotal = 0;
         var refAreas = reference.Nodes.SelectMany(n => n.Areas).ToDictionary(x => x.AreaId);
         var shown = 0;
+        var costDiffs = new List<string>();
+        var flagDiffs = new List<string>();
         if (mine.Nodes.Count == reference.Nodes.Count) nodes = 1;
         foreach (var ma in mine.Nodes.SelectMany(n => n.Areas))
         {
@@ -104,6 +106,8 @@ public static class HlpCompare
                 {
                     trPq++;
                     if (m.Cost == t.Cost) trCost++;
+                    else if (costDiffs.Count < examples * 3) costDiffs.Add($"  cost area {ma.AreaId} ({t.X},{t.Y})->({t.OtherX},{t.OtherY}) to {t.TargetArea}: mine {m.Cost} ref {t.Cost} f{(t.Flag1 ? 1 : 0)}{(t.Flag2 ? 1 : 0)}");
+                    if (m.Flag2 != t.Flag2 && flagDiffs.Count < examples * 3) flagDiffs.Add($"  f2 area {ma.AreaId} ({t.X},{t.Y})->({t.OtherX},{t.OtherY}) to {t.TargetArea}: mine {m.Flag2} ref {t.Flag2} cost {t.Cost}");
                     if (m == t) trAll++;
                 }
             var sameList = ma.Transitions.SequenceEqual(ra.Transitions);
@@ -125,6 +129,7 @@ public static class HlpCompare
                     sb.AppendLine($"    matrix mine [{string.Join(",", ma.Costs)}] ref [{string.Join(",", ra.Costs)}]");
             }
         }
+        foreach (var l in costDiffs.Concat(flagDiffs)) sb.AppendLine(l);
         sb.Insert(0, $"hlp fields: nodes {(nodes == 1 ? "same count" : "DIFFERENT count")}, areas {areas}/{refAreas.Count}, identical areas {areaSame}, centre {centre}, a {a}, b {b}, " +
                      $"transitions {trTotal}: same hexes+target {trPq}, +cost {trCost}, all fields {trAll}; same transition list {order}; matrix values {mat}/{matTotal}\n");
         return sb.ToString();

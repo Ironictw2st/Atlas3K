@@ -24,12 +24,14 @@ public static class HlpBuilder
     {
         /// <summary>refine_path's tolerance: a segment is kept when no hex of its path is further than this (squared
         /// world units) from the segment's line.</summary>
-        public float RefineThreshold { get; init; } = 1f;
+        public float RefineThreshold { get; init; } = 0.4f;
         /// <summary>Settlement handling for the centre-to-centre paths (true = slot edges cost 0, false = slots blocked).</summary>
         public bool CentrePathZero { get; init; } = true;
         /// <summary>Pre-2020 STL (VS2017) unordered_map: insert first, then rehash (dlc04 / 8p files); else VS2019 (rehash first).</summary>
         public bool LegacyStlOrder { get; init; }
         public int MaxThreads { get; init; }
+        /// <summary>Transition ends next to the same settlement: path without a faction (settlements passable at cost 0).</summary>
+        public bool CostSameSettlementZero { get; init; } = Environment.GetEnvironmentVariable("HLP_SAME_ZERO") != "0";
     }
 
     private sealed class Seg
@@ -94,8 +96,9 @@ public static class HlpBuilder
             search.Run(e.Centre, edges, visit: (h, c) =>
             {
                 var t = g.Types[h];
-                if (t > 1) return AiSearch.Visit.Continue;
+                // settlement slot hexes are slottlement types (4, 7-9) in the game's grid: neither land nor sea here
                 int area = regions.AreaMap[h];
+                if (t > 1 || g.Slot[h]) return AiSearch.Visit.Continue;
                 if (area == e.Aid) { if (c > b) b = c; return AiSearch.Visit.Continue; }
                 if (!segIndex.TryGetValue(area, out var seg))
                 {
@@ -114,11 +117,45 @@ public static class HlpBuilder
         var search0 = new AiSearch(g);
         var blocked = g.Slot;
 
+        // settlement owning each slot hex (FUN_1812040c0 via the slot's tile group)
+        var slotOwner = new int[g.Width * g.Height];
+        Array.Fill(slotOwner, -1);
+        for (var r = 0; r < regions.Regions.Count; r++)
+            foreach (var (x, y) in regions.Regions[r].PrimarySlot.Concat(regions.Regions[r].PortSlot))
+                if ((uint)x < (uint)g.Width && (uint)y < (uint)g.Height) slotOwner[y * W + x] = r;
+        int AdjacentSettlement(int h)
+        {
+            for (var d = 0; d < 6; d++)
+            {
+                var nb = g.Neighbour[h * 6 + d];
+                if (nb >= 0 && slotOwner[nb] >= 0) return slotOwner[nb];
+            }
+            return -1;
+        }
+
+        // FUN_1805f8910: both ends next to the same settlement -> path without a faction (settlements passable),
+        // else the faction path, for which foreign settlements are closed
         uint PathCost(int a, int b)
         {
             if (a == b) return 0;
-            var edges = g.Gated(false, g.Hlci[a], g.Hlci[b]);
-            return search0.Run(a, edges, target: b, blocked: blocked);
+            var sa = AdjacentSettlement(a);
+            var same = options.CostSameSettlementZero && sa >= 0 && sa == AdjacentSettlement(b);
+            var edges = g.Gated(same, g.Hlci[a], g.Hlci[b]);
+            var cost = search0.Run(a, edges, target: b, blocked: same ? null : blocked);
+            if (cost == uint.MaxValue) return cost;
+            // the reported cost is the sum of the path's waypoint costs (FUN_1805cc840): a bridge crossing
+            // (prev -> type-5 hex -> linked type-5 hex -> next) counts 500 instead of its three steps
+            var path = search0.PathTo(b);
+            for (var i = 0; i + 1 < path.Count; i++)
+            {
+                if (g.Types[path[i + 1]] != 5) continue;
+                uint steps = 0;
+                for (var k = i; k < i + 3 && k + 1 < path.Count; k++)
+                    steps += search0.Cost(path[k + 1]) - search0.Cost(path[k]);
+                cost = cost - steps + 500;
+                i += 2;
+            }
+            return cost;
         }
 
         List<int>? CentrePath(int a, int b)
@@ -183,8 +220,8 @@ public static class HlpBuilder
         {
             var cab = PathCost(pa, qb);
             var cba = PathCost(qb, pa);
-            e.Created.Add(new Tr { P = pa, Q = qb, Cost = cab, Target = f.Aid, Idx = e.Created.Count, F1 = f1 });
-            f.Created.Add(new Tr { P = qb, Q = pa, Cost = cba, Target = e.Aid, Idx = f.Created.Count, F1 = f1 });
+            e.Created.Add(new Tr { P = pa, Q = qb, Cost = cab, Target = f.Aid, Idx = e.Created.Count, F1 = f1, F2 = f1 && cab == 0 });
+            f.Created.Add(new Tr { P = qb, Q = pa, Cost = cba, Target = e.Aid, Idx = f.Created.Count, F1 = f1, F2 = f1 && cba == 0 });
         }
 
         void Determine(Entry e, Seg s, Seg t, Entry f)

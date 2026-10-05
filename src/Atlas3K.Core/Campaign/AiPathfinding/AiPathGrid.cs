@@ -83,6 +83,18 @@ public sealed class AiPathGrid
                     SetMask(h, 1 << d, roadSlot);
                 }
             }
+        // impassable hexes (type 2): no navigable edge in or out (FUN_181203a20 does this for the setup's blocked hexes;
+        // the landmark search's type masks give the same)
+        for (var h = 0; h < n; h++)
+        {
+            if (Types[h] != 2) continue;
+            for (var d = 0; d < 6; d++)
+            {
+                EdgesPlain[h * 6 + d] &= 0x3F;
+                var nb = Neighbour[h * 6 + d];
+                if (nb >= 0) EdgesPlain[nb * 6 + (d + 3) % 6] &= 0x3F;
+            }
+        }
         foreach (var r in regions.Regions)
             foreach (var (x, y) in r.PrimarySlot.Concat(r.PortSlot))
                 if ((uint)x < (uint)Width && (uint)y < (uint)Height) Slot[Index(x, y)] = true;
@@ -153,6 +165,25 @@ public sealed class AiPathGrid
                     for (var d = 0; d < 6; d++)
                         if ((m >> d & 1) != 0) e[h * 6 + d] = onL ? (byte)(e[h * 6 + d] | 0x80) : (byte)(e[h * 6 + d] & 0x7F);
             }
+            // impassable hexes stay closed whatever the beach state (their edges were cut when the grid was built)
+            for (var h = 0; h < Types.Length; h++)
+            {
+                if (Types[h] != 2) continue;
+                for (var d = 0; d < 6; d++)
+                {
+                    e[h * 6 + d] &= 0x7F;
+                    var nb = Neighbour[h * 6 + d];
+                    if (nb >= 0) e[nb * 6 + (d + 3) % 6] &= 0x7F;
+                }
+            }
+            // the move-type table (FUN_1805d3a70 / FUN_1805fa120) gates every step as well: e.g. no bridge -> sea
+            if (Environment.GetEnvironmentVariable("HLP_MASKALL") != "0")
+                for (var h = 0; h < Types.Length; h++)
+                for (var d = 0; d < 6; d++)
+                {
+                    var nb = Neighbour[h * 6 + d];
+                    if (nb >= 0 && (CampaignPathGrid.TypeMask[Types[h]] >> Types[nb] & 1) == 0) e[h * 6 + d] &= 0x7F;
+                }
             _gated[(zero, cc, ce)] = e;
             return e;
         }
