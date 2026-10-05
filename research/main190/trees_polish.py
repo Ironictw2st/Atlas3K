@@ -198,7 +198,7 @@ def suitability(out, f, van, Tf, log=print):
     return p[key].astype(np.float32), sb
 
 
-def quilt_forests(out, f, names, w, h, cut, log=print):
+def quilt_forests(out, f, names, w, h, cut, NA, log=print):
     """Q2 (in place on `out`): returns (domain mask, suitability, info)."""
     import hashlib, json
     from scipy import ndimage as ndi
@@ -249,6 +249,7 @@ def quilt_forests(out, f, names, w, h, cut, log=print):
     E = np.clip(E, 0, 0.95).astype(np.float32)
     src = out.copy(); canvas = out
     pres = (src != NO_TREE)
+    stable = (code == BV.VAN) | (code == BV.NPOLD) | ~land
     # donor windows (even column offsets keep the hex parity): mostly vanilla land
     n = QP
     wat = ~land
@@ -294,23 +295,63 @@ def quilt_forests(out, f, names, w, h, cut, log=print):
         blocks = np.stack([src[a:a + n, b:b + n] for a, b in zip(cy[idx], cx[idx])])
         dsuit = np.stack([suit[a:a + n, b:b + n] for a, b in zip(cy[idx], cx[idx])])
         old = canvas[sl]
-        known = (~dm | fil).astype(np.float32); known[wat[sl]] *= 0.2
+        # agree with what is already placed and with the STABLE neighbours only (vanilla, kept np_old, water): the other
+        # new regions get trees_x15's top-up after seeing this result, reading them here would make builds differ
+        known = ((~dm & stable[sl]) | fil).astype(np.float32); known[wat[sl]] *= 0.2
         bp = blocks != NO_TREE; op = old != NO_TREE
         mis = (bp != op[None]) + 0.3 * ((blocks != old[None]) & bp & op[None])
         ov = (mis * known[None]).sum((1, 2)) / max(float(known.sum()), 1.0)
         gm = (np.abs(dsuit - suit[sl][None]) * dm[None]).sum((1, 2)) / cnt
         cost = QW_OV * ov + 2.0 * QW_G * gm + QW_D * dc[idx] + QW_RE * used[idx]
-        okk = np.nonzero(cost <= cost.min() + QTOL)[0]; j = int(okk[rng.integers(len(okk))])
+        okk = np.nonzero(cost <= cost.min() + QTOL)[0]
+        j = int(okk[np.random.default_rng((QSEED, r0, c0)).integers(len(okk))])      # per-window seed: local effects only
         new = blocks[j]
         border = np.zeros((n, n), bool); border[0, :] = border[-1, :] = border[:, 0] = border[:, -1] = True
         must_old = ~dm | (border & fil)
         wpx = np.where(wat[sl], 0.2, 1.0).astype(np.float32)
         # seam cost: tree / no tree mismatch (1) + species (0.3); seams prefer existing wood edges
-        take = graph_cut(op, bp[j], must_old, must_new, nz[sl], wpx, d=mis[j])
+        sv = dm | stable[sl]                       # unstable neighbours (other new regions) do not steer the seam either
+        take = graph_cut(np.where(sv, op, bp[j]), bp[j], must_old, must_new, nz[sl], wpx, d=mis[j] * sv)
         wr = take & dm
         old[wr] = new[wr]; fil |= dm
         used[idx[j]] += 1; info["Q2_windows"] += 1
         rg = int(creg[idx[j]]); donor[rg] = donor.get(rg, 0) + int(wr.sum())
+    # cover correction per group x climate to the wanted mean (quilting drifts towards sparse: empty overlaps match
+    # best): grow onto the most suitable empty hexes next to woods / drop the least suitable trees. Terrain-ranked, so
+    # the edges move along slopes / valleys, not as rings. Nomad arid steppe is left to Q3.
+    T = (canvas != NO_TREE) & land & ~cut
+    nb = ncount(T, NA); hsh = hash01(w, h, 41)
+    info["Q2_cover_fix"] = {}
+    for g in (BV.HEXI, BV.NOMAD, BV.KNE, BV.NPNEW, BV.NPOLDF):
+        for cl in np.unique(f["climate"][dom & (code == g)]):
+            m = dom & (code == g) & (f["climate"] == cl) & land & ~cut
+            if g == BV.NOMAD and cl == 0: continue
+            if m.sum() < 200: continue
+            tgt, have = float(E[m].mean()), float(T[m].mean())
+            k = int(round((tgt - have) * m.sum()))
+            if abs(tgt - have) <= 0.02: continue
+            done = 0
+            for step in range(4):                          # in steps, so growth follows the terrain, not one ring
+                left = abs(k) - done
+                if left <= 0: break
+                kk_ = int(np.ceil(abs(k) / 4)) if step < 3 else left
+                score = suit + 0.06 * nb + 0.05 * hsh
+                if k > 0:
+                    rr, cc = np.nonzero(m & ~T & (nb > 0))
+                    o = np.argsort(-score[rr, cc], kind="stable")[:min(kk_, left)]; rr, cc = rr[o], cc[o]
+                    votes = np.zeros((len(rr), 20), np.int32)
+                    for nr, ncc, v in NA:
+                        kv = canvas[nr[rr, cc], ncc[rr, cc]]; okv = v[rr, cc] & T[nr[rr, cc], ncc[rr, cc]]
+                        np.add.at(votes, (np.nonzero(okv)[0], kv[okv]), 1)
+                    votes[:, NO_TREE] = -1
+                    canvas[rr, cc] = votes.argmax(1).astype(canvas.dtype); T[rr, cc] = True
+                else:
+                    rr, cc = np.nonzero(m & T)
+                    o = np.argsort(score[rr, cc], kind="stable")[:min(kk_, left)]; rr, cc = rr[o], cc[o]
+                    canvas[rr, cc] = NO_TREE; T[rr, cc] = False
+                if not len(rr): break
+                done += len(rr); nb = ncount(T, NA)
+            info["Q2_cover_fix"][f"{BV.GNAME[g]}/{int(cl)}"] = (round(have, 3), round(tgt, 3), done * (1 if k > 0 else -1))
     tot = max(sum(donor.values()), 1)
     info["Q2_donor_regions"] = [(names[k] if 0 <= k < len(names) else str(k), round(100 * v / tot, 1))
                                 for k, v in sorted(donor.items(), key=lambda kv: -kv[1])[:15]]
@@ -383,7 +424,7 @@ def polish(out, f, names, w, h, NA, cut, log=print):
 
     if QUILT:
         # Q2: terrain-guided quilting of the forest layer from vanilla (replaces the majority filter); P1 again on it
-        qd, suit, qinfo = quilt_forests(out, f, names, w, h, cut, log=log)
+        qd, suit, qinfo = quilt_forests(out, f, names, w, h, cut, NA, log=log)
         info.update(qinfo)
         m1q = qd & (rows >= NORTH_ROW) & np.isin(out, SUBTROP)
         for cl in np.unique(f["climate"][m1q]):

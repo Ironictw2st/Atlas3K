@@ -80,8 +80,9 @@ K = 256                         # descriptor prefilter (then the full overlap / 
 TOL = 0.08                      # random pick among candidates with cost <= best + TOL
 FEATHER = 1.5                   # hexes of domain next to fixed land that start as old (free for the cut)
 W_OV, W_G, W_D, W_RE = 1.0, 0.6, 0.35, 0.03
-WARP_FINE, WARP_COARSE = 4.0, 6.0                   # px, post-quilt domain warp (wavy seams)
-W_M = 1.5                       # land logic: mountain ground where vanilla has it for that slope band (x impassable)
+WARP_FINE, WARP_COARSE = 0.0, 6.0                   # px, post-quilt domain warp (wavy seams; a fine warp only roughens)
+WARP_CELL = 32                                      # px, coarse warp wavelength
+W_M = 1.2                       # land logic: mountain ground where vanilla has it for that slope band (x impassable)
 SLOPE_EDGES = (12.0, 33.0, 73.0, 130.0)             # vanilla north slope quantiles (u16 / px, 1-cell blur)
 FLAT_SLOPE = 30.0                                   # blend_polish's 5-hex flatness measure (metrics / H2 check)
 FLAT_MTN_MAX = 12.0                                 # % of flat passable hex centres with mountain ground, per group
@@ -213,7 +214,11 @@ def learn_priors(I, C, log=print):
             pc[ip, b] = float(cold[m].mean()) if m.sum() > 500 else float(cold[north & (C["sbin"] == b)].mean())
     pslope = np.array([float(cold[north & (C["sbin"] == b)].mean()) for b in range(5)], np.float32)
     play = np.isin(C["gcq"], (HEXI, NOMAD, KNE))
-    C["pcold"] = np.where(play & C["imp"], pc[1][C["sbin"]], np.where(play, pc[0][C["sbin"]], pslope[C["sbin"]])).astype(np.float32)
+    pcold = np.where(play & C["imp"], pc[1][C["sbin"]], np.where(play, pc[0][C["sbin"]], pslope[C["sbin"]])).astype(np.float32)
+    # where the pre-polish painting wanted mountain ground (Qilian, Yin shan, ...), keep it likelier - on SLOPES only
+    # (slope band >= 2; flat land never gets the boost: H2), smoothed over ~3 hexes so blob outlines do not carry over
+    ci = ndi.gaussian_filter(cold.astype(np.float32), 6.0)
+    C["pcold"] = np.where(C["sbin"] >= 2, np.maximum(pcold, 0.85 * ci), pcold).astype(np.float32)
     log("vanilla dryness prior by climate (arid, steppe, green):", {k: np.round(v, 2).tolist() for k, v in prior.items()},
         " grain by town distance bin:", np.round(gr, 3).tolist(), " mountain ground by slope band (passable / impassable; any):",
         np.round(pc, 2).tolist(), np.round(pslope, 2).tolist())
@@ -507,7 +512,7 @@ def noise_at(y, x, cell, seed):
 
 
 def warp_domain(canvas, I, dom_h, fixed_land, log=print):
-    """Light domain warp of the quilted px (+-WARP_FINE px at 12 px + +-WARP_COARSE at 40 px): the remaining straight
+    """Light domain warp of the quilted px (+-WARP_COARSE px at WARP_CELL px; WARP_FINE at 12 px, off): the remaining straight
     stretches of quilting seams become wavy. Tapered to 0 within ~1-2.5 hexes of the protected land (no new seam there);
     reads anywhere, writes domain px only. Shapes stay vanilla's (a warp, not a filter)."""
     H, W, w, h = I["H"], I["W"], I["w"], I["h"]
@@ -523,8 +528,8 @@ def warp_domain(canvas, I, dom_h, fixed_land, log=print):
         r, c = px_hex(yy, xx, H, w, h)
         tp *= dom_h[r, c]
         if not (tp > 0).any(): continue
-        dx = tp * (WARP_FINE * noise_at(yy, xx, 12, 401) + WARP_COARSE * noise_at(yy, xx, 40, 402))
-        dy = tp * (WARP_FINE * noise_at(yy, xx, 12, 403) + WARP_COARSE * noise_at(yy, xx, 40, 404))
+        dx = tp * (WARP_FINE * noise_at(yy, xx, 12, 401) + WARP_COARSE * noise_at(yy, xx, WARP_CELL, 402))
+        dy = tp * (WARP_FINE * noise_at(yy, xx, 12, 403) + WARP_COARSE * noise_at(yy, xx, WARP_CELL, 404))
         sy = np.clip(np.rint(yy + dy), 0, H - 1).astype(np.int64); sx = np.clip(np.rint(xx + dx), 0, W - 1).astype(np.int64)
         v = src[sy, sx]; o = canvas[y0:y1]
         wr = (tp > 0) & (v != o)

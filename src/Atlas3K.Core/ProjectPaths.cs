@@ -4,17 +4,15 @@ namespace Atlas3K.Core;
 public sealed record ProjectPaths
 {
     public string MapName { get; init; } = "3k_dlc07_main_map";
-    /// <summary>Folder holding the compiled terrain\ and campaign_maps\ trees (e.g. Z:\Claude\TerryClone\Vanilla\Map).</summary>
-    public string VanillaRoot { get; init; } = @"Z:\Claude\TerryClone\Vanilla\Map";
+    /// <summary>Folder holding the compiled terrain\ and campaign_maps\ trees (vanilla files extracted at first run).</summary>
+    public string VanillaRoot { get; init; } = Defaults.CompiledRoot;
     /// <summary>Assembly kit install. Override from the CLI with <c>--ak &lt;root&gt;</c>.</summary>
-    public string AssemblyKitRoot { get; init; } =
-        @"C:\Program Files (x86)\Steam\steamapps\common\Total War THREE KINGDOMS\assembly_kit";
-    public string GameDataDir { get; init; } =
-        @"C:\Program Files (x86)\Steam\steamapps\common\Total War THREE KINGDOMS\data";
-    /// <summary>Folder with RPFM-exported db TSVs (campaign_tree_ids_tables etc.).</summary>
-    public string DbTsvRoot { get; init; } = @"Z:\Claude\VariantMeshError\game_Db\db";
-    public string OutputRoot { get; init; } = @"Z:\Claude\TerryClone\output";
-    public string CacheRoot { get; init; } = @"Z:\Claude\TerryClone\cache";
+    public string AssemblyKitRoot { get; init; } = Defaults.AssemblyKit;
+    public string GameDataDir { get; init; } = Defaults.GameData;
+    /// <summary>Folder with db TSVs (campaign_tree_ids_tables etc.; extracted at first run, or an RPFM export).</summary>
+    public string DbTsvRoot { get; init; } = Defaults.DbTsv;
+    public string OutputRoot { get; init; } = Defaults.Output;
+    public string CacheRoot { get; init; } = Defaults.Cache;
     /// <summary>Mod packs (<c>--pack &lt;file.pack&gt;</c>, repeatable, highest priority first): searched before the
     /// vanilla packs for assets, and, for the map's compiled files (tile_list.bin, texture_arrays.xml), before the
     /// kit's working_data and the vanilla folder.</summary>
@@ -63,4 +61,23 @@ public sealed record ProjectPaths
         rest = list.ToArray();
         return paths;
     }
+}
+
+/// <summary>Default paths: <see cref="AppSettings"/> first, then the Steam install, then %LocalAppData%\Atlas3K.
+/// Read on access, so settings saved during the session (first-run setup) apply to new <see cref="ProjectPaths"/>.</summary>
+public static class Defaults
+{
+    private static readonly Lazy<string?> Detected = new(GameSetup.FindGameFolder);
+
+    public static string LocalData { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Atlas3K");
+    public static string GameFolder => Or(AppSettings.Current.GameFolder,
+        Detected.Value ?? @"C:\Program Files (x86)\Steam\steamapps\common\Total War THREE KINGDOMS");
+    public static string AssemblyKit => Or(AppSettings.Current.AssemblyKit, Path.Combine(GameFolder, "assembly_kit"));
+    public static string GameData => Path.Combine(GameFolder, "data");
+    public static string CompiledRoot => Or(AppSettings.Current.CompiledRoot, Path.Combine(LocalData, "vanilla"));
+    public static string DbTsv => Or(AppSettings.Current.DbTsvFolder, Path.Combine(LocalData, "db"));
+    public static string Output => Or(AppSettings.Current.OutputFolder, Path.Combine(LocalData, "output"));
+    public static string Cache => Or(AppSettings.Current.CacheFolder, Path.Combine(LocalData, "cache"));
+
+    private static string Or(string setting, string fallback) => string.IsNullOrWhiteSpace(setting) ? fallback : setting;
 }

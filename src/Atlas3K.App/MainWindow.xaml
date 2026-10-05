@@ -1,8 +1,8 @@
-<Window x:Class="Atlas3K.App.MainWindow"
+﻿<Window x:Class="Atlas3K.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Atlas3K.App"
-        Title="Atlas3K - 3K Campaign Map Editor" Height="900" Width="1500"
+        Title="Atlas3K" Height="900" Width="1500"
         Background="#1E1E1E" Foreground="#DDD">
     <Window.Resources>
         <Style TargetType="TextBlock"><Setter Property="Foreground" Value="#DDD"/></Style>
@@ -19,7 +19,7 @@
         <KeyBinding Key="Y" Modifiers="Ctrl" Command="{x:Static local:MainWindow.RedoCommand}"/>
     </Window.InputBindings>
     <DockPanel>
-        <Menu DockPanel.Dock="Top">
+        <Menu x:Name="MainMenu" DockPanel.Dock="Top">
             <MenuItem Header="_File">
                 <MenuItem Header="_Export to Assembly Kit..." Click="ExportAk_Click"/>
                 <MenuItem Header="Export _trees list..." Click="ExportTrees_Click"/>
@@ -43,7 +43,7 @@
                 <MenuItem Header="_Expand canvas (mirror CAIME resize)..." Click="Expand_Click"/>
                 <MenuItem Header="Show pending _DB changes..." Click="DbChanges_Click"/>
             </MenuItem>
-            <MenuItem Header="_Tools">
+            <MenuItem x:Name="LaunchBobItem" Header="_Tools">
                 <MenuItem Header="Launch _BOB" Click="LaunchBob_Click"/>
             </MenuItem>
         </Menu>

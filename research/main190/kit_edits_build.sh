@@ -18,6 +18,8 @@ LAKES=/z/Claude/TerryClone/output/lake_assets/$NEW/rigidmodels/campaign/props/la
 add() { for i in 1 2 3 4 5; do /z/RPFM/rpfm_cli.exe --game three_kingdoms pack add -p "$P" "$@" >/tmp/kb_add.log 2>&1 && { echo "  added ${2##*;}"; return 0; }; sleep 20; done; echo "  FAILED $2"; tail -3 /tmp/kb_add.log; exit 1; }
 KW="$(cygpath -w "$K/working_data")"; WC="$K/working_data/campaign_maps/$NEW"
 native() { echo "=== native $1 $(date +%T)"; "$CLI" build-campaign --ak "$AK" --map $NEW --accept-tilemap layout.mesh_columns --steps "$1" --out "$KW" > /tmp/native_build.log 2>&1 || { grep -v "^\[" /tmp/native_build.log | tail -30; exit 1; }; grep -v "^\[" /tmp/native_build.log; }
+# HOLD is shared with other sessions (BOB / game work): never run over someone else's, only remove our own
+[ -f /z/Claude/Headless/HOLD ] && { echo "HOLD present (another session) - abort"; exit 1; }
 touch /z/Claude/Headless/HOLD
 if [ "$1" = "--resume" ]; then
   # after a stop at global_map: restore its folder (texture_arrays.xml is copied from there) and redo that step only

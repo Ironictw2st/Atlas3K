@@ -62,7 +62,7 @@ public sealed class CampaignTileWindow : Window
     {
         _paths = paths;
         _tileMapPath = tileMapPath;
-        Title = $"Atlas3K - Campaign tile map ({paths.MapName})";
+        Title = AppInfo.Title($"Campaign tile map — {paths.MapName}");
         Width = 1500;
         Height = 950;
         Background = new SolidColorBrush(Color.FromRgb(30, 30, 30));
@@ -84,13 +84,13 @@ public sealed class CampaignTileWindow : Window
         var dock = new DockPanel();
         var menu = new Menu();
         var file = new MenuItem { Header = "_File" };
-        file.Items.Add(Item("_Save (Ctrl+S)", (_, _) => Save(false)));
+        file.Items.Add(Gesture(Item("_Save", (_, _) => Save(false)), "Ctrl+S"));
         file.Items.Add(Item("Save _anyway (ignore issues)", (_, _) => Save(true)));
         file.Items.Add(Item("_Reload from disk (drop unsaved edits)", async (_, _) => await LoadAsync()));
         file.Items.Add(new Separator());
         file.Items.Add(Item("_Close", (_, _) => Close()));
         var edit = new MenuItem { Header = "_Edit" };
-        edit.Items.Add(Item("_Undo unsaved stroke (Ctrl+Z)", (_, _) => UndoStroke()));
+        edit.Items.Add(Gesture(Item("_Undo unsaved stroke", (_, _) => UndoStroke()), "Ctrl+Z"));
         edit.Items.Add(Item("Undo last _saved batch", (_, _) => UndoSaved()));
         var view = new MenuItem { Header = "_View" };
         view.Items.Add(Item("_Fit to window", (_, _) => _view.FitToWindow()));
@@ -101,6 +101,8 @@ public sealed class CampaignTileWindow : Window
         menu.Items.Add(edit);
         menu.Items.Add(view);
         menu.Items.Add(check);
+        check.Visibility = AppSettings.Current.DeveloperMode ? Visibility.Visible : Visibility.Collapsed;
+        StandardMenus.AddTo(menu, this, _paths);
         DockPanel.SetDock(menu, Dock.Top);
         dock.Children.Add(menu);
 
@@ -130,7 +132,7 @@ public sealed class CampaignTileWindow : Window
         _issueList.MouseDoubleClick += (_, _) => { if (_issueList.SelectedItem is ListBoxItem { Tag: int[] h }) _view.CentreOn(h[0], h[1]); };
         panel.Children.Add(_issueList);
         panel.Children.Add(_allowWarnings);
-        var save = new Button { Content = "Save to tile__map.png", Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(4) };
+        var save = new Button { Content = "Save to tile_map.png", Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(4) };
         save.Click += (_, _) => Save(false);
         panel.Children.Add(save);
         panel.Children.Add(Header("Saved edits (shared with the terry MCP tools)"));
@@ -138,8 +140,8 @@ public sealed class CampaignTileWindow : Window
         panel.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Foreground = Brushes.Gray,
-            Text = "Right/middle drag pans, wheel zooms. Double-click an issue to go to it. After saving, run BOB Terrain / Tilemap, " +
-                   "then check holes (tiles-holes / check_tile_holes) and rebuild global_map + global_mesh.",
+            Text = "Right/middle drag pans, wheel zooms. Double-click an issue to go to it. After saving, build the map (Ctrl+B: " +
+                   "tile_list, then global_map + global_mesh) and check holes (tiles-holes / check_tile_holes).",
         });
         var scroll = new ScrollViewer { Width = 320, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Background = new SolidColorBrush(Color.FromRgb(37, 37, 38)), Content = panel };
         DockPanel.SetDock(scroll, Dock.Left);
@@ -149,6 +151,7 @@ public sealed class CampaignTileWindow : Window
     }
 
     private static MenuItem Item(string header, RoutedEventHandler click) { var m = new MenuItem { Header = header }; m.Click += click; return m; }
+    private static MenuItem Gesture(MenuItem m, string gesture) { m.InputGestureText = gesture; return m; }
 
     private static TextBlock Header(string text, double top = 10) => new()
     {
@@ -506,7 +509,7 @@ public sealed class CampaignTileWindow : Window
         RefreshOverlay();
         RefreshIssues();
         RefreshHistory();
-        _status.Text = $"Saved as edit #{result.Seq} ({result.Changed.Count} hexes). Run BOB Terrain / Tilemap to rebuild tile_list.bin.";
+        _status.Text = $"Saved as edit #{result.Seq} ({result.Changed.Count} hexes). Build tile_list (Ctrl+B) to rebuild tile_list.bin.";
     }
 
     /// <summary>The file changed on disk since it was loaded (an MCP edit, a builder): reload it and re-apply the

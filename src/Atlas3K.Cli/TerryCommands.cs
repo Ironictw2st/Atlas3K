@@ -289,7 +289,7 @@ static class TerryCommands
         var roots = Options(a, "--root");
         if (roots.Count == 0) roots.Add(Path.Combine(paths.AssemblyKitRoot, "raw_data"));
         var outPath = Option(a, "--out")
-                      ?? Path.GetFullPath(Path.Combine(@"Z:\Claude\TerryClone\src\Atlas3K.Formats\Terry\Data", "component_schema.json"));
+                      ?? Path.GetFullPath(Path.Combine("src", "Atlas3K.Formats", "Terry", "Data", "component_schema.json"));   // run from the repo root
 
         var config = EntityConfiguration.LoadFromKit(paths.AssemblyKitRoot);
         var files = roots.SelectMany(r => Directory.EnumerateFiles(r, "*.*", SearchOption.AllDirectories))

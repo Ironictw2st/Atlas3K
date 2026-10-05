@@ -37,7 +37,7 @@ public sealed class TileListStep : ICampaignBuildStep
         var db = TileMapValidator.LoadDatabase(ctx.Paths);
         var map = HexTileMap.Read(Path.Combine(dir, "tile_map.png"));
         ctx.Log("placing tiles...");
-        var sim = new TileMatchSimulator(db) { Log = ctx.Log }.Run(map, TileMapValidator.ClimateIndices(map, dir, db));
+        var sim = new TileMatchSimulator(db) { Log = ctx.Log, Cancel = ctx.Cancel }.Run(map, TileMapValidator.ClimateIndices(map, dir, db));
         var byLocation = db.Tiles.GroupBy(t => t.Variations[0].Location, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         var placed = sim.Tiles.Select(t => new PlacedTile(byLocation[t.Location], t.X, t.Y, t.Rotation, t.Climate, t.Layer));

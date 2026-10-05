@@ -54,7 +54,7 @@ public sealed class GlobalMeshStep : ICampaignBuildStep
         var per = builder.MeshesPerAxis;
         ctx.Log($"building {per}x{per} land and sea meshes...");
         var results = new ConcurrentDictionary<(MeshKind, int), GlobalMeshBuilder.MeshResult?>();
-        Parallel.For(0, per * per * 2, k =>
+        Parallel.For(0, per * per * 2, new ParallelOptions { CancellationToken = ctx.Cancel }, k =>
         {
             var kind = k < per * per ? MeshKind.Land : MeshKind.Sea;
             var index = k % (per * per);

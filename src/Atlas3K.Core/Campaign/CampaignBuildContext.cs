@@ -1,4 +1,4 @@
-namespace Atlas3K.Core.Campaign;
+﻿namespace Atlas3K.Core.Campaign;
 
 /// <summary>Where a native campaign build reads its sources and writes its loose output. The target root is laid out
 /// like working_data / a pack: <c>terrain\campaigns\&lt;map&gt;\…</c> and <c>campaign_maps\&lt;map&gt;\…</c>, so pointing it at
@@ -11,6 +11,8 @@ public sealed class CampaignBuildContext
     /// <summary>Tile-map pre-flight error codes the user accepts for this build (e.g. layout.mesh_columns); the
     /// tile_list step reports them as accepted instead of blocking.</summary>
     public IReadOnlySet<string> AcceptedTileMapIssues { get; init; } = new HashSet<string>();
+    /// <summary>Cancels the build; long steps check it between rows / meshes, the pipeline between steps.</summary>
+    public CancellationToken Cancel { get; init; }
 
     public CampaignBuildContext(ProjectPaths paths, string? targetRoot = null, Action<string>? log = null)
     {

@@ -96,6 +96,8 @@ public sealed class TileMatchSimulator
     public Action<string>? Log { get; init; }
     /// <summary>Run only the first n passes (large, transition, junction, link target, linked, all); diagnostics.</summary>
     public int MaxPasses { get; init; } = 6;
+    /// <summary>Checked once per scanned row.</summary>
+    public CancellationToken Cancel { get; init; }
     private readonly List<string> _messages = [];
 
     public TileMatchSimulator(CampaignTileDatabase db)
@@ -419,6 +421,7 @@ public sealed class TileMatchSimulator
             {
                 var t = list[i];
                 var last = i == list.Length - 1;
+                Cancel.ThrowIfCancellationRequested();
                 for (var y = 0; y < _h; y++)
                     for (var x = 0; x < _w; x++)
                     {
@@ -437,6 +440,8 @@ public sealed class TileMatchSimulator
             return placed;
         }
         for (var y = 0; y < _h; y++)
+        {
+            Cancel.ThrowIfCancellationRequested();
             for (var x = 0; x < _w; x++)
             {
                 var p = P(x, y);
@@ -452,6 +457,7 @@ public sealed class TileMatchSimulator
                     if (pass == 5) break;
                 }
             }
+        }
         return placed;
     }
 

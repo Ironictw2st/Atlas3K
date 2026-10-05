@@ -55,12 +55,12 @@ public partial class BattleWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = "Load failed: " + ex.Message;
-            MessageBox.Show(this, ex.ToString(), "Load failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            ErrorDialog.Show(this, "Load failed.", ex);
             return;
         }
         var p = _project;
         _renderer = new BattleRenderer(p);
-        Title = $"Atlas3K - Battle Map - {p.MapName}";
+        Title = AppInfo.Title($"Battle map (experimental) — {p.MapName}");
         Map.Load(p, _renderer);
         RefreshUsage();
         InitObjects(p);
@@ -260,7 +260,7 @@ public partial class BattleWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.ToString(), "Save failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            ErrorDialog.Show(this, "Save failed.", ex);
         }
     }
 

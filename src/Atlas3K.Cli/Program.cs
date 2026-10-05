@@ -77,12 +77,17 @@ switch (command)
         return TerryCommands.Run(paths, c, args.Skip(1).ToArray());
     case var c when TileCommands.Names.Contains(c):
         return TileCommands.Run(paths, c, args.Skip(1).ToArray());
+    case var c when BuildCommands.Names.Contains(c):
+        return BuildCommands.Run(paths, c, args.Skip(1).ToArray());
     default:
         Console.WriteLine("Commands: info | trees-roundtrip | find-textures | render [mapX mapY scale width height]");
         Console.WriteLine("          props-to-layers [targetDir|ak] [shiftX shiftZ]");
         Console.WriteLine("          compile-map [--out <dir>]      BOB-less compiled terrain (pack layout)");
         Console.WriteLine("          build-campaign [--steps a,b] [--out <dir>] [--accept-tilemap code,..] [--json]   native replacement for BOB's campaign actions");
         Console.WriteLine("          diagnose-campaign [--out <dir>] [--json]              per-step input check");
+        Console.WriteLine("          build --project <file.atlas3k> [--segments validate,compile,custom,pack,install] [--steps a,b] [--custom name,..]");
+        Console.WriteLine("                [--out <dir>] [--pack-output <file>] [--json]      a project's build (as the GUI's Build window)");
+        Console.WriteLine("          new-project <file.atlas3k>                          project with the default build profile (global --map / --ak)");
         Console.WriteLine("          parity <builtDir> <referenceDir> [--mask-junk] [--json]");
         Console.WriteLine("          validate-tilemap [--tilemap <png>] [--climate-dir <dir>] [--db <_tile_database>] [--simulate] [--overlay <png>] [--tilemap-only] [--json]");
         Console.WriteLine("                                         pre-flight check of tile_map.png before Tilemap (exit 1 on errors)");
@@ -337,21 +342,11 @@ static void BmdStats(ProjectPaths paths)
 static int MakePack(string[] a)
 {
     if (a.Length < 2) { Console.Error.WriteLine("make-pack <root folder> <out.pack> [--exclude substring]..."); return 2; }
-    var root = Path.GetFullPath(a[0]);
     var excludes = new List<string>();
     for (var i = 2; i + 1 < a.Length; i += 2) if (a[i] == "--exclude") excludes.Add(a[i + 1]);
-    var files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
-        .Select(f => (Rel: Path.GetRelativePath(root, f), Disk: f))
-        .Where(f => !excludes.Any(x => f.Rel.Contains(x, StringComparison.OrdinalIgnoreCase)))
-        .ToList();
-    PackWriter.Write(a[1], files.Select(f => (f.Rel, f.Disk)));
-    var check = PackFile.Open(a[1]);
-    long bytes = files.Sum(f => new FileInfo(f.Disk).Length);
-    var ok = files.All(f => check.Contains(f.Rel));
-    var sample = files.OrderBy(f => new FileInfo(f.Disk).Length).First();
-    var same = check.TryRead(sample.Rel)!.AsSpan().SequenceEqual(File.ReadAllBytes(sample.Disk));
-    Console.WriteLine($"{a[1]}: {files.Count} files, {bytes:N0} bytes; re-read: all present {ok}, content check {same}");
-    return ok && same ? 0 : 1;
+    var s = Atlas3K.Core.Build.PackBuilder.New(a[1], Atlas3K.Core.Build.PackBuilder.FromFolder(a[0], excludes));
+    Console.WriteLine($"{a[1]}: {s.Files} files, {s.Bytes:N0} bytes; re-read: all present {s.Verified}");
+    return s.Verified ? 0 : 1;
 }
 
 // A copy of <base.pack> with every file under <override root> replacing (or adding to) the base's. Base files inside
@@ -359,33 +354,15 @@ static int MakePack(string[] a)
 static int MergePack(string[] a)
 {
     if (a.Length < 3) { Console.Error.WriteLine("merge-pack <base.pack> <override root> <out.pack> [--exclude substring]... [--replace-dir pack/folder/]..."); return 2; }
-    var basePack = PackFile.Open(a[0]);
-    var root = Path.GetFullPath(a[1]);
     var excludes = new List<string>();
     var replaceDirs = new List<string>();
     for (var i = 3; i + 1 < a.Length; i += 2)
         if (a[i] == "--exclude") excludes.Add(a[i + 1]);
-        else if (a[i] == "--replace-dir") replaceDirs.Add(PackFile.Normalize(a[i + 1]));
-    var overrides = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
-        .Select(f => (Rel: Path.GetRelativePath(root, f), Disk: f))
-        .Where(f => !excludes.Any(x => f.Rel.Contains(x, StringComparison.OrdinalIgnoreCase)))
-        .ToDictionary(f => PackFile.Normalize(f.Rel), f => f);
-    var sources = new List<PackWriter.Source>();
-    int kept = 0, replaced = 0, dropped = 0;
-    foreach (var (key, entry) in basePack.Entries)
-    {
-        if (overrides.ContainsKey(key)) { replaced++; continue; }
-        if (replaceDirs.Any(d => key.StartsWith(d, StringComparison.Ordinal))) { dropped++; continue; }
-        sources.Add(PackWriter.FromPack(basePack, entry));
-        kept++;
-    }
-    foreach (var (_, f) in overrides) sources.Add(PackWriter.FromDisk(f.Rel, f.Disk));
-    PackWriter.Write(a[2], sources);
-    var check = PackFile.Open(a[2]);
-    var allPresent = sources.All(s => check.Contains(s.InternalPath));
-    Console.WriteLine($"{a[2]}: {sources.Count} files ({kept} kept from {Path.GetFileName(a[0])}, {replaced} replaced, " +
-                      $"{overrides.Count - replaced} added, {dropped} stale dropped); re-read: all present {allPresent}");
-    return allPresent ? 0 : 1;
+        else if (a[i] == "--replace-dir") replaceDirs.Add(a[i + 1]);
+    var s = Atlas3K.Core.Build.PackBuilder.Merge(a[0], a[2], Atlas3K.Core.Build.PackBuilder.FromFolder(a[1], excludes), replaceDirs);
+    Console.WriteLine($"{a[2]}: {s.Files} files ({s.Kept} kept from {Path.GetFileName(a[0])}, {s.Replaced} replaced, " +
+                      $"{s.Added} added, {s.Dropped} stale dropped); re-read: all present {s.Verified}");
+    return s.Verified ? 0 : 1;
 }
 
 static bool TakeFlag(ref string[] a, string name)

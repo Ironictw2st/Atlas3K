@@ -86,6 +86,7 @@ public sealed partial class SceneWindow : Window
             ("Frame _selection", () => { if (Is3D) _view3d.FrameSelection(); else _view.FrameSelection(); }, "F"),
             ("_Top view (2D)", () => _centre.SelectedIndex = 0, "Ctrl+1"),
             ("_3D view", () => _centre.SelectedIndex = 1, "Ctrl+2")));
+        StandardMenus.AddTo(menu, this, _paths);
         DockPanel.SetDock(menu, Dock.Top);
         dock.Children.Add(menu);
 
@@ -374,7 +375,7 @@ public sealed partial class SceneWindow : Window
             model.Changed += ModelChanged;
             model.ModelBoundsReady += () => Dispatcher.BeginInvoke(() => { _view.Refresh(); _view3d.Refresh(); Status($"Model footprints loaded ({model.ModelBounds.Count} models)."); });
             _ = model.LoadModelBoundsAsync();
-            Title = $"Atlas3K scene — {Path.GetFileName(model.TerryPath)} ({model.Project.Database} {model.Project.ProjectType})";
+            Title = AppInfo.Title($"Scene — {Path.GetFileName(model.TerryPath)} ({model.Project.Database} {model.Project.ProjectType})");
             _view.Attach(model);
             _view3d.Attach(model);
             _tree.Attach(model);

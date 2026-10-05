@@ -13,7 +13,8 @@ public sealed record BattlePaths
     /// <summary>raw_data\terrain\battles\tile_placement_groups.xml of the kit (the 20 mixed placement groups).</summary>
     public string? PlacementGroupsXml { get; init; }
     /// <summary>terrain\tiles\battle\_tile_database extracted from the game.</summary>
-    public string TileDatabaseDir { get; init; } = @"Z:\Claude\TerryClone\Vanilla\terrain\tiles\battle\_tile_database";
+    public string TileDatabaseDir { get; init; } =
+        Path.Combine(Path.GetDirectoryName(Defaults.CompiledRoot.TrimEnd('\\'))!, "terrain", "tiles", "battle", "_tile_database");
     /// <summary>Assembly kit root, when the project sits inside one (…\raw_data\terrain\battles\&lt;map&gt;).</summary>
     public string? AssemblyKitRoot { get; init; }
 

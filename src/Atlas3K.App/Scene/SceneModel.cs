@@ -131,7 +131,7 @@ public sealed class SceneModel
                          })
                     if (File.Exists(candidate)) { list = Atlas3K.Formats.Maps.TileList.Read(candidate); source = candidate; break; }
             if (list is null && Models.Source.TryRead(relative) is { } packed) { list = Atlas3K.Formats.Maps.TileList.Read(packed); source = Models.Source.Locate(relative); }
-            if (list is null) { TilesNote = "no tile_list.bin (build the map, or run BOB Tilemap)"; return; }
+            if (list is null) { TilesNote = "no tile_list.bin (build the map: Build > tile_list)"; return; }
 
             var db = Atlas3K.Core.Campaign.TileMapCheck.TileMapValidator.LoadDatabase(_paths);
             static string Key(string p) => p.Replace('\\', '/').Trim('/').ToLowerInvariant();

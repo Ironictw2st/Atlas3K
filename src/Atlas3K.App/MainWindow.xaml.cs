@@ -17,7 +17,7 @@ public partial class MainWindow : Window
     public static readonly RoutedCommand UndoCommand = new();
     public static readonly RoutedCommand RedoCommand = new();
 
-    private readonly ProjectPaths _paths = ProjectPaths.FromArgs(Environment.GetCommandLineArgs().Skip(1).ToArray(), out _);
+    private readonly ProjectPaths _paths;
     private TerrainData? _terrain;
     private TerrainRenderer? _renderer;
     private CampaignTreeList? _trees;
@@ -31,9 +31,15 @@ public partial class MainWindow : Window
     private readonly TreeEditLog _treeLog = new();
     private TreeBrush? _treeBrush;
 
-    public MainWindow()
+    public MainWindow() : this(ProjectPaths.FromArgs(Environment.GetCommandLineArgs().Skip(1).ToArray(), out _)) { }
+
+    public MainWindow(ProjectPaths paths)
     {
+        _paths = paths;
         InitializeComponent();
+        Title = AppInfo.Title($"Terrain painter — {paths.MapName}");
+        StandardMenus.AddTo(MainMenu, this, paths);
+        LaunchBobItem.Visibility = AppSettings.Current.DeveloperMode ? Visibility.Visible : Visibility.Collapsed;
         CommandBindings.Add(new CommandBinding(UndoCommand, (_, _) => Map.Undo.Undo(), (_, e) => e.CanExecute = Map.Undo.CanUndo));
         CommandBindings.Add(new CommandBinding(RedoCommand, (_, _) => Map.Undo.Redo(), (_, e) => e.CanExecute = Map.Undo.CanRedo));
         Map.HoverChanged += UpdateStatus;
@@ -59,7 +65,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = "Load failed: " + ex.Message;
-            MessageBox.Show(this, ex.ToString(), "Load failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            ErrorDialog.Show(this, $"Could not load the map {_paths.MapName} from {_paths.VanillaRoot}.", ex);
             return;
         }
 
@@ -92,7 +98,10 @@ public partial class MainWindow : Window
             row.Children.Add(new TextBlock { Text = $"{group.Index,2}  {group.Name}" });
             TextureList.Items.Add(row);
         }
-        TextureList.SelectedIndex = 27; // temperate_1
+        // the last used texture, else temperate_1
+        TextureList.SelectedIndex = int.TryParse(AppSettings.Current.Values.GetValueOrDefault("painter.texture"), out var t) && t < TextureList.Items.Count ? t
+            : Math.Min(27, TextureList.Items.Count - 1);
+        TextureList.SelectionChanged += (_, _) => AppSettings.Current.Values["painter.texture"] = TextureList.SelectedIndex.ToString();
     }
 
     private void PopulateSpecies()
@@ -104,7 +113,9 @@ public partial class MainWindow : Window
             .OrderBy(n => n)
             .ToList();
         SpeciesCombo.ItemsSource = names;
-        SpeciesCombo.SelectedItem = names.FirstOrDefault(n => n == "temperate_tree_katsura_medium_1") ?? names.FirstOrDefault();
+        var last = AppSettings.Current.Values.GetValueOrDefault("painter.species");
+        SpeciesCombo.SelectedItem = names.FirstOrDefault(n => n == last) ?? names.FirstOrDefault(n => n == "temperate_tree_katsura_medium_1") ?? names.FirstOrDefault();
+        SpeciesCombo.SelectionChanged += (_, _) => { if (SpeciesCombo.SelectedItem is string sp) AppSettings.Current.Values["painter.species"] = sp; };
     }
 
     private void PopulateTreeList()
@@ -308,13 +319,13 @@ public partial class MainWindow : Window
                 (result.BackupDir != null ? $"\n\nBackup of previous files:\n{result.BackupDir}" : "") +
                 (result.Notes.Count > 0 ? "\n\n" + string.Join("\n", result.Notes) : "") +
                 dbNote +
-                "\n\nRun BOB (terrain) to rebuild the compiled map.",
+                "\n\nBuild the map (Build > Open Build window, Ctrl+B) to compile it.",
                 "Export complete", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
             StatusText.Text = "Export failed: " + ex.Message;
-            MessageBox.Show(this, ex.ToString(), "Export failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            ErrorDialog.Show(this, "Export failed.", ex);
         }
         finally
         {
@@ -375,7 +386,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.ToString(), "Tree export failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            ErrorDialog.Show(this, "Tree export failed.", ex);
         }
     }
 
