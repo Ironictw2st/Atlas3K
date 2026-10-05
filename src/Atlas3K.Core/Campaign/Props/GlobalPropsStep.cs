@@ -49,6 +49,7 @@ public sealed class GlobalPropsStep : ICampaignBuildStep
         {
             Prefabs = PrefabLibrary.ForKit(ctx.Paths.AssemblyKitRoot, "campaign"),
             QuadRoot = lookup?.QuadRoot,
+            Debug = Environment.GetEnvironmentVariable("ATLAS3K_GP_TRACE") is { Length: > 0 } trace ? TraceTo(trace) : null,
         };
         if (lookup is null) notes.Add($"region by layer name only ({why})");
         else notes.Add("regions from map.hex at each object's position (as BOB)");
@@ -92,4 +93,10 @@ public sealed class GlobalPropsStep : ICampaignBuildStep
             .Select(e => ((string?)e.Attribute("name") ?? "", (string)e.Attribute("id")!))
             .Where(l => l.Item1.Length > 0)
             .ToList();
+
+    private static Action<string> TraceTo(string path)
+    {
+        var w = new StreamWriter(path) { AutoFlush = true };
+        return w.WriteLine;
+    }
 }

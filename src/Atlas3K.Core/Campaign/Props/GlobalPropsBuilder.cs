@@ -32,6 +32,8 @@ public sealed class GlobalPropsBuilder
     {
         /// <summary>The entity's id (hex u64): BOB writes each body's records in ascending id order.</summary>
         public ulong Id { get; init; }
+
+        public string Tags { get; init; } = "";
     }
 
     private readonly Templates _t;
@@ -46,6 +48,9 @@ public sealed class GlobalPropsBuilder
     /// <summary>Rectangle the bmd quadtree covers (minX, minZ, maxX, maxZ); BOB uses the map bounds' x range and the hex
     /// grid's z extent (<see cref="HexRegionLookup.QuadRoot"/>). Null = (0, 0, world width, world height).</summary>
     public (float X0, float Z0, float X1, float Z1)? QuadRoot { get; init; }
+
+    /// <summary>Optional trace: one line per object written (entry, kind, entity id, season mask).</summary>
+    public Action<string>? Debug { get; init; }
 
     public GlobalPropsBuilder(PackSet packs, double worldWidth, double worldHeight)
     {
@@ -90,8 +95,12 @@ public sealed class GlobalPropsBuilder
                 {
                     var body = BmdBody.Dynamic(_t.Framing);
                     // BOB iterates the scene's entities by ascending id (every main190 body checked 2026-10-04)
-                    foreach (var o in bucket.OrderBy(o => o.Id)) Add(body, o);
                     var name = $"{prefix}.{region}.{cell.Key}.{bucket.Key}.bin";
+                    foreach (var o in bucket.OrderBy(o => KindRank(o.Kind)).ThenBy(o => o.Id))
+                    {
+                        Add(body, o);
+                        Debug?.Invoke($"{name},{o.Kind},{o.Id:x15},\"{o.SeasonMask}\",\"{o.Tags}\"");
+                    }
                     entries.Add((name, body.ToBytes()));
                     cellBody.Nested.Add(BmdRecords.Nested(_t.Nested, name, 0, region));   // vanilla and BOB: 0 for every bucket
                 }
@@ -103,6 +112,10 @@ public sealed class GlobalPropsBuilder
         entries.Add(($"{prefix}.bin", root.ToBytes()));
         return entries;
     }
+
+    /// <summary>Order in which BOB registers a body's enum tags and season codes (preamble order) by object kind.</summary>
+    private static int KindRank(string kind) => Environment.GetEnvironmentVariable("ATLAS3K_GP_RANK") is { Length: > 0 } r
+        ? r.Split(',').ToList().IndexOf(kind) : kind switch { "scene" => 0, "light" => 1, "prop" => 2, "vfx" => 3, _ => 4 };
 
     private void Add(BmdBody body, Obj o)
     {
@@ -274,7 +287,7 @@ public sealed class GlobalPropsBuilder
             var before = objects.Count;
             ReadEntity(e, tags);
             var id = ulong.TryParse((string?)e.Attribute("id"), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var v) ? v : 0;
-            for (var i = before; i < objects.Count; i++) objects[i] = objects[i] with { Id = id };
+            for (var i = before; i < objects.Count; i++) objects[i] = objects[i] with { Id = id, Tags = tags };
         }
         return objects;
 
@@ -342,12 +355,12 @@ public sealed class GlobalPropsBuilder
                 // column norms with rows in BOB's order 1, 0, 2 (row-major world matrix)
                 var avg = (MathF.Sqrt(M(3) * M(3) + M(0) * M(0) + M(6) * M(6)) + MathF.Sqrt(M(4) * M(4) + M(1) * M(1) + M(7) * M(7))
                            + MathF.Sqrt(M(5) * M(5) + M(2) * M(2) + M(8) * M(8))) * 0.33333334f;
-                var lr = A("radius", 1) * avg * 0.5f;
+                var lr = A("radius", 1) * avg * 0.5f;                  // the record's radius is radius x avg too (as BOB)
                 float lx = (float)tr.Position.X, lz = (float)tr.Position.Z;
                 objects.Add(new Obj("light", tr.Position.X, tr.Position.Z, 0, seasons, b =>
                 {
                     var (f, m) = b.EncodeTags(tags);
-                    return BmdRecords.PointLight(_t.Light, tr.Position, A("radius", 1), (c[0] * (1f / 255f), c[1] * (1f / 255f), c[2] * (1f / 255f)),
+                    return BmdRecords.PointLight(_t.Light, tr.Position, A("radius", 1) * avg, (c[0] * (1f / 255f), c[1] * (1f / 255f), c[2] * (1f / 255f)),
                         A("colour_scale", 1), anim, speed.ElementAtOrDefault(0), speed.ElementAtOrDefault(1), A("colour_min", 0),
                         A("random_offset", 0), falloff, probesOnly, f, m, b.EncodeSeasons(seasons));
                 }, null) { Box = [lx - lr, lz - lr, lx + lr, lz + lr] });
