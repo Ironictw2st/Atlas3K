@@ -14,6 +14,10 @@ public sealed record TileInfo(string Name, string Category, string Mask, int Wid
         if (Mask.Length == 0) return true;
         return Mask.Length == Width * Height && Mask[row * Width + col] == '1';
     }
+
+    /// <summary>TILE_DATABASE_TILE::use_alt_lf, the record's last field (v5+): the tile sits on the alternative (sea)
+    /// lf map and feeds the sea global meshes (vanilla: the generic_sea and sea tile sets).</summary>
+    public bool UseAltLf { get; init; }
 }
 
 /// <summary>
@@ -47,7 +51,8 @@ public static class TileDatabase
             var n = BinaryPrimitives.ReadUInt16LittleEndian(b[(i - 2)..]);
             path = Encoding.ASCII.GetString(b.Slice(i, n));
         }
-        return new TileInfo(name, category, mask, width, height, path);
+        var version = BinaryPrimitives.ReadUInt16LittleEndian(b[8..]);
+        return new TileInfo(name, category, mask, width, height, path) { UseAltLf = version > 4 && b[^1] != 0 };
     }
 
     /// <summary>Tiles keyed by normalised folder path (lower case, backslashes, trailing backslash).</summary>

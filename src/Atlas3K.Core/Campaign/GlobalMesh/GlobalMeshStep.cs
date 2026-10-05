@@ -48,8 +48,24 @@ public sealed class GlobalMeshStep : ICampaignBuildStep
         if (land.Raster.Width != tilesW * 4 || land.Raster.Height != tilesH * 4)
             notes.Add($"lf {land.Raster.Width}x{land.Raster.Height} is not 4x the tile list's {tilesW}x{tilesH}");
         float worldW = tilesW * TileSize, worldH = tilesH * TileSize;
+        BobGlobalHeight? bob = null;
+        if (Environment.GetEnvironmentVariable("ATLAS3K_GMESH_BOB_HEIGHT") == "1")
+        {
+            // BOB reads the campaign tiles from the assembly kit's working_data (it can differ from the packs)
+            byte[]? Read(string k)
+            {
+                var loose = Path.Combine(ctx.Paths.AkWorkingDir, k.Replace('\\', '/'));
+                return File.Exists(loose) ? File.ReadAllBytes(loose) : packs.TryRead(PackFile.Normalize(k));
+            }
+            var tileDbDir = Path.Combine(ctx.Paths.AkWorkingDir, "terrain", "tiles", "campaign", "_tile_database", "tiles");
+            var bobDb = Directory.Exists(tileDbDir) ? TileDatabase.Load(Directory.EnumerateFiles(tileDbDir, "*.bin").Select(File.ReadAllBytes)) : db;
+            var settings = Read("terrain/tiles/campaign/_tile_database/_settings.bin");
+            var excluded = settings is null ? new HashSet<string>() : BobGlobalHeight.ExcludedTileSets(settings);
+            notes.Add($"BOB height query ({(bobDb == db ? "pack" : "working_data")} tiles); tile sets excluded from the global mesh: {string.Join(", ", excluded.Order())}");
+            bob = new BobGlobalHeight(tiles, bobDb, excluded, Read, land, sea, TileSize);
+        }
         var builder = new GlobalMeshBuilder(coverage, new LfSampler(land, worldW, worldH, TileSize),
-            new LfSampler(sea, worldW, worldH, TileSize), tilesW, tilesH, TileSize);
+            new LfSampler(sea, worldW, worldH, TileSize), tilesW, tilesH, TileSize, bob);
 
         var per = builder.MeshesPerAxis;
         ctx.Log($"building {per}x{per} land and sea meshes...");

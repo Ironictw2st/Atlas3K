@@ -27,11 +27,23 @@ public sealed class GlobalMeshBuilder
     private readonly LfSampler _land, _sea;
     private readonly int _cells, _gridTotal, _meshesPerAxis;
     private readonly double _extent;
+    private readonly BobGlobalHeight? _bob;
+    /// <summary>BOB's grid step (FUN_18016b2f0): (max tiles · T′) / (2 · max tiles) in float32, T′ = the terrain's tile size.</summary>
+    private readonly float _bobCell;
+    private readonly int _tilesWForPos, _tilesHForPos;
+    private readonly float _bobProbe;
+    private static int _gridTotalOf(int tilesW, int tilesH) => 2 * Math.Max(tilesW, tilesH);
 
     public int MeshesPerAxis => _meshesPerAxis;
 
-    public GlobalMeshBuilder(TileCoverage coverage, LfSampler land, LfSampler sea, int tilesW, int tilesH, float tileSize)
+    public GlobalMeshBuilder(TileCoverage coverage, LfSampler land, LfSampler sea, int tilesW, int tilesH, float tileSize,
+        BobGlobalHeight? bob = null)
     {
+        _bob = bob;
+        (_tilesWForPos, _tilesHForPos) = (tilesW, tilesH);
+        if (bob is not null) _bobCell = Math.Max(tilesW, tilesH) * bob.TileSize / _gridTotalOf(tilesW, tilesH);
+        // DAT_1806b2c04: the neighbour probe offset (research: env override until read from BOB)
+        _bobProbe = float.TryParse(Environment.GetEnvironmentVariable("ATLAS3K_GMESH_PROBE"), System.Globalization.CultureInfo.InvariantCulture, out var pr) ? pr : _bobCell;
         _coverage = coverage;
         _land = land;
         _sea = sea;
@@ -42,7 +54,12 @@ public sealed class GlobalMeshBuilder
         _extent = (float)(maxTiles * tileSize);
     }
 
-    private float Coord(int index) => (float)(index * _extent / _gridTotal);
+    /// <summary>Vertex position on the grid: BOB writes I · ext / (2 · max tiles) computed in double (bit-exact on its
+    /// files), while its height queries use the float step <see cref="Coord"/>.</summary>
+    private float Position(int index) => _bob is not null && (BobGlobalHeight.Variant & 256) == 0
+        ? (float)(index * (double)(Math.Max(_tilesWForPos, _tilesHForPos) * _bob.TileSize) / _gridTotal) : Coord(index);
+
+    private float Coord(int index) => _bob is not null ? index * _bobCell : (float)(index * _extent / _gridTotal);
 
     public MeshResult? Build(int row, int col, MeshKind kind)
     {
@@ -58,10 +75,18 @@ public sealed class GlobalMeshBuilder
         // validity of every grid point of this mesh plus a one-cell border, queried once
         var m = n + 2;
         var validGrid = new bool[m * m];
+        var bobHeight = _bob is null ? null : new float[m * m];
         for (var j = -1; j <= n; j++)
             for (var i = -1; i <= n; i++)
             {
                 int gi = i0 + i, gj = j0 + j;
+                if (_bob is not null)
+                {
+                    var h = _bob.Height(Coord(gi), Coord(gj), kind == MeshKind.Sea);
+                    bobHeight![(j + 1) * m + i + 1] = h;
+                    validGrid[(j + 1) * m + i + 1] = h != Hole;
+                    continue;
+                }
                 validGrid[(j + 1) * m + i + 1] = gi >= 0 && gj >= 0 && gi <= _gridTotal && gj <= _gridTotal
                                                  && _coverage.Covered(Coord(gi), Coord(gj), kind);
             }
@@ -71,25 +96,55 @@ public sealed class GlobalMeshBuilder
             return li >= 0 && lj >= 0 && li < m && lj < m && validGrid[lj * m + li];
         }
 
+        // research: BOB's own grid for this mesh (export_bob_grids.py) replaces heights and interior validity
+        float[]? bobGrid = null;
+        if (Environment.GetEnvironmentVariable("ATLAS3K_GMESH_BOB_GRIDS") is { Length: > 0 } gridDir
+            && File.Exists(Path.Combine(gridDir, $"{kind}_{row}_{col}.bob.bin")))
+        {
+            var raw = File.ReadAllBytes(Path.Combine(gridDir, $"{kind}_{row}_{col}.bob.bin"));
+            bobGrid = new float[raw.Length / 4];
+            Buffer.BlockCopy(raw, 0, bobGrid, 0, raw.Length);
+            for (var j = 0; j < n; j++)
+                for (var i = 0; i < n; i++)
+                {
+                    validGrid[(j + 1) * m + i + 1] = bobGrid[j * n + i] != Hole;
+                    if (bobHeight is not null) bobHeight[(j + 1) * m + i + 1] = bobGrid[j * n + i];
+                }
+        }
+
         var any = false;
         for (var j = 0; j < n; j++)
         for (var i = 0; i < n; i++)
         {
             var k = j * n + i;
             int gi = i0 + i, gj = j0 + j;
-            x[k] = Coord(gi);
-            z[k] = Coord(gj);
+            x[k] = Position(gi);
+            z[k] = Position(gj);
             flags[k] = 2;
             if (!Valid(gi, gj)) { y[k] = Hole; continue; }
             any = true;
-            y[k] = sampler.Height(x[k], z[k]);
+            y[k] = bobGrid is not null ? bobGrid[k] : bobHeight is not null ? bobHeight[(j + 1) * m + i + 1] : sampler.Height(x[k], z[k]);
             byte f = 2;
-            for (var dj = -1; dj <= 1 && f == 2; dj++)
-                for (var di = -1; di <= 1; di++)
-                    if ((di != 0 || dj != 0) && !Valid(gi + di, gj + dj)) { f = 0; break; }
+            // BOB (FUN_18016b2f0 / FUN_1801471b0) probes the 8 points at ±d around the vertex's query position
+            var qx = Coord(gi);
+            var qz = Coord(gj);
+            var sea = kind == MeshKind.Sea;
+            bool Probe(float px, float pz) => _bob!.Height(px, pz, sea) != Hole;
+            if (_bob is not null && (BobGlobalHeight.Variant & 512) == 0)
+            {
+                var d = _bobProbe;
+                if (!(Probe(qx - d, qz) && Probe(qx, qz - d) && Probe(d + qx, qz) && Probe(qx, d + qz) && Probe(qx - d, qz - d)
+                      && Probe(d + qx, qz - d) && Probe(qx - d, d + qz) && Probe(d + qx, d + qz))) f = 0;
+            }
+            else
+                for (var dj = -1; dj <= 1 && f == 2; dj++)
+                    for (var di = -1; di <= 1; di++)
+                        if ((di != 0 || dj != 0) && !Valid(gi + di, gj + dj)) { f = 0; break; }
             if (i == 0 || j == 0 || i == n - 1 || j == n - 1)
             {
-                var count = (Valid(gi, gj - 1) ? 1 : 0) + (Valid(gi, gj + 1) ? 1 : 0) + (Valid(gi - 1, gj) ? 1 : 0) + (Valid(gi + 1, gj) ? 1 : 0);
+                var count = _bob is not null && (BobGlobalHeight.Variant & 512) == 0
+                    ? (Probe(qx, qz - _bobProbe) ? 1 : 0) + (Probe(qx, _bobProbe + qz) ? 1 : 0) + (Probe(qx - _bobProbe, qz) ? 1 : 0) + (Probe(_bobProbe + qx, qz) ? 1 : 0)
+                    : (Valid(gi, gj - 1) ? 1 : 0) + (Valid(gi, gj + 1) ? 1 : 0) + (Valid(gi - 1, gj) ? 1 : 0) + (Valid(gi + 1, gj) ? 1 : 0);
                 f = 0;
                 if (count == 3)
                 {
@@ -102,6 +157,14 @@ public sealed class GlobalMeshBuilder
             flags[k] = f;
         }
         if (!any) return null;
+        if (Environment.GetEnvironmentVariable("ATLAS3K_GMESH_DUMP") is { Length: > 0 } dump)   // research: grids vs BOB's
+        {
+            Directory.CreateDirectory(dump);
+            var bytes = new byte[n * n * 4];
+            Buffer.BlockCopy(y, 0, bytes, 0, bytes.Length);
+            File.WriteAllBytes(Path.Combine(dump, $"{kind}_{row}_{col}.y.bin"), bytes);
+            File.WriteAllBytes(Path.Combine(dump, $"{kind}_{row}_{col}.flags.bin"), flags);
+        }
 
         var normals = SobelNormals(y, n);
         var triangles = new List<int[]>();
@@ -116,7 +179,22 @@ public sealed class GlobalMeshBuilder
         if (triangles.Count == 0) return null;
         var inputTriangles = triangles.Count;
 
-        var merged = new TriangleMerger(x, y, z, normals, flags).Run(triangles, MergeFactor);
+        var merged = new TriangleMerger(x, y, z, normals, flags)
+        {
+            Trace = Environment.GetEnvironmentVariable("ATLAS3K_GMESH_TRACE") is { } tr && tr.Split(',').Contains($"{kind}_{row}_{col}")
+                    && Environment.GetEnvironmentVariable("ATLAS3K_GMESH_DUMP") is { Length: > 0 } td
+                ? TraceWriter(Path.Combine(td, $"{kind}_{row}_{col}.trace.txt")) : null,
+        }.Run(triangles, float.TryParse(Environment.GetEnvironmentVariable("ATLAS3K_GMESH_FACTOR"), System.Globalization.CultureInfo.InvariantCulture, out var fac) ? fac : MergeFactor);
+        if (Environment.GetEnvironmentVariable("ATLAS3K_GMESH_DUMP") is { Length: > 0 } dumpDir)
+        {
+            var flat = merged.SelectMany(t => t).Select(v => (uint)v).ToArray();
+            var bytes = new byte[flat.Length * 4];
+            Buffer.BlockCopy(flat, 0, bytes, 0, bytes.Length);
+            File.WriteAllBytes(Path.Combine(dumpDir, $"{kind}_{row}_{col}.merged.bin"), bytes);
+            var nb = new byte[normals.Length * 4];
+            Buffer.BlockCopy(normals, 0, nb, 0, nb.Length);
+            File.WriteAllBytes(Path.Combine(dumpDir, $"{kind}_{row}_{col}.normals.bin"), nb);
+        }
         foreach (var t in merged) (t[0], t[1]) = (t[1], t[0]);
 
         // first-use renumbering
@@ -150,6 +228,12 @@ public sealed class GlobalMeshBuilder
         return new MeshResult(row, col, model, heights, header, inputTriangles);
     }
 
+    private static Action<string> TraceWriter(string path)
+    {
+        File.WriteAllText(path, "");
+        return line => File.AppendAllText(path, line + "\n");
+    }
+
     private static float[] SobelNormals(float[] h, int n)
     {
         int[] k = [1, 0, -1, 2, 0, -2, 1, 0, -1];
@@ -164,7 +248,8 @@ public sealed class GlobalMeshBuilder
                     {
                         var w = k[r * 3 + c];
                         gx += h[Math.Clamp(j + r - 1, 0, n - 1) * n + Math.Clamp(i + c - 1, 0, n - 1)] * w;
-                        gy += h[Math.Clamp(j + c - 1, 0, n - 1) * n + Math.Clamp(i + r - 1, 0, n - 1)] * w;
+                        // FUN_180134370: same row-by-row traversal as gx, transposed kernel
+                        gy += h[Math.Clamp(j + r - 1, 0, n - 1) * n + Math.Clamp(i + c - 1, 0, n - 1)] * k[c * 3 + r];
                     }
                 gx /= 8f;
                 gy /= 8f;

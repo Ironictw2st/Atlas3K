@@ -30,6 +30,9 @@ counts = {}
 def on_msg(msg, data):
     if msg["type"] == "send":
         p = msg["payload"]; counts[p["kind"]] = counts.get(p["kind"], 0) + 1
+        if data is not None:                      # binary payloads -> frida_out/<label>_bin/<seq>.bin
+            d = OUT / f"{LABEL}_bin"; d.mkdir(exist_ok=True)
+            f = d / f"{sum(counts.values()):06d}_{p['kind']}.bin"; f.write_bytes(data); p = {**p, "file": f.name}
         log.write(json.dumps(p) + "\n"); log.flush()
         if p["kind"] not in ("hs",): print(time.strftime("%T"), {k: (v if not isinstance(v, list) else len(v)) for k, v in p.items()}, flush=True)
     else: print("frida:", msg, flush=True)

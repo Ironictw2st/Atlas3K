@@ -13,6 +13,9 @@ public sealed class TriangleMerger
     private readonly float[] _n; // 3 per vertex
     private readonly byte[] _flags;
 
+    /// <summary>Research: per-pass / per-vertex trace lines in the format of research/bob_re/frida_gmerge_trace.js.</summary>
+    public Action<string>? Trace { get; init; }
+
     public TriangleMerger(float[] x, float[] y, float[] z, float[] normals, byte[] flags)
     {
         _x = x; _y = y; _z = z; _n = normals; _flags = flags;
@@ -20,7 +23,8 @@ public sealed class TriangleMerger
 
     public List<int[]> Run(List<int[]> triangles, float factor, float span = 64f, float heightTolerance = float.MaxValue)
     {
-        var passes = Math.Min((int)(span * (1f / 6f)), 50);
+        // FUN_18009b4d0 is max: 50 passes of 64/50 = 1.28 (BOB trace, main190)
+        var passes = Math.Max((int)(span * (1f / 6f)), 50);
         var step = span / passes;
         var current = triangles.Select(t => (int[])t.Clone()).ToList();
         int stall = 0, k = 0, multiplier = 1;
@@ -30,6 +34,7 @@ public sealed class TriangleMerger
             var limit = multiplier * step;
             var limit2 = limit * limit;
             var tri = current;
+            Trace?.Invoke($"pass limit {limit.ToString("R", System.Globalization.CultureInfo.InvariantCulture)} tris {tri.Count * 3}");
             var adj = new List<int>[nv];
             for (var t = 0; t < tri.Count; t++)
                 foreach (var c in tri[t]) (adj[c] ??= []).Add(t);
@@ -37,7 +42,9 @@ public sealed class TriangleMerger
             for (var v = 0; v < nv; v++)
             {
                 if (_flags[v] < 2 || adj[v] is null) continue;
-                if (!Removable(v, tri, adj[v], factor, heightTolerance)) continue;
+                var removable = Removable(v, tri, adj[v], factor, heightTolerance);
+                Trace?.Invoke($"rem v {v} {(removable ? 1 : 0)}");
+                if (!removable) continue;
                 var target = Target(v, tri, adj, limit2);
                 if (target < 0) continue;
                 (adj[target] ??= []).AddRange(adj[v]);
@@ -95,8 +102,14 @@ public sealed class TriangleMerger
             foreach (var w in t)
                 if (w != v && CanCollapse(v, w, tri, adj, limit2)) candidates.Add(w);
         }
-        if (candidates.Count == 0) return -1;
         float vx = _x[v], vz = _z[v];
+        if (Trace is not null)
+        {
+            // stable insertion sort by squared x/z distance, as BOB's (n <= 32)
+            var sorted = candidates.OrderBy(w => Dist2(w, vx, vz)).ToList();
+            Trace($"cand v {v} ok {(candidates.Count > 0 ? 1 : 0)} target {(sorted.Count > 0 ? sorted[0] : 0)} n {candidates.Count} [{string.Join(",", sorted)}]");
+        }
+        if (candidates.Count == 0) return -1;
         // stable ordering by squared x/z distance (MSVC insertion sort for small lists)
         var best = candidates[0];
         var bestD = Dist2(best, vx, vz);
