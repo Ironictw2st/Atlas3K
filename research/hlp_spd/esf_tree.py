@@ -55,6 +55,12 @@ def node(b, p, names, root=False):
     if t >= 0x40:
         n, q = cauleb(b, p+1)
         return ("ARR", t, b[q:q+n]), q + n
+    if t == 0x26:  # Three Kingdoms 'very weird type' (RPFM esf/utils.rs UNKNOWN_26)
+        first = b[p + 1]
+        n = first if first % 8 == 0 and first != 0 else 7
+        q = p + 2 + n
+        if q < len(b) and b[q] == 0x9C: q += 1
+        return ("VAL", t, b[p + 1:q]), q
     q = p + 1 + SZ[t]
     raw = b[p+1:q]
     if t == 0x18 or t == 0x1c: v = int.from_bytes(raw, "big")

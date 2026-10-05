@@ -136,4 +136,18 @@ In the game, these files come out of a startpos build that takes many minutes.
   - All of these need the game's campaign state.
 - **Knock-on effects.** A differing transition shifts the `idx` values in that area only.
 
+**The start position does not explain the gaps** (checked 2026-10-05). Tools: `research/hlp_spd/startpos_unpack.py` unpacks the LZMA payload of a CAAB startpos, and `esf_tree.py` now reads the Three Kingdoms 0x26 value type with RPFM's rule. I read:
+
+- 190E: `campaigns/3k_main_campaign_map/startpos_historical.esf` from the main190 pack. It is the campaign of `3k_190e_expanded_map` in campaign_map_playable_areas, and was built 42 s after CA's spd_data.
+- Vanilla: 8p_start_pos and 3k_dlc07_start_pos from data.pack.
+
+What they show:
+
+- **CAMPAIGN_PATHFINDER.** This record holds only a 3-byte state per ppd road (723 roads on 190E, 467 on vanilla). Every entry is `00 ff 00`, so there are no per-road differences. Roads 485/502/530 are like all the others.
+- **Settlement slot areas.** All 339 settlements' slot areas (`SETTLEMENT_EXPANSION_MAP_DATA` / `SLOT_ZOE_ARRAY`, primary and port) equal the map_data slot blocks exactly. `ironic_hexi_dunhuang_resource_1` included: settlement (133,945) with its 7 slot hexes.
+- **Settlement records.** Its SETTLEMENT, REGION_SLOT, SPRAWL_BLOCK and GARRISON_RESIDENCE records match those of a normal region (`ironic_central_pei_resource_1`). There is nothing marking it absent, abandoned (FACTION_SETTLEMENT_ABANDON_MANAGER lists are empty) or razed.
+- **Characters.** No character (LOCOMOTABLE world position → hex) stands within 25 hexes of the dunhuang slot area or roads 502/530. On 8p, none stands within 8 hexes of (358,120); on dlc07 and 8p, none near the other tie cases. The only one near road 485 is the garrison inside the settlement at (1321,698).
+
+So the remaining differences are not in the startpos data. They need state that exists only while the game runs. The 190E inputs CA's files were built from may also have differed from the current pack (a ppd or map_data that was rebuilt later); there is no way to check that from the files.
+
 The game reads these files at campaign start. Small transition differences change AI route planning slightly, but the files stay structurally valid. Use the CA-built files when they are available.
