@@ -49,6 +49,39 @@ public class HlpSpdTests
         if (Directory.Exists(Extracted)) Assert.True(maps >= 5, $"only {maps} vanilla maps found");
     }
 
+    /// <summary>The native hlp_data.esf is not byte-identical yet; guard the field-level parity reached on the vanilla
+    /// maps (2026-10-05: dlc07 317/334 areas identical, 2372/2398 transitions with the same hexes, target and cost).</summary>
+    [Fact]
+    public void Hlp_NativeBuild_FieldParityOnVanilla()
+    {
+        var maps = 0;
+        foreach (var dir in VanillaMapDirs().Where(d => d.Contains("dlc06") || d.Contains("dlc07")))
+        {
+            maps++;
+            var reference = HlpData.Read(Path.Combine(dir, "hlp_data.esf"));
+            var built = Atlas3K.Core.Campaign.AiPathfinding.HlpBuilder.Build(
+                Atlas3K.Formats.Maps.PathfindingPpd.Read(Path.Combine(dir, "pathfinding.ppd")),
+                Atlas3K.Core.Campaign.AiPathfinding.MapDataRegions.Read(Path.Combine(dir, "map_data.esf")),
+                new Atlas3K.Core.Campaign.AiPathfinding.CampaignPathGrid.Settings(), reference.Timestamp);
+            Assert.Equal(reference.Nodes.Count, built.Nodes.Count);
+            var refAreas = reference.Nodes.SelectMany(n => n.Areas).ToDictionary(a => a.AreaId);
+            int areas = 0, same = 0, transitions = 0, matched = 0;
+            foreach (var a in built.Nodes.SelectMany(n => n.Areas))
+            {
+                var r = refAreas[a.AreaId];
+                areas++;
+                Assert.Equal((r.CentreX, r.CentreY, r.A), (a.CentreX, a.CentreY, a.A));
+                if (a.Transitions.SequenceEqual(r.Transitions) && a.Costs.SequenceEqual(r.Costs) && a.B == r.B) same++;
+                transitions += r.Transitions.Count;
+                matched += r.Transitions.Count(t => a.Transitions.Any(m =>
+                    (m.X, m.Y, m.OtherX, m.OtherY, m.TargetArea, m.Cost) == (t.X, t.Y, t.OtherX, t.OtherY, t.TargetArea, t.Cost)));
+            }
+            Assert.True(same >= areas * 0.93, $"{dir}: {same}/{areas} identical areas");
+            Assert.True(matched >= transitions * 0.98, $"{dir}: {matched}/{transitions} transitions");
+        }
+        if (Directory.Exists(Extracted)) Assert.True(maps >= 2, $"only {maps} maps found");
+    }
+
     [Fact]
     public void Spd_RoundTripsByteIdentical()
     {
