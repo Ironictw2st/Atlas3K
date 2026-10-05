@@ -22,7 +22,8 @@ public sealed class RiversStep : ICampaignBuildStep
     public IReadOnlyList<string> CheckInputs(CampaignBuildContext ctx)
     {
         var missing = new List<string>();
-        if (!File.Exists(ctx.OutFile("lf_height_map.compressed_map"))) missing.Add("missing lf_height_map.compressed_map (run step 'rasters')");
+        // only the wide geometry samples the terrain (terrain_relative splines) and sizes the world uv from the lf map
+        if (Wide(ctx) && !File.Exists(ctx.OutFile("lf_height_map.compressed_map"))) missing.Add("missing lf_height_map.compressed_map (run step 'rasters')");
         if (!Directory.Exists(ctx.Paths.AkTerrainDir)) missing.Add($"missing {ctx.Paths.AkTerrainDir}");
         else if (RiverLayers(ctx).Count == 0) missing.Add("no layer with ECRiverSpline entities in the AK map folder");
         return missing;
@@ -32,13 +33,20 @@ public sealed class RiversStep : ICampaignBuildStep
     {
         var sw = Stopwatch.StartNew();
         var notes = new List<string>();
-        var lf = CompressedMap.Read(ctx.OutFile("lf_height_map.compressed_map"));
-        var worldW = (float)(lf.Raster.Width * WorldPerPixelX);
-        var worldH = (float)(lf.Raster.Height * WorldPerPixelZ);
-        // terrain height for terrain_relative splines: props-world z maps onto the square-pixel terrain grid
-        var terrainH = lf.Raster.Height / 4 * GlobalMeshStep.TileSize;
-        var sampler = new LfSampler(lf, lf.Raster.Width / 4 * GlobalMeshStep.TileSize, terrainH, GlobalMeshStep.TileSize);
-        double Terrain(double x, double z) => sampler.Height((float)x, (float)(z * terrainH / worldH));
+        float worldW = 0, worldH = 0;
+        Func<double, double, double>? terrain = null;
+        void LoadTerrain()
+        {
+            if (terrain is not null) return;
+            var lf = CompressedMap.Read(ctx.OutFile("lf_height_map.compressed_map"));
+            worldW = (float)(lf.Raster.Width * WorldPerPixelX);
+            worldH = (float)(lf.Raster.Height * WorldPerPixelZ);
+            // terrain height for terrain_relative splines: props-world z maps onto the square-pixel terrain grid
+            var terrainH = lf.Raster.Height / 4 * GlobalMeshStep.TileSize;
+            var sampler = new LfSampler(lf, lf.Raster.Width / 4 * GlobalMeshStep.TileSize, terrainH, GlobalMeshStep.TileSize);
+            var h = worldH;
+            terrain = (x, z) => sampler.Height((float)x, (float)(z * terrainH / h));
+        }
 
         var rivers = RiverLayers(ctx).SelectMany(RiverBuilder.ReadLayer).OrderBy(r => r.Number).ToList();
         // BOB's river_N numbering (by region, RiverNumbering.Bob) whenever the region lookup is available, as global_props
@@ -63,18 +71,41 @@ public sealed class RiversStep : ICampaignBuildStep
 
         var written = new List<string>();
         var collection = new HeightPatchCollection();
+        var bob = !Wide(ctx);
+        var bounds = bob ? BobRiver.MapBounds(ctx.Paths) : null;
+        if (bob && bounds is null)
+        {
+            bob = false;
+            notes.Add("no campaign_map_playable_areas row for the map: wide (game-valid) river geometry instead of BOB's");
+        }
+        notes.Add(bob ? "river geometry: BOB's (identical to BOB's files apart from its uninitialised bytes)"
+                      : "river geometry: wide (game-valid, covers the land-mesh river holes)");
+        if (bob && rivers.Any(r => r.YawDegrees != 0 || r.TerrainRelative || r.Reverse))
+            notes.Add("a river has a rotation, terrain_relative or reverse_direction: BOB's handling of these is not verified");
         foreach (var river in rivers)
         {
-            var sections = RiverBuilder.Sample(river, Terrain);
-            if (sections.Count < 2) { notes.Add($"{river.Name}: fewer than 2 cross-sections, skipped"); continue; }
-            var model = RiverBuilder.BuildModel(sections, worldW, worldH);
+            RigidModelV2 model;
+            if (bob)
+            {
+                if (river.Points.Count < 2) { notes.Add($"{river.Name}: fewer than 2 spline points, skipped"); continue; }
+                var raw = BobRiver.BuildRaw(BobRiver.BuildSpline(river), river.Points.Select(p => (float)p.Width).ToList(), bounds!.Value);
+                model = BobRiver.ToModel(raw);
+            }
+            else
+            {
+                LoadTerrain();
+                var sections = RiverBuilder.Sample(river, terrain);
+                if (sections.Count < 2) { notes.Add($"{river.Name}: fewer than 2 cross-sections, skipped"); continue; }
+                model = RiverBuilder.BuildModel(sections, worldW, worldH);
+            }
             var mesh = Path.Combine(models, $"river_{river.Number}.wsmodel.rigid_model_v2");
             model.Write(mesh);
             var wsmodel = Path.Combine(models, $"river_{river.Number}.wsmodel");
-            File.WriteAllText(wsmodel, WsModel.River(ctx.MapName, river.Number, river.Material));
+            File.WriteAllText(wsmodel, WsModel.River(ctx.MapName, river.Number, river.Material, bob ? "\n" : "\r\n"));
             written.AddRange([mesh, wsmodel]);
 
-            foreach (var (name, raster, header, minX, minZ, maxX, maxZ) in RiverBuilder.HeightPatches(model, river.Number))
+            var patches = bob ? BobRiver.HeightPatches(model, river.Number) : RiverBuilder.HeightPatches(model, river.Number);
+            foreach (var (name, raster, header, minX, minZ, maxX, maxZ) in patches)
             {
                 var file = Path.Combine(patchesDir, name + ".compressed_map");
                 CompressedMap.Write(file, raster, header);
@@ -88,6 +119,8 @@ public sealed class RiversStep : ICampaignBuildStep
         notes.Add($"{rivers.Count} rivers, {collection.Patches.Count} height patches");
         return new StepResult(Name, written, notes, sw.Elapsed);
     }
+
+    private static bool Wide(CampaignBuildContext ctx) => ctx.RiverGeometry.Equals("wide", StringComparison.OrdinalIgnoreCase);
 
     private static List<string> RiverLayers(CampaignBuildContext ctx) =>
         Directory.EnumerateFiles(ctx.Paths.AkTerrainDir, "*.layer")

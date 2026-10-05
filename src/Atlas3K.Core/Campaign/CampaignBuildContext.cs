@@ -17,6 +17,10 @@ public sealed class CampaignBuildContext
     /// <summary>trees step: keep the reference list's heights where a tree is unchanged (false = compute every height).</summary>
     public bool ReuseTreeHeights { get; init; } = true;
 
+    /// <summary>rivers step: "bob" = BOB's own river meshes and height patches (identical to BOB's files apart from the
+    /// bytes BOB leaves uninitialised); "wide" = the wider game-valid water that also covers the land-mesh river holes.</summary>
+    public string RiverGeometry { get; init; } = "bob";
+
     public CampaignBuildContext(ProjectPaths paths, string? targetRoot = null, Action<string>? log = null)
     {
         Paths = paths;

@@ -39,7 +39,7 @@ The `terry` MCP server also edits the props in the kit's region layers (`<map>.<
 | `tile_list` | Tilemap | native | **byte-identical to BOB on vanilla** (2026-10-04: `tile_list.bin`, and `global_map\` with it). Fixes: `TILE_DATABASE::sort` runs before link targets are loaded (all 0), so the DB order is area then name; `calculate_flow` neither flows nor queues a tile with no TLT_EQUALS entry link. main190 (BOB 2026-10-03): every record field identical; only low/high differ because that BOB run had no lf (all records +/-FLT_MAX sentinels). Evidence: Frida dumps `research/bob_re/frida_out`, `research/sim_first_divergence.py`, `research/tilelist_fields.py` |
 | `global_map` | Global Mesh (`global_map\` part) | native | `global_blend.dds`, `texture_arrays.xml`, `global_map\tile_list.bin` byte-identical |
 | `global_mesh` | Global Mesh (`land_mesh_N`, `sea_mesh_N`) | native (game-valid) | same mesh count and positions (170 land, 125 sea); holes identical (coverage IoU 1.0); land triangles 1.06× vanilla, sea 1.00×; surface-to-lf error equal to vanilla's (p99 ≈ 0.1–0.25); compressed-map holes agree on 97–99.7% of grid points |
-| `rivers` | Terry file (river models, height patches) | native (game-valid) | same 24 rivers and numbering as vanilla (checked by shape); land-mesh river holes left uncovered: 78 px map-wide (vanilla 0, BOB 732). vs BOB main190 (prototype): spline, lengths and sample lists bit-exact, index lists identical on 21/24, exact vertex positions 90.4%, 0/24 whole files; see *Rivers vs BOB* |
+| `rivers` | Terry file (river models, height patches) | native (identical to BOB) | default `--river-geometry bob` (`BobRiver`): on main190 all 24 `river_N.wsmodel.rigid_model_v2` are identical to BOB's apart from 3-5 bytes BOB leaves uninitialised (they differ between BOB runs too); all 24 `.wsmodel`, all 87 height patches and `rivers.height_patch_collection` byte-identical. `--river-geometry wide`: the older game-valid water (78 px of land-mesh river holes left uncovered map-wide, BOB 732). See *Rivers vs BOB* |
 | `global_props` | Terry file (`global_props.bin`) | native (byte-identical to BOB) | main190 against BOB (2026-10-05): the whole file is byte-identical (24,778,485 bytes, 12,465 entries); see "global_props.bin vs BOB" below. main190 checked in game 2026-10-04 |
 | `camera_heightmap` | Generate Camera Height Map | native (byte-identical to BOB) | vanilla 3k_dlc07 against BOB (2026-10-05): the PNG is byte-identical (same scene inputs: CA's packed meshes, tile list, lf; global_props from the kit layers); every one of the 2,506,520 float cells bit-exact; see *camera_heightmap.png* |
 | `trees` | Campaign Trees (`trees.campaign_tree_list`) | native | byte-identical when the CampaignTree map is the one decoded from vanilla (`trees-decode`) and heights are reused; heights computed from scratch (`TileHfHeight`): 205,765 of 205,767 vanilla trees bit-exact |
@@ -78,7 +78,7 @@ After the fix both render in game. Other findings from the comparison:
 | tile_list | 383,440 vs 383,410 records; header identical; 97.9% same tile at the same place, 88.4% identical records; holes 145 vs 144 points, 141 shared |
 | global_map | `global_blend.dds` and `texture_arrays.xml` byte-identical; the `tile_list.bin` copy differs (same differences as tile_list) |
 | global_meshes | 184 land / 126 sea meshes, same as BOB; not byte-identical (expected) |
-| rivers | 24 rivers / 48 model files, same as BOB. Height patches: 108 vs 85 files, because the native tiling per river is wider |
+| rivers | 24 rivers / 48 model files, identical to BOB's apart from BOB's uninitialised bytes; height patches byte-identical (2026-10-05, `BobRiver`) |
 | global_props | 66,271 vs 66,268 objects; model + position 100%. Region: 100% (331 regions, same set as BOB) since the fix below. It was 67.7% while the step used layer names. River models are numbered as BOB (see the regions note) |
 | lookup | `.dds` and `.tga` byte-identical; `_minimap.tga` differs in 6,959 of 3.88M bytes |
 | rasters, climate | byte-identical to the kit's copies, but those were built natively too, so there is no BOB reference |
@@ -160,62 +160,100 @@ The decompiled algorithm is written up in `docs/bob_re_global_mesh.md`. Native v
 - **Skirts:** double-sided quads 1.0 below boundary edges next to holes or the map edge.
 - **Land compressed map:** the final surface rasterised onto the grid, with header (0, −50, 0, 0, max, 0) and 0 = hole.
 
-### Rivers (`RiverBuilder`)
+### Rivers (`BobRiver`, default; `RiverBuilder` with `--river-geometry wide`)
 
 - **Source:** every `ECRiverSpline` entity in the AK layers.
-- **Numbering:** BOB's (`RiverNumbering.Bob`, see the global_props regions note) whenever the map.hex region lookup is available, so the models, height patches and `global_props.bin` match a BOB build. `RiverNumbersByName` (rivers step and `GlobalPropsBuilder`, keep both in step) numbers by the entity name (`river_N`) instead, which is CA's numbering in the shipped vanilla files.
-- **Curve:** a chain of cubic Béziers, (p_i, p_i + tangent_out, p_i+1 + tangent_in, p_i+1), placed by the entity transform and sampled every `spline_step_size` along the arc.
-- **Cross-sections:** 5 vertices each, at −w/2, −w/4, 0, w/4 and w/2.
-  - **Width margin:** width × 1.15, with both ends pushed out by w/2, so the water covers the tile-based land-mesh holes. The extra water sits under the higher banks.
-- **Vertex, 48 bytes:** position relative to the pivot, then 1, then v = 0.1 × lateral offset, then u = 0.1 × arc length, then world uv = (x/595.1, z/541.79) scaled to the map, then packed normal (up), tangent (downstream) and bitangent (across), then 4 zero bytes. The bounding box is in world coordinates.
-- **Height patches:** the water surface rasterised at 16 px per unit into 32-unit blocks (512², row 0 = south), header (0, −50, 0, 0, max, 0), 0 = no water. They're named `river_N_patch_<dx>x<dz>` by pixel offset from the river's first block, and listed in `rivers.height_patch_collection` with their world rectangles.
+- **Numbering:** BOB's (`RiverNumbering.Bob`, see the global_props regions note) whenever the map.hex region lookup is available, so the models, height patches and `global_props.bin` match a BOB build. `RiverNumbersByName` (rivers step and `GlobalPropsBuilder`, keep both in step) numbers by the entity name (`river_N`) instead, which is CA's numbering in the shipped vanilla files. Height patches carry the model's number.
+- **Geometry:** `CampaignBuildContext.RiverGeometry`, CLI `build-campaign --river-geometry bob|wide`.
+  - `bob` (default): BOB's own geometry, described below. Like a BOB build, its water leaves 732 px of land-mesh river holes uncovered on main190.
+  - `wide`: the older game-valid water (`RiverBuilder`). It samples the Béziers every `spline_step_size`, multiplies the width by 1.15 and pushes both ends out by w/2, so it also covers the tile-based land-mesh holes (78 px left). It uses packed up normals and writes patches in 32-unit blocks from the river's first block.
+- **`.wsmodel`:** BOB writes LF line endings and no final newline (`bob`). CA's shipped vanilla files use CRLF (`wide` keeps CRLF).
+- **Vanilla:** CA's shipped 3k_dlc07 river models are not this BOB's output for the vanilla kit layer (they have more vertices, from an older tool), so `bob` doesn't reproduce them.
 
-#### Rivers vs BOB (2026-10-05, work in progress)
+#### Rivers vs BOB (2026-10-05)
 
-**Status:**
-- **Test:** the Python prototype (`research/rivers/bob_spline.py`) against BOB's main190 "Terry file" output, measured with `research/rivers/exact_cmp.py`, `mesh_tail.py` and `dump_cmp.py`.
-- **Reference:** `output/bob_runs/frida_rivers_main190_bob_terrain/models`. Its vertex positions and indices are identical to the 2026-10-04 23:05 BOB run; other vertex fields differ between the two runs.
-- **Native step unchanged:** still the wider game-valid geometry, because BOB's own rivers leave 732 px of land-mesh holes.
+**Result** on main190, against BOB's "Terry file" output saved in `output/bob_runs/frida_rivers2_main190_bob_terrain` (tests: `BobRiverTests`):
+- **Models:** all 24 `.rigid_model_v2` are identical apart from the bytes BOB leaves uninitialised: 0xA5–0xA7 (LOD padding) and 0x31A–0x31B (material). Both ranges differ between two BOB runs of the same input.
+- **`.wsmodel`:** all 24 identical.
+- **Height patches:** all 87 patches and `rivers.height_patch_collection` byte-identical, when rasterised from the models BOB actually read (see the note under *Height patches*).
 
-Verified bit-exact against a Frida dump of BOB (`research/bob_re/frida_rivers.js`, `frida_out/frida_rivers_main190.jsonl`):
-- **Spline input** (all 451 of 451 segments identical: raw input points, stored control points, lengths):
-  - world point = float32(local + entity position) (yaw 0 on main190);
-  - control points = world(p_i) + tangent_out and world(p_i+1) + tangent_in, in float32.
-- **Degenerate segments** (`FUN_18016e440`):
+**How it was found:**
+- **Frida dumps of BOB:**
+  - `research/bob_re/frida_rivers.js`: spline segments and `optimise_spline`;
+  - `frida_rivers2.js`: the 32-byte vertices and the indices that `FUN_18015e9e0` returns.
+- **Python prototype:** `research/rivers/bob_spline.py`, `bob_mesh.py`, `bob_file.py` and `bob_patch.py`, compared with `dump_cmp.py` and `raw_cmp2.py`.
+- **C# port:** `BobRiver`.
+
+**Spline** (tooldatabuilder `FUN_18016e440`, utilitydll `SEGMENTED_SPLINE_3`; 451/451 segments and 24/24 sample lists identical):
+- **World points:** float32(local) + float32(entity position); yaw is 0 on main190.
+- **Control points:** world(p_i) + tangent_out and world(p_i+1) + tangent_in, in float32.
+- **Degenerate segments:**
   - p0 = p1 → p1 = (p2 + p0)·0.5;
   - p2 = p3 → p2 = (p1 + p3)·0.5;
   - both → p1 = p2 = (p3 + p0)·0.5;
-  - every degenerate segment uses the straight-line length |p0 − p3|.
-- **Length:** Σ|B′(u)|·du over 1000 steps; the derivative is the basis applied to (3u², 2u, 1, 0), summed w0·P0 + w1·P1 + w2·P2 + w3·P3.
-- **Samples** (`SEGMENTED_SPLINE_3::optimise_spline`, identical on 24 of 24 rivers):
-  - N = trunc(20·total + 0.5) candidates at k/(N−1);
-  - greedy keep of t_(k−1) when the direction dot product < 1 − 0.02, with the evaluator summed w0·P0 + w1·P1 + w2·P2 + w3·P3 left to right (**not** the order Ghidra prints for `FUN_1800b13b0`);
-  - then add 1.0, add the 7 extras k/8, `std::sort`;
-  - BOB's in-place unique never shrinks the list, so the old tail stays in.
-- **Cross-sections:**
-  - P(t) and the xz derivative;
-  - width = lerp of the segment's two point widths;
-  - 5 vertices at off = j·0.25·w − 0.5·w, x = dz·off + px, z = −(dx·off) + pz;
-  - each component goes through BOB's own float→half (`FUN_1803811a0`, ported as `half_bob`).
-- **Mesh:**
-  - triangles per section pair: (n_j, c_j, n_(j+1)) and (c_j, c_(j+1), n_(j+1));
-  - vertices renumbered by first use, then written with flipped winding (a, c, b);
-  - pivot = bounding-box centre of the half world positions;
-  - vertex = half world − pivot (float32).
+  - any degenerate segment uses the straight length |p0 − p3|.
+- **Length:** Σ|B′(u)|·du over 1000 steps, with derivative weights (3u², 2u, 1, 0).
+- **Evaluation order:** every evaluation sums w0·P0 + w1·P1 + w2·P2 + w3·P3 left to right. This is **not** the order Ghidra prints for `FUN_1800b13b0`.
+- **Samples** (`optimise_spline`, density 20, tolerance 0.02):
+  1. N = trunc(20·total + 0.5) candidates at k/(N−1);
+  2. greedy keep when the direction dot product < 0.98;
+  3. append 1.0 and the 7 extras k/8, then `std::sort`;
+  4. BOB's in-place unique, which never shrinks the list, so the old tail stays in.
+- `spline_step_size` is not used.
 
-**Numbers:**
-- index lists identical on 21 of 24 rivers;
-- vertex counts equal on 21 of 24;
-- exact vertex positions 90.4% (4,252 of 4,695 on the 21 rivers);
-- whole river files identical: 0 of 24.
+**Mesh** (`FUN_18015e9e0`; 5,460/5,460 32-byte vertices and 24/24 index lists identical):
+- **Per sample:**
+  - segment found by BOB's linear search, accumulating (1/total)·len;
+  - u = (total·t − start)/len;
+  - width = lerp of the segment's two point widths by the clamped u;
+  - position and derivative at u;
+  - 5 vertices at off = j·0.25·w − 0.5·w: x = dz·off + px, z = −(dx·off) + pz, y = py;
+  - each component goes through BOB's float→half (`FUN_1803811a0`): it adds ((v−1)&v)&0x1fff before dropping 13 bits, so exact ties truncate;
+  - the w half is 0x0002.
+- **Indices** per sample pair: (n_j, c_j, n_j+1) and (c_j, c_j+1, n_j+1).
+- **Snap pass:** for each triangle in order, every other vertex whose (x, z) lies inside it (`WARSCAPE::contains`, a crossing test) takes the nearest corner's x, y, z and w halves, in place. This explains the "shared y" and the x/z half steps.
+- **Normals:**
+  - face normals come from the half positions and accumulate only when the face normal's y ≠ 0;
+  - normal bytes = trunc(n·0.5·255 + 127.5);
+  - tangent (the normalised derivative) and bitangent (n × t) bytes = trunc((v + 1)·127.5);
+  - stored z, y, x, 0xff.
+- **Dropped triangles:** any triangle touching a vertex whose normal y byte is < 0x82. This explains the three odd-count rivers.
+- **uv:**
+  - half(0.1·off) and half(0.1·total·t);
+  - world uv half((x − x0)/(x1 − x0)) and half((z − z0)/(z1 − z0)), over the map rectangle in `map_data.esf`'s header;
+  - main190's rectangle is (0, 0, 986.05096, 873.79541). The playable-area row says max y 874.185, but BOB uses the ESF.
 
-**Remaining, with evidence:**
-1. **y on coincident vertices:** where vertices from different sections fall on the same half-quantised (x, z), BOB writes one shared y, taken from one member of the group. Its own y is right 91.4% of the time. The chosen member isn't simply the first, last, min or max, and averaging is worse.
+**File** (`FUN_180146460`, VERTEX_LIST_CLEANER, `MODEL_PROCESSOR::write`):
+- **Order:** vertices renumbered by first use in the index list; triangles written (a, c, b).
+- **Vertex:**
+  - position = half − pivot, where pivot = the bbox centre of the used half positions (stored in the material block);
+  - w = 1;
+  - uv as floats;
+  - NTB bytes decoded as b/255·2−1 and re-encoded as trunc((v + 1)·127.5), 4th byte 0;
+  - last 4 bytes 0.
+- **Header:**
+  - bounds = the world bbox;
+  - shader block tail zero, with 9e d4 at 0xF0 in both BOB runs; vanilla has other stale bytes there.
 
-   A second Frida pass that would dump the raw 32-byte half vertices from `FUN_18015e9e0` (`frida_rivers2.js`) was refused twice by BOB's GUI: ticking "Terry file" also ticked dependencies. It needs another attempt, to tell whether the shared y already exists in the section builder or is applied later.
-2. **x/z:** 120 x and 103 z single half-step differences remain, probably from the same mechanism; they follow the same groups.
-3. **Three rivers with odd counts** (`river_23` 129 vertices / 573 indices, `river_12` 334 / 1575, `river_3` 292 / 1368): BOB drops or adds vertices that aren't a whole cross-section, so some extra pass, a weld or degenerate-triangle removal, applies there. None of the simple rules (same position, zero area) reproduce it without breaking the 21 rivers that already match.
-4. **Not started:** the 48-byte vertex fields (uv, normal, tangent, bitangent), the header, and the height patches (BOB 88 files vs native 108). The river numbering is BOB's (`RiverNumbering.Bob`, all 24 main190 rivers).
+**Height patches** (bob_terrain `FUN_18005eb30`, `WARSCAPE::rasterise_max_heights`, `COMPRESSED_MAP::compress`):
+- **Field:**
+  - vertices = model positions + pivot;
+  - origin = bbox floored to 16 units, far side ceiled;
+  - 16 px per unit, filled with −50 (INVALID_HEIGHT).
+- **Per triangle:**
+  - pixel bbox from the truncated corners ±1, clipped to the field;
+  - pixel (x, y) is inside by warscape's crossing test;
+  - barycentric weights |…|·0.5·(2/area);
+  - height = y_b·w_b + y_a·w_a + y_c·w_c, keeping the max.
+- **Blocks:**
+  - 512 × 512, z-major then x, written only when a pixel is valid;
+  - u16 = trunc((h − lo)·(1/(hi − lo))·65535), with lo/hi the block's min/max (lo = −50 whenever a pixel is empty);
+  - header (0, lo, 0, 0, hi, 0);
+  - rectangle = origin + pixel offset / 16.
+- **Collection:** models in number order; each entry is `terrain/campaigns/<map>//height_patches//river_N_patch_XxZ.compressed_map` + (x0, z0, x1, z1).
+- **BOB reads the models already on disk:** when a run starts, BOB rasterises the river models already there, not the ones it writes in the same run. The saved run's patches therefore come from the native models the kit held, and they're byte-identical when rasterised from those models. A BOB run on its own models (a second run) gives what `BobRiver` writes.
+
+**Not verified:** rotated river entities, `terrain_relative="true"` and `reverse_direction` (none on main190). The step adds a note when a map has them.
 
 ### global_props.bin (`GlobalPropsBuilder`)
 
@@ -327,12 +365,14 @@ Decompiled from `QTU::CampaignTreeGenerator` / `generate_campaign_tree_list_for`
 
 - **What the game needs:** `empirecampaign.dll` loads `campaign_maps\<map>\camera_heightmap.png` and requires the tEXt `height_scale`.
 - **Status:** byte-identical to BOB on vanilla 3k_dlc07 (2026-10-05; 2,195,093 bytes, MD5 `6c6353e4…`), every float cell of BOB's sample buffer bit-exact. Before this work the native step rasterised props (correlation 0.94); a BOB-faithful Python prototype reached 95.6% bit-exact cells.
-- **Settings:** `raw_data	errain\campaignsules.bob` [Terrain] `cam_hmap_resolution_scale`, `cam_hmap_samples_per_wu`, `cam_hmap_apply_blur`, `cam_hmap_blur_kernel`, `cam_hmap_standard_drv`. Without them BOB's settings are 0 and it writes no usable map; the native step then uses 1 / 4 / no blur (the values the parity run used). BOB's blur is not ported (a note says so when it is on).
+- **Settings:** `raw_data	errain\campaigns
+ules.bob` [Terrain] `cam_hmap_resolution_scale`, `cam_hmap_samples_per_wu`, `cam_hmap_apply_blur`, `cam_hmap_blur_kernel`, `cam_hmap_standard_drv`. Without them BOB's settings are 0 and it writes no usable map; the native step then uses 1 / 4 / no blur (the values the parity run used). BOB's blur is not ported (a note says so when it is on).
 - **Grid and samples** (`TOOLDATABUILDER::generate_camera_height_map`, FUN_18006bf20): (tiles W × res) × (tiles H × res) cells over x 0..W·T, z 0..(H·128·(T/128))·1.15476. Cell (u, v) is centred at (u·step, v·step), half extents step·0.5. n = ceil(extent × samples per unit) per axis; the samples are accumulated from the min corner and BOB's inner loop also runs the z count; plus one sample at the centre. The cell keeps the max, starting from −1.
 - **Pixels:** highest = max cell; pixel = ceil(max(h / highest, 0) · 65535), PNG row 0 = the north edge (BOB's buffer row 0 is south); `height_scale` = "%f" of highest · (1/65535).
 - **PNG encoding** (`PngLib`, `ZlibDeflate`): IHDR, tEXt, IDAT in 8192-byte chunks, IEND; each row takes libpng's adaptive filter (lowest sum of |signed byte|, ties to the earlier filter); zlib level 6 with Z_FILTERED, ported from zlib 1.2.x deflate_slow + trees.c (.NET's ZLibStream is zlib-ng and differs). BOB's IDAT reproduced byte for byte.
 - **Scene height** (warscape FUN_18034cf20, `CameraHeightField`): max(P, G).
-  - P, height patches (FUN_180350320): river patches (`height_patchesivers.height_patch_collection`, identity transform), the props of every placed tile's `bmd_data.bin` with `has_height_patch`, and the global props with `has_height_patch`. Each needs `<geometry>.rigid_model_v2.compressed_map`; local bounds = LOD0 first mesh bounds (x, z). Value = |column 1| · sample + translation y, sample = max of corners (x0, y−1), (x1, y−1), (x1, y) (FUN_18039f140), −50 = none. Patches whose AABB leaves the quadtree build box (−1, −1)..(scene W, scene D) are never stored (18 on vanilla).
+  - P, height patches (FUN_180350320): river patches (`height_patches
+ivers.height_patch_collection`, identity transform), the props of every placed tile's `bmd_data.bin` with `has_height_patch`, and the global props with `has_height_patch`. Each needs `<geometry>.rigid_model_v2.compressed_map`; local bounds = LOD0 first mesh bounds (x, z). Value = |column 1| · sample + translation y, sample = max of corners (x0, y−1), (x1, y−1), (x1, y) (FUN_18039f140), −50 = none. Patches whose AABB leaves the quadtree build box (−1, −1)..(scene W, scene D) are never stored (18 on vanilla).
   - Patch matrices, bit-exact on all 11,670 vanilla objects: tile props = get_tile_transform (s = T/128, scale (s, s, s·1.15476), z translation (p·s)·1.15476) times 5 (bmd units) then the stored prop matrix, element (t·5)·p, then y lifted by the tile terrain height at (x, z / 1.15476); global props = the stored 4x3 from global_props.bin (it must be the one built from the kit layers, as BOB's scene is: CA's shipped file differs in the last bits). AABB over the model box's 8 corners; inverse = warscape's inlined adjugate / determinant (FUN_18034a210).
   - G, global mesh (FUN_180350620): the first land_mesh block in file-name order whose bounds (the RMV2 bounds at 0xC0) contain (x, z / 1.15476); bilinear with invalid corners filled (FUN_18039f3e0). Invalid (−50) or no block: the tile fallback (FUN_180350820) = the highest get_height (hf + lf) over the tiles the scene quadtree reaches at (x, z'·1.15476), else 0.
   - Scene quadtree (`TileQuadtree`, from a Frida dump of the whole tree): 7 levels of midpoint splits of (−1, −1)..(scene W, scene D); it holds the `global_map	ile_list.bin` records with flag bit 0 (instance flag 0x100), each in the leaf holding the centre of its extent; a leaf's bounds grow to its tiles' extents, inner nodes to their children's. Extent: x = X·128·s + w·128·s, z = (Y·128·s + h·128·s)·1.15476, widened for blockout cliffs by the custom mesh bounds without the tile's turn (a over x, b over −z; for 90° turns a over x min..−z min and b over −z max..x max). A tile answers only inside its leaf's bounds: sample points on a tile edge can miss it by an ulp.
