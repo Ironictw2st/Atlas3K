@@ -91,6 +91,8 @@ Each of these looked fine in the decompile and only showed up when the output wa
 | Global props | Quadtree cell rule, record order by entity id, BOB's own quaternion and sine routines for matrices, `-0` written as `+0`, region order from CA's hash map, map bounds from `map_data.esf`. |
 | Camera heightmap | BOB samples its scene (height patches, global mesh, a tile fallback reached through its own quadtree), not "terrain plus props". The PNG needs classic zlib's compressor to match byte for byte. |
 | Rivers | Adaptive spline sampling (`optimise_spline`, including its in-place unique bug), BOB's own float-to-half, a snap pass of vertices onto triangle corners, triangles dropped by normal y, and height patches rasterised from the river models already on disk. |
+| Rivers | Entity yaw turns points and tangents in float (cos/sin rounded to float first), `reverse_direction` walks the points backwards with tangents swapped, `terrain_relative` has no effect on the mesh. |
+| Rivers | The river_N numbering rule (regions by largest entity id) fits main190 but not vanilla (11 of 24 renumbered): still open. |
 | Global meshes | When the pack is set to Movie, BOB reads lf and the tile list from the game VFS, not the kit. The grid step is in double precision. The triangle merger runs 50 passes of 1.28 with an MSVC-sorted candidate list. |
 | Global meshes | The VFS rule holds on vanilla too: BOB reads CA's `tile_list.bin` and `lf_sea_height_map` from `data/terrain.pack`, not the kit's (`gmesh/find_pack_inputs.py`). Compare against a fresh BOB run only with the inputs BOB read. |
 | Global meshes | Land byte 0xA6 is character 165 of the mesh's own `.compressed_map` output path (stale string memory): it depends on the kit folder and map name. |

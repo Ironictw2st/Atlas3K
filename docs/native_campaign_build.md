@@ -259,7 +259,12 @@ The decompiled algorithm is written up in `docs/bob_re_global_mesh.md`. Native v
 - **Collection:** models in number order; each entry is `terrain/campaigns/<map>//height_patches//river_N_patch_XxZ.compressed_map` + (x0, z0, x1, z1).
 - **BOB reads the models already on disk:** when a run starts, BOB rasterises the river models already there, not the ones it writes in the same run. The saved run's patches therefore come from the native models the kit held, and they're byte-identical when rasterised from those models. A BOB run on its own models (a second run) gives what `BobRiver` writes.
 
-**Not verified:** rotated river entities, `terrain_relative="true"` and `reverse_direction` (none on main190). The step adds a note when a map has them.
+**Rotation, terrain_relative, reverse_direction** (none on main190 or vanilla), checked on a scratch copy of the vanilla river layer against BOB (2026-10-05, `BobRiverTests.Vanilla_RotatedRelativeAndReversedRivers_MatchBob`): all three byte-identical apart from the uninitialised bytes.
+  - Yaw (ECTransform rotation y, degrees): cos/sin of the double angle rounded to float; points and tangents turned in float (x·c + z·s, y, −x·s + z·c), then the float position added. Rotating in double is 131 bytes off.
+  - `terrain_relative="true"` changes nothing in BOB's river mesh.
+  - `reverse_direction="true"`: the points are walked last to first with tangent in/out swapped (widths too).
+
+**Vanilla 3k_dlc07 vs a fresh BOB Terry file run (2026-10-05, `output/bob_runs/20261005_104349_terryfile_vanilla_fresh`):** all 24 river models and `.wsmodel` files are identical to BOB's apart from the uninitialised bytes, but 11 carry another number: native river_13..23 are BOB's 23, 13, 22, 14..21. BOB's order is native's up to river_15 (entity), then river_20, 10, 9, 8, 3, 4, 2, 1, 0, 11, 16, so `RiverNumbering.Bob` (regions by largest entity id) does not hold on vanilla: entities river_11 and river_16 come last. Not explained by map.hex regions near their positions, nor by the props hash-map region order. **Open.** The vanilla `global_props.bin` differs from BOB's in the same river numbers only (14 bytes). The fresh run's height patches are byte-identical to the kit's previous ones (BOB rasterises the models already on disk, see above).
 
 ### global_props.bin (`GlobalPropsBuilder`)
 

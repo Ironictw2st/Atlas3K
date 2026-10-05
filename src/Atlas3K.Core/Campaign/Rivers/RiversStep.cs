@@ -80,15 +80,13 @@ public sealed class RiversStep : ICampaignBuildStep
         }
         notes.Add(bob ? "river geometry: BOB's (identical to BOB's files apart from its uninitialised bytes)"
                       : "river geometry: wide (game-valid, covers the land-mesh river holes)");
-        if (bob && rivers.Any(r => r.YawDegrees != 0 || r.TerrainRelative || r.Reverse))
-            notes.Add("a river has a rotation, terrain_relative or reverse_direction: BOB's handling of these is not verified");
         foreach (var river in rivers)
         {
             RigidModelV2 model;
             if (bob)
             {
                 if (river.Points.Count < 2) { notes.Add($"{river.Name}: fewer than 2 spline points, skipped"); continue; }
-                var raw = BobRiver.BuildRaw(BobRiver.BuildSpline(river), river.Points.Select(p => (float)p.Width).ToList(), bounds!.Value);
+                var raw = BobRiver.BuildRaw(BobRiver.BuildSpline(river), BobRiver.RiverPointsInOrder(river).Select(p => (float)p.Width).ToList(), bounds!.Value);
                 model = BobRiver.ToModel(raw);
             }
             else

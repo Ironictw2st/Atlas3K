@@ -20,7 +20,8 @@ namespace Atlas3K.Core.Campaign.Rivers;
 ///  - MODEL_PROCESSOR: vertices renumbered by first use, winding flipped, positions relative to the bbox-centre pivot
 ///  - height patches (bob_terrain FUN_18005eb30): the model rasterised at 16 px per unit into a max-height field
 ///    (INVALID -50) on a 16-unit grid, cut into 512 x 512 patches
-/// Verified on main190 (24 rivers, all yaw 0, terrain_relative false, no reverse_direction).
+/// Verified on main190 (24 rivers, all yaw 0, terrain_relative false, no reverse_direction) and on vanilla scratch rivers
+/// with yaw 30, terrain_relative="true" (no effect) and reverse_direction="true" (2026-10-05).
 /// </summary>
 public static class BobRiver
 {
@@ -165,29 +166,41 @@ public static class BobRiver
         }
     }
 
-    /// <summary>The spline BOB builds for a river entity (yaw 0: world = float(local) + float(position)).</summary>
+    /// <summary>The spline BOB builds for a river entity: world = turn(float(local)) + float(position).</summary>
     public static Spline BuildSpline(RiverSpline river)
     {
+        // yaw (ECTransform rotation y, degrees): float cos/sin, rotated in float, then the position added; the tangents
+        // turn the same way (vanilla scratch river rotated 30°, byte-identical to BOB, 2026-10-05)
         var yaw = river.YawDegrees * Math.PI / 180;
+        float c = (float)Math.Cos(yaw), s = (float)Math.Sin(yaw);
+        float[] Turn((double X, double Y, double Z) t)
+        {
+            float x = (float)t.X, y = (float)t.Y, z = (float)t.Z;
+            return yaw == 0 ? [x, y, z] : [x * c + z * s, y, -x * s + z * c];
+        }
         float[] World((double X, double Y, double Z) p)
         {
-            if (yaw == 0) return [(float)p.X + (float)river.Position.X, (float)p.Y + (float)river.Position.Y, (float)p.Z + (float)river.Position.Z];
-            // not seen on main190 (all rivers have yaw 0): rotated in double, as the game-valid builder
-            return [(float)(river.Position.X + p.X * Math.Cos(yaw) + p.Z * Math.Sin(yaw)), (float)(river.Position.Y + p.Y),
-                    (float)(river.Position.Z - p.X * Math.Sin(yaw) + p.Z * Math.Cos(yaw))];
+            var q = Turn(p);
+            return [q[0] + (float)river.Position.X, q[1] + (float)river.Position.Y, q[2] + (float)river.Position.Z];
         }
-        float[] Control(float[] w, (double X, double Y, double Z) t) => [w[0] + (float)t.X, w[1] + (float)t.Y, w[2] + (float)t.Z];
+        float[] Control(float[] w, (double X, double Y, double Z) t) { var q = Turn(t); return [w[0] + q[0], w[1] + q[1], w[2] + q[2]]; }
         var spline = new Spline();
-        for (var i = 0; i + 1 < river.Points.Count; i++)
+        var points = RiverPointsInOrder(river);
+        for (var i = 0; i + 1 < points.Count; i++)
         {
-            var a = river.Points[i];
-            var b = river.Points[i + 1];
+            var a = points[i];
+            var b = points[i + 1];
             var w0 = World(a.Position);
             var w3 = World(b.Position);
             spline.Add(w0, Control(w0, a.TangentOut), Control(w3, b.TangentIn), w3);
         }
         return spline;
     }
+
+    /// <summary>The spline points in the order BOB walks them: reverse_direction="true" runs the spline backwards
+    /// (last point first, each point's tangents swapped).</summary>
+    public static IReadOnlyList<RiverPoint> RiverPointsInOrder(RiverSpline river) => !river.Reverse ? river.Points
+        : river.Points.Reverse().Select(p => p with { TangentIn = p.TangentOut, TangentOut = p.TangentIn }).ToList();
 
     // ---------------------------------------------------------------- mesh (FUN_18015e9e0)
 

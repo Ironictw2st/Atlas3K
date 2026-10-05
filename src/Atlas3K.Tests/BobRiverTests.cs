@@ -47,6 +47,33 @@ public class BobRiverTests
         Assert.Contains(1f, ts);
     }
 
+    /// <summary>River entity options none of the shipped maps use, against BOB's "Terry file" on a scratch copy of the
+    /// vanilla river layer (output/bob_runs/river_variants_vanilla_bob, 2026-10-05): river_7 turned 30° (yaw), river_6
+    /// terrain_relative="true" (no effect in BOB), river_5 reverse_direction="true".</summary>
+    [Fact]
+    public void Vanilla_RotatedRelativeAndReversedRivers_MatchBob()
+    {
+        var vanilla = new ProjectPaths { MapName = "3k_dlc07_main_map" };
+        var run = Path.Combine(vanilla.OutputRoot, "bob_runs", "river_variants_vanilla_bob");
+        var layer = Path.Combine(run, "scratch_river_layer.layer");
+        if (!File.Exists(layer) || BobRiver.MapBounds(vanilla) is not { } bounds) return;
+        var expected = new Dictionary<string, int> { ["river_7"] = 0, ["river_6"] = 1, ["river_5"] = 2 };
+        var rivers = RiverBuilder.ReadLayer(layer).Where(r => expected.ContainsKey(r.Name)).ToList();
+        Assert.Equal(3, rivers.Count);
+        Assert.Contains(rivers, r => r.YawDegrees == 30);
+        Assert.Contains(rivers, r => r.TerrainRelative);
+        Assert.Contains(rivers, r => r.Reverse);
+        foreach (var river in rivers)
+        {
+            var raw = BobRiver.BuildRaw(BobRiver.BuildSpline(river), BobRiver.RiverPointsInOrder(river).Select(p => (float)p.Width).ToList(), bounds);
+            var ours = BobRiver.ToModel(raw).ToBytes();
+            var bob = File.ReadAllBytes(Path.Combine(run, "models", $"river_{expected[river.Name]}.wsmodel.rigid_model_v2"));
+            Assert.True(ours.Length == bob.Length, river.Name);
+            for (var i = 0; i < bob.Length; i++)
+                if (ours[i] != bob[i] && !Uninitialised.Contains(i)) Assert.Fail($"{river.Name} differs at 0x{i:X}");
+        }
+    }
+
     [Fact]
     public void Main190_RiverModels_MatchBobApartFromUninitialisedBytes()
     {
