@@ -40,6 +40,23 @@ the same input too, so the parity tool masks them.
 Meshes over BOB's 65,000-vertex limit are split the way BOB's mesh splitter does it, into extra meshes of the same
 model.
 
+### Campaign AI pathfinding data (`hlp_spd`)
+
+No BOB action makes these two files: CA generates them with the campaign engine (`empirecampaign.modder.x64.dll`,
+`reprocess_spd_data` / `reprocess_hlp_data`). Atlas3K builds both from `pathfinding.ppd` and `map_data.esf`, and the
+comparison is against the files CA ships:
+
+| Step | Generates | Match with CA's file | Time |
+|---|---|---|---|
+| `hlp_spd` | `campaign_maps\<map>\spd_data.esf` (AI path table) | 100%, byte-identical on 5 vanilla files (dlc04, dlc06, dlc07 x2, 8p); 190E: 99.997% of values | 0.13 s vanilla, 0.5 s 190E |
+| `hlp_spd` | `campaign_maps\<map>\hlp_data.esf` (AI transition graph) | identical areas: 330 / 334 (dlc07), 335 / 339 (dlc06), 313 / 321 (dlc04), 311 / 321 (8p), 633 / 644 (190E); cost values 100% wherever an area's transitions match | 0.9 s vanilla, 2.8 s 190E |
+
+The remaining `hlp_data` differences are ties between routes of exactly equal cost, plus, on 190E, one region whose
+settlement and roads CA's build treated differently from what the map files say. The search code itself is verified
+against the engine's own search loop, and the start position was ruled out as the cause: the differences come from
+campaign state that exists only while the game runs. The generated files are valid and give equivalent AI routes.
+CLI: `Atlas3K.Cli hlp-spd [--in dir] [--out dir] [--compare dir]`. Details: [`docs/hlp_spd.md`](docs/hlp_spd.md).
+
 ## Install
 
 1. Install Total War: THREE KINGDOMS and its **Assembly Kit** (Steam → Library → Tools).
