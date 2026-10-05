@@ -147,6 +147,8 @@ public static partial class InfoCards
         new("profile.installBackup", "Keep a backup",
             "Before Install overwrites a pack in the game's data folder, keep one copy of the old pack in the app's backup folder."),
         new("profile.browse", "Browse", "Pick the path with a file dialog."),
+        new("build.walkthrough", "Walkthrough",
+            "A short guided tour of the Build window: the project bar, the build steps, the log and the project settings (F1)."),
     ];
 
     /// <summary>The card key for a compile step row, or null when the step has no text yet.</summary>

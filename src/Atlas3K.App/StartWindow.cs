@@ -39,6 +39,7 @@ public sealed class StartWindow : Window
         Foreground = Theme.Brush("Text");
         Content = BuildLayout();
         Placement.Track(this, "start");
+        Walkthrough.Enable(this, "start");
     }
 
     /// <summary>Closes the other windows one by one first, so an unsaved-edits prompt's Cancel keeps the app running
@@ -56,7 +57,7 @@ public sealed class StartWindow : Window
     private UIElement BuildLayout()
     {
         var dock = new DockPanel();
-        var menu = new Menu();
+        var menu = new Menu().Spot("start.menu");
         var file = new MenuItem { Header = "_File" };
         file.Items.Add(StandardMenus.Item("_Settings…", OpenSettings, tooltip: "Folders, linked packs, tile map source and developer mode."));
         file.Items.Add(new Separator());
@@ -85,25 +86,27 @@ public sealed class StartWindow : Window
 
         var tiles = new WrapPanel();
         tiles.Children.Add(Tile(Theme.Glyph.Scene, "Scene editor", "Props, entities, prefabs and layers, in 2D and 3D.",
-                                () => new Scene.SceneWindow(_paths).Show()));
+                                () => new Scene.SceneWindow(_paths).Show()).Spot("start.scene"));
         tiles.Children.Add(Tile(Theme.Glyph.Tiles, "Tile map", "Paint the campaign tile map hex by hex, with live validation.",
-                                () => new CampaignTileWindow(_paths).Show()));
+                                () => new CampaignTileWindow(_paths).Show()).Spot("start.tiles"));
         tiles.Children.Add(Tile(Theme.Glyph.Terrain, "Terrain painter", "Heights, ground textures and trees on the compiled map.",
-                                () => new MainWindow(_paths).Show()));
+                                () => new MainWindow(_paths).Show()).Spot("start.painter"));
         tiles.Children.Add(Tile(Theme.Glyph.Build, "Build", "Compile the map natively, run custom steps, pack and install.",
-                                () => BuildWindow.Show(this, _paths)));
+                                () => BuildWindow.Show(this, _paths)).Spot("start.build"));
         tiles.Children.Add(Tile(Theme.Glyph.Settings, "Settings", "Folders, linked mod packs, tile map source and game data.",
-                                OpenSettings).Card("start.settings"));
+                                OpenSettings).Card("start.settings").Spot("start.settingsTile"));
         left.Children.Add(tiles);
         Grid.SetColumn(left, 0);
         grid.Children.Add(left);
 
         // right: recent projects
         var right = new StackPanel();
-        right.Children.Add(Theme.Header("Recent projects", 6));
+        var recentPanel = new StackPanel().Spot("start.recent");
+        right.Children.Add(recentPanel);
+        recentPanel.Children.Add(Theme.Header("Recent projects", 6));
         var recent = AppSettings.Current.RecentProjects.Where(File.Exists).Take(8).ToList();
         if (recent.Count == 0)
-            right.Children.Add(new TextBlock
+            recentPanel.Children.Add(new TextBlock
             {
                 TextWrapping = TextWrapping.Wrap, Foreground = Theme.Brush("DimText"),
                 Text = "No projects yet. A project (.atlas3k) holds a map's build profile: open Build and create one.",
@@ -127,10 +130,12 @@ public sealed class StartWindow : Window
                 ToolTip = r,
             };
             b.Click += (_, _) => BuildWindow.Show(this, _paths, r);
-            right.Children.Add(b);
+            recentPanel.Children.Add(b);
         }
-        right.Children.Add(Theme.Header("Get started", 20));
-        right.Children.Add(new TextBlock
+        var started = new StackPanel().Spot("start.getStarted");
+        right.Children.Add(started);
+        started.Children.Add(Theme.Header("Get started", 20));
+        started.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Foreground = Theme.Brush("DimText"),
             Text = "1. Check your game and assembly kit folders in File > Settings.\n" +
@@ -152,7 +157,7 @@ public sealed class StartWindow : Window
         {
             Margin = new Thickness(0, 22, 12, 14), Padding = new Thickness(12, 10, 12, 10), Background = Theme.Brush("Panel"),
             CornerRadius = new CornerRadius(4),
-        };
+        }.Spot("start.selector");
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

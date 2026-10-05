@@ -71,6 +71,7 @@ public sealed partial class CampaignTileWindow : Window
         Foreground = Theme.Brush("Text");
         Content = BuildLayout();
         Placement.Track(this, "tiles");
+        Walkthrough.Enable(this, "tiles");
 
         _view.HoverChanged += Hover;
         _view.HexDown += HexDown;
@@ -85,8 +86,8 @@ public sealed partial class CampaignTileWindow : Window
     private UIElement BuildLayout()
     {
         var dock = new DockPanel();
-        var menu = new Menu();
-        var file = new MenuItem { Header = "_File" };
+        var menu = new Menu().Spot("tiles.menu");
+        var file = new MenuItem { Header = "_File" }.Spot("tiles.file");
         file.Items.Add(Gesture(Item("_Save", (_, _) => Save(false)), "Ctrl+S"));
         file.Items.Add(Item("Save _anyway (ignore issues)", (_, _) => Save(true)));
         file.Items.Add(Item("_Reload from disk (drop unsaved edits)", async (_, _) => await LoadAsync()));
@@ -110,12 +111,14 @@ public sealed partial class CampaignTileWindow : Window
         DockPanel.SetDock(menu, Dock.Top);
         dock.Children.Add(menu);
 
-        var statusBar = new Border { Background = Theme.Brush("Panel"), Padding = new Thickness(6, 3, 6, 3), Child = _status };
+        var statusBar = new Border { Background = Theme.Brush("Panel"), Padding = new Thickness(6, 3, 6, 3), Child = _status }.Spot("tiles.status");
         DockPanel.SetDock(statusBar, Dock.Bottom);
         dock.Children.Add(statusBar);
 
         var panel = new StackPanel { Margin = new Thickness(10) };
-        panel.Children.Add(Header("Tool", top: 0));
+        var toolGroup = new StackPanel().Spot("tiles.tools");
+        panel.Children.Add(toolGroup);
+        toolGroup.Children.Add(Header("Tool", top: 0));
         foreach (var (tool, text) in new[]
         {
             (Tool.Navigate, "Navigate (no edit)"), (Tool.Paint, "Paint tiles (brush)"), (Tool.Erase, "Remove tiles (brush: back to surrounding land/sea)"),
@@ -125,22 +128,28 @@ public sealed partial class CampaignTileWindow : Window
             var rb = new RadioButton { Content = text, Foreground = Theme.Brush("Text"), Margin = new Thickness(0, 2, 0, 2), IsChecked = tool == Tool.Navigate, GroupName = "tool" };
             rb.Checked += (_, _) => SetTool(tool);
             _toolButtons[tool] = rb;
-            panel.Children.Add(rb);
+            toolGroup.Children.Add(rb);
         }
-        panel.Children.Add(_radiusLabel);
-        panel.Children.Add(_radius);
-        panel.Children.Add(Header("Tile set (paint, line, fill)"));
-        panel.Children.Add(_palette);
-        panel.Children.Add(Header("New issues from unsaved edits"));
-        panel.Children.Add(_summary);
+        toolGroup.Children.Add(_radiusLabel);
+        toolGroup.Children.Add(_radius);
+        var paletteGroup = new StackPanel().Spot("tiles.palette");
+        panel.Children.Add(paletteGroup);
+        paletteGroup.Children.Add(Header("Tile set (paint, line, fill)"));
+        paletteGroup.Children.Add(_palette);
+        var issuesGroup = new StackPanel().Spot("tiles.issues");
+        panel.Children.Add(issuesGroup);
+        issuesGroup.Children.Add(Header("New issues from unsaved edits"));
+        issuesGroup.Children.Add(_summary);
         _issueList.MouseDoubleClick += (_, _) => { if (_issueList.SelectedItem is ListBoxItem { Tag: int[] h }) _view.CentreOn(h[0], h[1]); };
-        panel.Children.Add(_issueList);
-        panel.Children.Add(_allowWarnings);
-        var save = new Button { Content = "Save to tile_map.png", Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(4) };
+        issuesGroup.Children.Add(_issueList);
+        issuesGroup.Children.Add(_allowWarnings);
+        var save = new Button { Content = "Save to tile_map.png", Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(4) }.Spot("tiles.save");
         save.Click += (_, _) => Save(false);
-        panel.Children.Add(save);
-        panel.Children.Add(Header("Saved edits (shared with the terry MCP tools)"));
-        panel.Children.Add(_history);
+        issuesGroup.Children.Add(save);
+        var historyGroup = new StackPanel().Spot("tiles.history");
+        panel.Children.Add(historyGroup);
+        historyGroup.Children.Add(Header("Saved edits (shared with the terry MCP tools)"));
+        historyGroup.Children.Add(_history);
         panel.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Foreground = Theme.Brush("DimText"),
@@ -149,12 +158,12 @@ public sealed partial class CampaignTileWindow : Window
         });
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Background = Theme.Brush("Panel"), Content = panel };
         _tabs.Items.Add(new TabItem { Header = "Paint", Content = scroll });
-        _tabs.Items.Add(new TabItem { Header = "Errors (F8)", Content = BuildErrorsPanel() });
+        _tabs.Items.Add(new TabItem { Header = "Errors (F8)", Content = BuildErrorsPanel() }.Spot("tiles.errorsTab"));
         _tabs.SelectionChanged += (_, e) => { if (ReferenceEquals(e.OriginalSource, _tabs)) SetErrorMode(_tabs.SelectedIndex == 1); };
         _tabs.Width = 340;
         DockPanel.SetDock(_tabs, Dock.Left);
         dock.Children.Add(_tabs);
-        dock.Children.Add(_view);
+        dock.Children.Add(_view.Spot("tiles.map"));
         return dock;
     }
 

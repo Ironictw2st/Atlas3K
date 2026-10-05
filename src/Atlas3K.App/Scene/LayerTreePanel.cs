@@ -82,7 +82,7 @@ public sealed class LayerTreePanel : DockPanel
             if (ItemAt(e.OriginalSource) is { Tag: Node { IsLayer: true } target } && e.Data.GetData("terry-ids") is string[] ids)
                 DropRequested?.Invoke(ids, target);
         };
-        var bar = FilterBar();
+        var bar = FilterBar().Spot("scene.layerFilters");
         SetDock(bar, Dock.Top);
         Children.Add(bar);
         Children.Add(_tree);

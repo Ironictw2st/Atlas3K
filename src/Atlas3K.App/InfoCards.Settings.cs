@@ -46,6 +46,10 @@ public static partial class InfoCards
             "Copy the map's compiled files and the tree DB tables out of the linked packs, then the vanilla packs, into the game data cache. Packs are only read."),
         new("settings.dev", "Developer mode",
             "Shows the extra tools used to compare Atlas3K with BOB (BOB launch, tile-matching simulation, self-tests). Leave it off unless you check parity."),
+        new("settings.tour", "Show the walkthrough",
+            "A short guided tour of this page: what each section is for. Help › Walkthrough for this window (F1) does the same in every editor."),
+        new("settings.resetTours", "Reset walkthroughs",
+            "Every window's walkthrough starts again the next time that window opens, as on a fresh install."),
         new("menu.settings", "Settings",
             "Folders, linked mod packs (read-only), tile map source, game data and developer mode. Changes apply to windows opened afterwards."),
     ];

@@ -70,6 +70,19 @@ public static class StandardMenus
     public static MenuItem Help(Window owner)
     {
         var help = new MenuItem { Header = "_Help" };
+        var tour = Item("_Walkthrough for this window", () => Walkthrough.Start(owner), "F1",
+                        "A short guided tour of this window's panels. It also starts by itself the first time a window opens.");
+        help.Items.Add(tour);
+        if (owner is StartWindow)
+            help.Items.Add(Item("_Reset all walkthroughs", () =>
+            {
+                Walkthrough.ResetAll();
+                MessageBox.Show(owner, "Every window's walkthrough will start again the next time that window opens.", AppInfo.Product);
+            }, tooltip: "Show each window's walkthrough again the next time it opens."));
+        help.SubmenuOpened += (_, _) => tour.IsEnabled = Walkthrough.Has(owner);
+        owner.InputBindings.Add(new System.Windows.Input.KeyBinding(new RelayCommand(() => Walkthrough.Start(owner)),
+            System.Windows.Input.Key.F1, System.Windows.Input.ModifierKeys.None));
+        help.Items.Add(new Separator());
         help.Items.Add(Item("_Settings…", () => OpenSettings(owner), tooltip: SettingsTip));
         help.Items.Add(new Separator());
         help.Items.Add(Item("_Read me", () => OpenFile(Path.Combine(AppContext.BaseDirectory, "README.md"))));

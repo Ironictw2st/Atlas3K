@@ -56,50 +56,72 @@ public sealed class SettingsWindow : Window
             });
         }
         var detected = GameSetup.FindGameFolder();
-        panel.Children.Add(Theme.Header("Folders", firstRun ? 8 : 0));
-        panel.Children.Add(PathRow("Game folder", _game, _s.GameFolder, detected ?? "", p => Directory.Exists(Path.Combine(p, "data")),
+        var folders = new StackPanel().Spot("settings.folders");
+        panel.Children.Add(folders);
+        folders.Children.Add(Theme.Header("Folders", firstRun ? 8 : 0));
+        folders.Children.Add(PathRow("Game folder", _game, _s.GameFolder, detected ?? "", p => Directory.Exists(Path.Combine(p, "data")),
                                    "settings.game"));
-        panel.Children.Add(PathRow("Assembly kit", _kit, _s.AssemblyKit, Path.Combine(Effective(_game, detected ?? ""), "assembly_kit"),
+        folders.Children.Add(PathRow("Assembly kit", _kit, _s.AssemblyKit, Path.Combine(Effective(_game, detected ?? ""), "assembly_kit"),
                                    p => Directory.Exists(Path.Combine(p, "raw_data")), "settings.kit"));
-        panel.Children.Add(PathRow("Game data cache", _compiled, _s.CompiledRoot, Defaults.LocalData + "\\vanilla",
+        folders.Children.Add(PathRow("Game data cache", _compiled, _s.CompiledRoot, Defaults.LocalData + "\\vanilla",
                                    p => Directory.Exists(Path.Combine(p, "terrain", "campaigns")), "settings.compiled"));
-        panel.Children.Add(PathRow("DB tables", _db, _s.DbTsvFolder, Defaults.LocalData + "\\db",
+        folders.Children.Add(PathRow("DB tables", _db, _s.DbTsvFolder, Defaults.LocalData + "\\db",
                                    p => File.Exists(Path.Combine(p, "campaign_tree_ids_tables", "data__.tsv")), "settings.db"));
-        panel.Children.Add(PathRow("Output", _output, _s.OutputFolder, Defaults.LocalData + "\\output", _ => true, "settings.output"));
-        panel.Children.Add(PathRow("Cache", _cache, _s.CacheFolder, Defaults.LocalData + "\\cache", _ => true, "settings.cache"));
+        folders.Children.Add(PathRow("Output", _output, _s.OutputFolder, Defaults.LocalData + "\\output", _ => true, "settings.output"));
+        folders.Children.Add(PathRow("Cache", _cache, _s.CacheFolder, Defaults.LocalData + "\\cache", _ => true, "settings.cache"));
         _dev.Card("settings.dev");
         _map.Card("settings.map");
         _prepare.Card("settings.prepare");
         _kit.LostFocus += async (_, _) => await LoadMapsAsync();
 
-        panel.Children.Add(Theme.Header("Linked packs (read-only)"));
-        panel.Children.Add(new TextBlock
+        var linked = new StackPanel().Spot("settings.packs");
+        panel.Children.Add(linked);
+        linked.Children.Add(Theme.Header("Linked packs (read-only)"));
+        linked.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap, Foreground = Theme.Brush("DimText"), Margin = new Thickness(0, 0, 0, 4),
             Text = "Mod packs read for compiled map files, DB tables and assets, before the vanilla packs (top of the list wins). " +
                    "Atlas3K never writes to a pack or the game's data folder: edits go to the assembly kit or the output folder.",
         });
-        panel.Children.Add(PackRow());
+        linked.Children.Add(PackRow());
 
-        panel.Children.Add(Theme.Header("Tile map source"));
+        var tileSource = new StackPanel().Spot("settings.tileMap");
+        panel.Children.Add(tileSource);
+        tileSource.Children.Add(Theme.Header("Tile map source"));
         _tileMap = new TileMapSourcePanel(_s.TileMap, () => new ProjectPaths());
-        panel.Children.Add(_tileMap);
+        tileSource.Children.Add(_tileMap);
 
-        panel.Children.Add(Theme.Header("Prepare game data"));
+        var prepare = new StackPanel().Spot("settings.prepare");
+        panel.Children.Add(prepare);
+        prepare.Children.Add(Theme.Header("Prepare game data"));
         var prep = new StackPanel { Orientation = Orientation.Horizontal };
         prep.Children.Add(new TextBlock { Text = "Map", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
         prep.Children.Add(_map);
         prep.Children.Add(new Border { Width = 8 });
         prep.Children.Add(_prepare);
-        panel.Children.Add(prep);
-        panel.Children.Add(_log);
+        prepare.Children.Add(prep);
+        prepare.Children.Add(_log);
         _log.Margin = new Thickness(0, 6, 0, 0);
 
-        panel.Children.Add(Theme.Header("Other"));
+        var other = new StackPanel().Spot("settings.other");
+        panel.Children.Add(other);
+        other.Children.Add(Theme.Header("Other"));
         _dev.IsChecked = _s.DeveloperMode;
-        panel.Children.Add(_dev);
+        other.Children.Add(_dev);
+        var tours = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+        var showTour = new Button { Content = "Show the walkthrough", Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(0, 0, 6, 0) }.Card("settings.tour");
+        showTour.Click += (_, _) => Walkthrough.Start(this);
+        var resetTours = new Button { Content = "Reset walkthroughs", Padding = new Thickness(10, 2, 10, 2) }.Card("settings.resetTours");
+        resetTours.Click += (_, _) =>
+        {
+            Walkthrough.ResetAll();
+            resetTours.Content = "Walkthroughs reset";
+        };
+        tours.Children.Add(showTour);
+        tours.Children.Add(resetTours);
+        other.Children.Add(tours);
 
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(18, 10, 18, 14) };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(18, 10, 18, 14) }.Spot("settings.save");
         buttons.Children.Add(new TextBlock { Text = "Folder changes apply to windows opened after saving.", Foreground = Theme.Brush("DimText"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) });
         var ok = new Button { Content = firstRun ? "Continue" : "Save", IsDefault = true, MinWidth = 90, Style = (Style)FindResource("AccentButton") };
         ok.Click += (_, _) => { if (Save()) { DialogResult = true; } };
@@ -115,6 +137,9 @@ public sealed class SettingsWindow : Window
         dock.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = panel });
         Content = dock;
         Loaded += async (_, _) => await LoadMapsAsync();
+        Walkthrough.Enable(this, "settings", autoStart: !firstRun);
+        InputBindings.Add(new System.Windows.Input.KeyBinding(new RelayCommand(() => Walkthrough.Start(this)), System.Windows.Input.Key.F1,
+                                                              System.Windows.Input.ModifierKeys.None));
     }
 
     private UIElement PackRow()

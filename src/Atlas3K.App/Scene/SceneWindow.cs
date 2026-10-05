@@ -51,6 +51,7 @@ public sealed partial class SceneWindow : Window
         Foreground = Theme.Brush("Text");
         Content = BuildLayout();
         Placement.Track(this, "scene");
+        Walkthrough.Enable(this, "scene");
         Wire();
         Loaded += async (_, _) => await LoadAsync();
     }
@@ -60,14 +61,14 @@ public sealed partial class SceneWindow : Window
     private UIElement BuildLayout()
     {
         var dock = new DockPanel();
-        var menu = new Menu();
+        var menu = new Menu().Spot("scene.menu");
         menu.Items.Add(MenuOf("_File",
             ("_Open Terry project…", (Action)OpenProject, "Ctrl+O"),
             ("Open _campaign map", () => _ = Switch(null), ""),
             ("_Save terrain and tree edits", SaveAll, "Ctrl+S"),
             ("_Reload from disk", () => _ = LoadAsync(), "F5"),
             (null, null, null),
-            ("_Close", Close, "")));
+            ("_Close", Close, "")).Spot("scene.file"));
         menu.Items.Add(MenuOf("_Edit",
             ("_Undo last edit", Undo, "Ctrl+Z"),
             ("_Checkpoint…", Checkpoint, ""),
@@ -83,22 +84,22 @@ public sealed partial class SceneWindow : Window
             ("Clamp selected to _ground", () => _ = ClampAsync("selected"), "Ctrl+G"),
             ("Clamp all in active _layer", () => _ = ClampAsync("layer"), ""),
             ("Clamp all in _view", () => _ = ClampAsync("view"), ""),
-            ("Find _floating props", () => _ = FindFloatingAsync(), "")));
+            ("Find _floating props", () => _ = FindFloatingAsync(), "")).Spot("scene.edit"));
         menu.Items.Add(MenuOf("_Create",
             ("_Entity…", () => AddEntity(null), "Ctrl+N"),
             ("_Prefab…", () => PlacePrefab(null), "Ctrl+P"),
             ("Prop from _asset browser…", ShowPropsTab, ""),
-            ("New _file layer…", NewFileLayer, "")));
+            ("New _file layer…", NewFileLayer, "")).Spot("scene.create"));
         menu.Items.Add(MenuOf("_View",
             ("_Fit all", () => { if (Is3D) _view3d.FrameAll(); else _view.FitToContent(); }, "Home"),
             ("Frame _selection", () => { if (Is3D) _view3d.FrameSelection(); else _view.FrameSelection(); }, "F"),
             ("_Top view (2D)", () => _centre.SelectedIndex = 0, "Ctrl+1"),
-            ("_3D view", () => _centre.SelectedIndex = 1, "Ctrl+2")));
+            ("_3D view", () => _centre.SelectedIndex = 1, "Ctrl+2")).Spot("scene.viewMenu"));
         StandardMenus.AddTo(menu, this, _paths);
         DockPanel.SetDock(menu, Dock.Top);
         dock.Children.Add(menu);
 
-        var statusBar = new DockPanel { Background = Theme.Brush("Panel") };
+        var statusBar = new DockPanel { Background = Theme.Brush("Panel") }.Spot("scene.status");
         DockPanel.SetDock(_hover, Dock.Right);
         _hover.Margin = new Thickness(6, 3, 6, 3);
         _status.Margin = new Thickness(6, 3, 6, 3);
@@ -115,7 +116,7 @@ public sealed partial class SceneWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) });
 
         var left = new DockPanel { Background = Theme.Brush("Panel") };
-        var searchRow = new DockPanel { Margin = new Thickness(6) };
+        var searchRow = new DockPanel { Margin = new Thickness(6) }.Spot("scene.search");
         var find = new Button { Content = "Find", Padding = new Thickness(8, 1, 8, 1) };
         find.Click += (_, _) => RunSearch();
         DockPanel.SetDock(find, Dock.Right);
@@ -134,20 +135,20 @@ public sealed partial class SceneWindow : Window
         DockPanel.SetDock(resultsPanel, Dock.Top);
         left.Children.Add(searchRow);
         left.Children.Add(resultsPanel);
-        left.Children.Add(_tree);
+        left.Children.Add(_tree.Spot("scene.layers"));
         Grid.SetColumn(left, 0);
         grid.Children.Add(left);
 
         grid.Children.Add(Splitter(1));
-        _centre.Items.Add(new TabItem { Header = "Top (2D)", Content = _view });
-        _centre.Items.Add(new TabItem { Header = "3D", Content = Build3DPanel() });
+        _centre.Items.Add(new TabItem { Header = "Top (2D)", Content = _view.Spot("scene.map2d") });
+        _centre.Items.Add(new TabItem { Header = "3D", Content = Build3DPanel() }.Spot("scene.tab3d"));
         _centre.SelectionChanged += (_, e) =>
         {
             if (!ReferenceEquals(e.OriginalSource, _centre)) return;
             if (Is3D) { _view3d.Selection = new HashSet<string>(_selection); _view3d.Invalidate(); }
         };
         var centrePanel = new DockPanel();
-        var shared = SharedBar();
+        var shared = SharedBar().Spot("scene.sharedBar");
         DockPanel.SetDock(shared, Dock.Top);
         centrePanel.Children.Add(shared);
         centrePanel.Children.Add(_centre);

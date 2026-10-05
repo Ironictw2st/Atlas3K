@@ -18,13 +18,13 @@ public sealed partial class SceneWindow
     private UIElement RightPanel(UIElement inspector)
     {
         var tabs = _rightTabs = new TabControl { Background = Theme.Brush("Panel"), BorderThickness = new Thickness(0) };
-        tabs.Items.Add(new TabItem { Header = "Inspector", Content = inspector });
+        tabs.Items.Add(new TabItem { Header = "Inspector", Content = inspector.Spot("scene.inspector") });
         tabs.Items.Add(new TabItem
         {
             Header = "Terrain & trees", Content = TerrainTools,
             ToolTip = "Edit the kit's land / sea height maps and the CampaignTree map (brushes, fills, undo, save)",
-        });
-        tabs.Items.Add(new TabItem { Header = "Props", Content = PropTools }.Card("scene.props.add"));
+        }.Spot("scene.terrainTab"));
+        tabs.Items.Add(new TabItem { Header = "Props", Content = PropTools }.Card("scene.props.add").Spot("scene.propsTab"));
         tabs.SelectionChanged += (_, e) =>
         {
             if (!ReferenceEquals(e.OriginalSource, tabs)) return;

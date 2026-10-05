@@ -87,6 +87,8 @@ public sealed class BuildWindow : Window
         _log.Background = Theme.Brush("Bg");
         Content = BuildLayout();
         Placement.Track(this, "build");
+        Walkthrough.Enable(this, "build");
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => Walkthrough.Start(this)), Key.F1, ModifierKeys.None));
         UpdateTitle();
         ShowEmptyState();
         _filter.TextChanged += (_, _) => RefreshLog();
@@ -110,28 +112,36 @@ public sealed class BuildWindow : Window
         var dock = new DockPanel();
 
         var bar = new DockPanel { Background = Theme.Brush("Panel"), LastChildFill = true };
+        var tour = Theme.IconButton(Theme.Glyph.Info, "Walkthrough", (_, _) => Walkthrough.Start(this), null).Card("build.walkthrough").Spot("build.walkthrough");
+        tour.Margin = new Thickness(0, 6, 8, 6);
+        DockPanel.SetDock(tour, Dock.Right);
+        bar.Children.Add(tour);
         var left = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 6, 8, 6) };
-        left.Children.Add(Theme.Icon(Theme.Glyph.Map, 16, Theme.Brush("Accent")));
+        var projectGroup = new StackPanel { Orientation = Orientation.Horizontal }.Spot("build.projectBar");
+        left.Children.Add(projectGroup);
+        projectGroup.Children.Add(Theme.Icon(Theme.Glyph.Map, 16, Theme.Brush("Accent")));
         _projectLabel.Margin = new Thickness(6, 0, 12, 0);
-        left.Children.Add(_projectLabel.Card("build.project"));
-        left.Children.Add(Theme.IconButton(Theme.Glyph.Open, "Open…", (_, _) => OpenProjectDialog(), null).Card("build.open"));
-        left.Children.Add(Theme.IconButton(Theme.Glyph.New, "New…", (_, _) => NewProjectDialog(), null).Card("build.new"));
+        projectGroup.Children.Add(_projectLabel.Card("build.project"));
+        projectGroup.Children.Add(Theme.IconButton(Theme.Glyph.Open, "Open…", (_, _) => OpenProjectDialog(), null).Card("build.open"));
+        projectGroup.Children.Add(Theme.IconButton(Theme.Glyph.New, "New…", (_, _) => NewProjectDialog(), null).Card("build.new"));
         _save = Theme.IconButton(Theme.Glyph.Save, "Save", (_, _) => SaveProject(), null).Card("build.save");
-        left.Children.Add(_save);
+        projectGroup.Children.Add(_save);
         left.Children.Add(new Border { Width = 1, Background = Theme.Brush("BorderBrush"), Margin = new Thickness(8, 2, 12, 2) });
         _buildAll = Theme.IconButton(Theme.Glyph.Play, "Build all", (_, _) => Run(AllRequest()), null, (Style)FindResource("AccentButton")).Card("build.buildAll");
         _runSelected = Theme.IconButton(Theme.Glyph.Running, "Run selected", (_, _) => RunSelected(), null).Card("build.runSelected");
         _packOnly = Theme.IconButton(Theme.Glyph.Package, "Pack only", (_, _) => Run(new BuildRunner.Request { Segments = new HashSet<BuildSegment> { BuildSegment.Pack } }), null).Card("build.packOnly");
         _cancel = Theme.IconButton(Theme.Glyph.Stop, "Cancel", (_, _) => { _cts?.Cancel(); _progress.Text = "Cancelling…"; }, null).Card("build.cancel");
         _cancel.IsEnabled = false;
-        foreach (var b in new[] { _buildAll, _runSelected, _packOnly, _cancel }) left.Children.Add(b);
-        left.Children.Add(_progress.Card("build.progress"));
+        var runGroup = new StackPanel { Orientation = Orientation.Horizontal }.Spot("build.runBar");
+        foreach (var b in new[] { _buildAll, _runSelected, _packOnly, _cancel }) runGroup.Children.Add(b);
+        left.Children.Add(runGroup);
+        left.Children.Add(_progress.Card("build.progress").Spot("build.progress"));
         bar.Children.Add(left);
         DockPanel.SetDock(bar, Dock.Top);
         dock.Children.Add(bar);
 
         // left: the segment / step checklist
-        var treePanel = new DockPanel { Background = Theme.Brush("Panel") };
+        var treePanel = new DockPanel { Background = Theme.Brush("Panel") }.Spot("build.tree");
         var treeHint = new TextBlock
         {
             Text = "Ticked rows run on Build all, top to bottom; ticks are saved with the project. Select a row and press Run selected to run only that part. Hover a row for what it does.",
@@ -147,8 +157,8 @@ public sealed class BuildWindow : Window
 
         // right: log + profile tabs
         var tabs = new TabControl { Margin = new Thickness(0, 4, 0, 0) };
-        tabs.Items.Add(new TabItem { Header = "Log", Content = BuildLogPanel() }.Card("build.tab.log"));
-        tabs.Items.Add(new TabItem { Header = "Project settings", Content = _profileHost }.Card("build.tab.settings"));
+        tabs.Items.Add(new TabItem { Header = "Log", Content = BuildLogPanel() }.Card("build.tab.log").Spot("build.logTab"));
+        tabs.Items.Add(new TabItem { Header = "Project settings", Content = _profileHost }.Card("build.tab.settings").Spot("build.settingsTab"));
 
         _body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(340), MinWidth = 220 });
         _body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -171,7 +181,7 @@ public sealed class BuildWindow : Window
     private UIElement BuildLogPanel()
     {
         var dock = new DockPanel();
-        var tools = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) }.Spot("build.logTools");
         tools.Children.Add(new TextBlock { Text = "Filter", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }.Card("build.filter"));
         tools.Children.Add(_filter.Card("build.filter"));
         tools.Children.Add(_onlySelected.Card("build.onlySelected"));
@@ -186,13 +196,13 @@ public sealed class BuildWindow : Window
         tools.Children.Add(_showTileErrors);
         DockPanel.SetDock(tools, Dock.Top);
         dock.Children.Add(tools);
-        dock.Children.Add(_log);
+        dock.Children.Add(_log.Spot("build.log"));
         return dock;
     }
 
     private void ShowEmptyState()
     {
-        var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 520 };
+        var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 520 }.Spot("build.empty");
         panel.Children.Add(Theme.Icon(Theme.Glyph.Build, 40, Theme.Brush("Accent")));
         panel.Children.Add(new TextBlock { Text = "No project open", FontSize = 20, Margin = new Thickness(0, 12, 0, 6), HorizontalAlignment = HorizontalAlignment.Center });
         panel.Children.Add(new TextBlock

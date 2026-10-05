@@ -9,7 +9,7 @@
         <KeyBinding Key="Y" Modifiers="Ctrl" Command="{x:Static local:MainWindow.RedoCommand}"/>
     </Window.InputBindings>
     <DockPanel>
-        <Menu x:Name="MainMenu" DockPanel.Dock="Top">
+        <Menu x:Name="MainMenu" DockPanel.Dock="Top" local:Walkthrough.Spot="painter.menu">
             <MenuItem Header="_File">
                 <MenuItem Header="_Export to Assembly Kit..." Click="ExportAk_Click"/>
                 <MenuItem Header="Export _trees list..." Click="ExportTrees_Click"/>
@@ -38,7 +38,7 @@
             </MenuItem>
         </Menu>
 
-        <StatusBar DockPanel.Dock="Bottom">
+        <StatusBar DockPanel.Dock="Bottom" local:Walkthrough.Spot="painter.status">
             <StatusBarItem>
                 <TextBlock x:Name="StatusText" Text="Loading..." FontFamily="{StaticResource MonoFont}"/>
             </StatusBarItem>
@@ -52,7 +52,7 @@
             </Grid.ColumnDefinitions>
             <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Background="{StaticResource Panel}">
                 <StackPanel Margin="10,6">
-                    <Expander Header="Tool" IsExpanded="True">
+                    <Expander Header="Tool" IsExpanded="True" local:Walkthrough.Spot="painter.tool">
                         <StackPanel Margin="4,4,0,6">
                             <RadioButton x:Name="ToolNavigate" Content="Navigate (no edit)" IsChecked="True" Checked="Tool_Changed"/>
                             <RadioButton x:Name="ToolRaise" Content="Raise terrain" Checked="Tool_Changed"/>
@@ -67,7 +67,7 @@
                         </StackPanel>
                     </Expander>
 
-                    <Expander Header="Brush" IsExpanded="True">
+                    <Expander Header="Brush" IsExpanded="True" local:Walkthrough.Spot="painter.brush">
                         <StackPanel Margin="4,4,0,6">
                             <TextBlock x:Name="RadiusLabel" Text="Radius"/>
                             <Slider x:Name="RadiusSlider" Minimum="2" Maximum="400" Value="40" ValueChanged="Brush_Changed"/>
@@ -78,11 +78,11 @@
                         </StackPanel>
                     </Expander>
 
-                    <Expander Header="Ground texture" IsExpanded="True">
+                    <Expander Header="Ground texture" IsExpanded="True" local:Walkthrough.Spot="painter.texture">
                         <ListBox x:Name="TextureList" Height="220" Margin="4,4,0,6" SelectionChanged="Brush_Changed"/>
                     </Expander>
 
-                    <Expander Header="Tree tools">
+                    <Expander Header="Tree tools" local:Walkthrough.Spot="painter.trees">
                         <StackPanel Margin="4,4,0,6">
                             <TextBlock Text="Species to place"/>
                             <ComboBox x:Name="SpeciesCombo" Margin="0,2,0,6" SelectionChanged="Brush_Changed"/>
@@ -97,7 +97,7 @@
                         </StackPanel>
                     </Expander>
 
-                    <Expander Header="View" IsExpanded="True">
+                    <Expander Header="View" IsExpanded="True" local:Walkthrough.Spot="painter.view">
                         <StackPanel Margin="4,4,0,6">
                             <CheckBox x:Name="ShowTextures" Content="Ground textures" IsChecked="True" Click="Layers_Changed"/>
                             <CheckBox x:Name="ShowWater" Content="Water" IsChecked="True" Click="Layers_Changed"/>
@@ -106,7 +106,7 @@
                         </StackPanel>
                     </Expander>
 
-                    <Expander Header="Tree species">
+                    <Expander Header="Tree species" local:Walkthrough.Spot="painter.species">
                         <StackPanel Margin="4,4,0,6">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <Button Content="All" Width="50" Click="TreesAll_Click" Margin="0,0,4,0"/>
@@ -118,7 +118,7 @@
                 </StackPanel>
             </ScrollViewer>
             <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="{StaticResource Bg}"/>
-            <local:MapView x:Name="Map" Grid.Column="2"/>
+            <local:MapView x:Name="Map" Grid.Column="2" local:Walkthrough.Spot="painter.map"/>
         </Grid>
     </DockPanel>
 </Window>

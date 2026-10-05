@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Walkthroughs
+- **First-run tours:** the first time each window opens (start page, Settings, Scene editor, Tile map, Terrain painter, Build), a guided tour dims the window, rings one panel at a time and explains it in 1-2 sentences. Back / Next / Skip tour; Esc skips, Enter or → goes on. A step whose panel is hidden (a developer-only menu, the Build window's empty state once a project is open) is left out.
+  - The start page tour opens with a welcome card on the very first start.
+  - Replay with *Help › Walkthrough for this window* (F1) in every editor, the *Walkthrough* button in Build, or *Show the walkthrough* in Settings. *Help › Reset all walkthroughs* (start page) and *Settings › Reset walkthroughs* show every tour again.
+  - Finished or skipped tours are remembered in `settings.json` (`toursSeen`). Self-tests and other command-line automation never get a tour.
+  - The tour is its own transparent window over the editor, so it also covers the 3D view, and it takes the keyboard while open.
+  - Panels are tagged with `element.Spot("key")`; the step texts are one table per window (`Walkthrough.*.cs`).
+- **Testing:** the `ATLAS3K_SETTINGS_DIR` environment variable points the app at a throw-away settings folder. `Atlas3K.exe [--scene|--tile-editor|--painter|--build] --walkthrough-shots <dir> [settings]` saves every step of that window's tour as a PNG (rendered off-screen, no input sent) and quits.
+
 ### Scene editor
 - **Layer filters:** filter the layer tree by name, region, entity type and visible / hidden. Parents of matches stay in the tree, and filtering never changes visibility.
 - **Show all / Hide all / Show only filtered:** each is one undo step, and locked layers are left as they are.

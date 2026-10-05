@@ -52,6 +52,14 @@ model.
 Settings live in `%AppData%\Atlas3K\settings.json`. Change them later from **File › Settings** on the start page, the
 **Settings** tile, or **Help › Settings** / **Window › Settings** in any editor.
 
+### Walkthroughs
+
+The first time each window opens (start page, Settings, Scene editor, Tile map, Terrain painter, Build), a short guided
+tour rings its panels one at a time and says what each is for. **Next** / Enter goes on, **Back** goes back, **Skip
+tour** / Esc ends it. Replay a window's tour with **Help › Walkthrough for this window** (F1; the **Walkthrough** button
+in the Build window, **Show the walkthrough** in Settings). **Help › Reset all walkthroughs** on the start page, or **Reset
+walkthroughs** in Settings, shows every tour again.
+
 ### Choosing the map
 
 The start page has an **Assembly kit** list (the `assembly_kit*` folders next to the game) and a **Map** list: the maps
