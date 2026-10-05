@@ -89,6 +89,28 @@ public sealed class HexRegionLookup
         if (row is null) { reason = $"no campaign_map_playable_areas row for {paths.MapName}"; return null; }
         float F(string n) => float.Parse((string?)row.Element(n) ?? "0", CultureInfo.InvariantCulture);
         reason = "";
-        return new HexRegionLookup(MapHexFile.Read(hexPath), F("minx"), F("miny"), F("maxx"));
+        var (minX, minY, maxX) = (F("minx"), F("miny"), F("maxx"));
+        // BOB reads the bounds from the compiled map_data.esf, whose floats can be an ulp off the XML's decimal text
+        // (main190: 986.05096 vs float(986.051)), which moves hex edges by an ulp (2026-10-05, one boundary prop)
+        if (EsfBounds(Path.Combine(paths.AkWorkingCampaignMapDir, "map_data.esf"), minX, minY, maxX) is { } esf)
+            (minX, minY, maxX) = esf;
+        return new HexRegionLookup(MapHexFile.Read(hexPath), minX, minY, maxX);
+    }
+
+    /// <summary>The map bounds in map_data.esf's header: two vec2 values (ESF type 0x0c) holding (min x, min y) and
+    /// (max x, max y), accepted only when they are within 0.01 of the playable-area row.</summary>
+    internal static (float MinX, float MinY, float MaxX)? EsfBounds(string path, float minX, float minY, float maxX)
+    {
+        if (!File.Exists(path)) return null;
+        var b = new byte[4096];
+        int n;
+        using (var s = File.OpenRead(path)) n = s.Read(b, 0, b.Length);
+        for (var i = 0; i + 18 <= n; i++)
+        {
+            if (b[i] != 0x0c || b[i + 9] != 0x0c) continue;
+            float x0 = BitConverter.ToSingle(b, i + 1), y0 = BitConverter.ToSingle(b, i + 5), x1 = BitConverter.ToSingle(b, i + 10);
+            if (Math.Abs(x0 - minX) <= 0.01f && Math.Abs(y0 - minY) <= 0.01f && Math.Abs(x1 - maxX) <= 0.01f) return (x0, y0, x1);
+        }
+        return null;
     }
 }
