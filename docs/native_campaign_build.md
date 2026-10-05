@@ -39,7 +39,7 @@ The `terry` MCP server also edits the props in the kit's region layers (`<map>.<
 | `tile_list` | Tilemap | native | **byte-identical to BOB on vanilla** (2026-10-04: `tile_list.bin`, and `global_map\` with it). Fixes: `TILE_DATABASE::sort` runs before link targets are loaded (all 0), so the DB order is area then name; `calculate_flow` neither flows nor queues a tile with no TLT_EQUALS entry link. main190 (BOB 2026-10-03): every record field identical; only low/high differ because that BOB run had no lf (all records +/-FLT_MAX sentinels). Evidence: Frida dumps `research/bob_re/frida_out`, `research/sim_first_divergence.py`, `research/tilelist_fields.py` |
 | `global_map` | Global Mesh (`global_map\` part) | native | `global_blend.dds`, `texture_arrays.xml`, `global_map\tile_list.bin` byte-identical |
 | `global_mesh` | Global Mesh (`land_mesh_N`, `sea_mesh_N`) | native (game-valid) | same mesh count and positions (170 land, 125 sea); holes identical (coverage IoU 1.0); land triangles 1.06× vanilla, sea 1.00×; surface-to-lf error equal to vanilla's (p99 ≈ 0.1–0.25); compressed-map holes agree on 97–99.7% of grid points |
-| `rivers` | Terry file (river models, height patches) | native (game-valid) | same 24 rivers and numbering as vanilla (checked by shape); land-mesh river holes left uncovered: 78 px map-wide (vanilla 0, BOB 732) |
+| `rivers` | Terry file (river models, height patches) | native (game-valid) | same 24 rivers and numbering as vanilla (checked by shape); land-mesh river holes left uncovered: 78 px map-wide (vanilla 0, BOB 732). vs BOB main190: no file identical yet; BOB's spline sampler is reverse-engineered and prototyped (8 of 24 rivers get BOB's exact vertex count, xz positions up to 87% exact), see *Rivers vs BOB* |
 | `global_props` | Terry file (`global_props.bin`) | native (near byte-identical to BOB) | main190 against BOB (2026-10-05): 12,429 of 12,461 common bodies byte-identical; BOB has 4 more entries (12,465). Remaining differences are listed under "global_props.bin vs BOB" below. main190 checked in game 2026-10-04 |
 | `camera_heightmap` | Generate Camera Height Map | native (close, not byte-identical) | correlation 0.94, 73% of pixels within 0.1 units |
 | `trees` | Campaign Trees (`trees.campaign_tree_list`) | native | byte-identical when the CampaignTree map is the one decoded from vanilla (`trees-decode`) and heights are reused; heights computed from scratch (`TileHfHeight`): 205,765 of 205,767 vanilla trees bit-exact |
@@ -169,6 +169,47 @@ The decompiled algorithm is written up in `docs/bob_re_global_mesh.md`. Native v
 - **Vertex, 48 bytes:** position relative to the pivot, then 1, then v = 0.1 × lateral offset, then u = 0.1 × arc length, then world uv = (x/595.1, z/541.79) scaled to the map, then packed normal (up), tangent (downstream) and bitangent (across), then 4 zero bytes. The bounding box is in world coordinates.
 - **Height patches:** the water surface rasterised at 16 px per unit into 32-unit blocks (512², row 0 = south), header (0, −50, 0, 0, max, 0), 0 = no water. They're named `river_N_patch_<dx>x<dz>` by pixel offset from the river's first block, and listed in `rivers.height_patch_collection` with their world rectangles.
 
+#### Rivers vs BOB (2026-10-05, work in progress)
+
+Reference: BOB's main190 "Terry file" output (`output/bob_runs/20261004_230523_frida_trees_main190/bob_terrain_out`),
+built from the kit river layer `3k_190e_expanded_map.1972bd217a4938e.layer`, which is still unchanged. Prototype:
+`research/rivers/bob_spline.py`. Measured by `research/rivers/river_match.py` and `river_cmp.py`. No native code changed
+yet; the native step stays game-valid (its wider water covers the tile holes BOB leaves).
+
+BOB's pipeline (tooldatabuilder `process_river_spline` → `FUN_1800d99e0`):
+- **Spline** (`FUN_18016e440`, utilitydll `SEGMENTED_SPLINE_3`):
+  - one cubic Bézier per point pair (p_i, p_i + tangent_out, p_i+1 + tangent_in, p_i+1);
+  - basis matrix rows (−1,3,−3,1), (3,−6,3,0), (−3,3,0,0), (1,0,0,0);
+  - segment length = Σ|B′(u)|·du with 1000 steps of du = 1/1000, where the derivative is the basis applied to (3u², 2u, 1, 0);
+  - a degenerate segment (p0 = p1 and p2 = p3) uses the straight-line distance.
+- **Evaluation:** `FUN_1800a4990` finds the segment by Σ len/total, then u = (total·t − start)/len. Two sum orders:
+  - `FUN_1800b13b0` (used by `optimise_spline`) adds ((w3·P3 + w2·P2) + w1·P1) + w0·P0;
+  - `FUN_1801884d0` (used by the sections) adds w0·P0 + w1·P1 + w2·P2 + w3·P3.
+- **Samples:** `SEGMENTED_SPLINE_3::optimise_spline(out, 20, extra, 0.02)` runs a greedy direction filter:
+  - **Candidates:** N = trunc(20·length ± 0.5) parameters.
+  - **Filter:** keep t_(k−1) when dot(norm(P(t_last) − P(t_prev_kept)), norm(P(t_k) − P(t_(k−1)))) < 0.98; then add 1.0.
+  - **Extras:** merge the 7 extras k/8 (k = 0..6) and sort.
+  - **Unique bug:** BOB's in-place unique never shrinks the count, so the old tail values stay in the list. With this, 8 of 24 rivers get exactly BOB's vertex count.
+- **Cross-section** (`FUN_18015e9e0`):
+  - position = P(t); direction = the xz derivative, normalised (z² + x²);
+  - width = lerp of the segment's start/end widths (record +0x48/+0x4c);
+  - 5 vertices at off = j·0.25·w − 0.5·w, x = dz·off + px, z = −(dx·off) + pz, y = py;
+  - each component goes through BOB's own float→half (`FUN_1803811a0`) into a 32-byte intermediate vertex: half x, y, z, v = off·C, u = len·C·t, world uv.
+- **Why the vertices look snapped to 0.25:** they're half-precision world coordinates (the half step is 0.25 between 256 and 512).
+- **Later stages:** `FUN_180146460`, then VERTEX_LIST_CLEANER `FUN_1800d0700`, then MESH_SPLITTER `FUN_1800d0f80`, then `MODEL_PROCESSOR::write`.
+- **BOB's .wsmodel** uses LF line ends. CA's shipped vanilla files use CRLF.
+
+**Where it stands:**
+- **xz agreement:** the vertex positions with the prototype (half-quantised, translation-aligned) reach 87% on the best river, 1–58% elsewhere; 0 of 24 rivers are exact.
+- **y:** differs by about one half-quantum, so BOB's water height isn't the plain spline y.
+
+**Next:**
+1. the y source;
+2. the remaining one-quantum xz differences: the float op order in the segment search and the width lerp;
+3. the index order and the cleaner/splitter, which make BOB's vertex order section-interleaved;
+4. the 48-byte writer and pivot;
+5. the height patches (88 BOB vs 108 native files).
+
 ### global_props.bin (`GlobalPropsBuilder`)
 
 **Layout**, recovered from vanilla and the decompiled serializers (`research/bob_re/bmd_fields`, `bmd_export`):
@@ -215,8 +256,7 @@ BOB's rules, from the decompiled bob_terrain / qttoolutility / empireutility / c
   - Decal: bytes 80..83 = parallax_scale, 102 = apply_to_terrain, 103 = render_above_snow, 104 = apply_to_objects.
   - Composite scene last byte = autoplay.
   - Sound cloud points = float(position) + float(offset).
-- **Entry order:** cells ascending. Inside a cell, BOB's region order isn't matched; native uses the lowest entity id.
-  - Region bodies hang off a CA hash map keyed by region name (`CA::murmur_hash` = MurmurHash3 x86_32, seed 0x4a545eed; buckets h % (n − 1)). That ordering theory didn't reproduce the order (`research/props/region_hash_order.py`).
+- **Entry order:** cells ascending. Inside a cell, regions are in the list order of a CA_STD hash map keyed by region name, filled by ascending first entity id (`CaHash.HashMapOrder`: CA::murmur_hash, buckets 1 -> 2b+1, re-bucketing in list order). Matches all 2,417 main190 cells (`research/props/cell_map_order.py`, 2026-10-05).
 
 **Remaining differences:**
 
