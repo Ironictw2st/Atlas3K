@@ -316,4 +316,28 @@ public class CampaignBuildTests
         Assert.DoesNotContain(CampaignBuildPipeline.NativeSteps, s => s is PendingStep);
         Assert.Contains(CampaignBuildPipeline.NativeSteps, s => s.Name == "global_map");
     }
+
+    [Fact]
+    public void TileHfHeight_VanillaTrees_MatchShippedHeights()
+    {
+        if (!File.Exists(Vanilla("tile_list.bin")) || !File.Exists(Paths.TreeList) || !Directory.Exists(Paths.GameDataDir)) return;
+        var packs = Atlas3K.Formats.Packs.PackSet.OpenVanilla(Paths.GameDataDir);
+        var prefix = Atlas3K.Formats.Packs.PackFile.Normalize(TileDatabase.Folder);
+        var db = TileDatabase.Load(packs.Packs.SelectMany(p => p.Entries.Keys).Where(k => k.StartsWith(prefix, StringComparison.Ordinal))
+            .Distinct().Select(k => packs.TryRead(k)).OfType<byte[]>());
+        var terrain = new Atlas3K.Core.Campaign.Terrain.TileHfHeight(TileList.Read(Vanilla("tile_list.bin")), db, packs.TryRead,
+            CompressedMap.Read(Vanilla("lf_height_map.compressed_map")), Atlas3K.Core.Campaign.GlobalMesh.GlobalMeshStep.TileSize);
+        var trees = Atlas3K.Formats.Trees.CampaignTreeList.Load(Paths.TreeList);
+        int n = 0, exact = 0, close = 0;
+        foreach (var t in trees.Types.SelectMany(type => type.Instances))
+        {
+            var y = terrain.Height(t.X, t.Z / Atlas3K.Core.Campaign.Trees.TreesStep.CampaignZScale);
+            n++;
+            if (BitConverter.SingleToInt32Bits(y) == BitConverter.SingleToInt32Bits(t.Y)) exact++;
+            if (Math.Abs(y - t.Y) <= 1e-5f) close++;
+        }
+        // 2026-10-04: 61.46% bit-exact, 99.90% within 1e-5 (lf alone: 60.8% / 98.9%)
+        Assert.True(exact >= 0.60 * n, $"bit-exact {exact} of {n}");
+        Assert.True(close >= 0.998 * n, $"within 1e-5 {close} of {n}");
+    }
 }

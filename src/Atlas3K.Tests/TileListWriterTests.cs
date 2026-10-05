@@ -64,17 +64,14 @@ public class TileListWriterTests
                 diffs.Add($"#{i} vanilla {vanilla.Paths[(int)a.Path]} {a.X},{a.Y} o{a.Orientation:X2} c{a.Climate} {a.LowHeight}/{a.HighHeight}" +
                           $" | built {built.Paths[(int)b.Path]} {b.X},{b.Y} o{b.Orientation:X2} c{b.Climate} {b.LowHeight}/{b.HighHeight}");
         }
-        // Known: the two river tiles just past the unique river_crossing\cross_5 (956,1178 and 952,1182) carry no
-        // flow bit in vanilla, though the same layout gets one everywhere else. BOB's walk evidently did not cross
-        // cross_5 when vanilla was built (its tile definition has likely changed since).
-        var known = new[] { " 956,1178 o80 ", " 952,1182 o80 " };
-        var unexpected = diffs.Where(d => !known.Any(d.Contains)).ToList();
-        Assert.True(unexpected.Count == 0, string.Join("\n", unexpected));
+        // 2026-10-04: byte-identical. calculate_flow neither flows nor queues a tile with no TLT_EQUALS entry link
+        // (river_crossing\cross_5), so the river tiles upstream of it keep flow 0 as in vanilla.
+        Assert.True(diffs.Count == 0, string.Join("\n", diffs));
         Assert.Equal(vanilla.Ints, built.Ints);
         Assert.Equal(vanilla.Paths, built.Paths);
         Assert.Equal(vanilla.Climates, built.Climates);
         var bytes = built.ToBytes();
         Assert.Equal(original.Length, bytes.Length);
-        Assert.Equal(2, original.Zip(bytes).Count(p => p.First != p.Second));   // just those two orientation bytes
+        Assert.Equal(original, bytes);
     }
 }

@@ -36,3 +36,4 @@ __pycache__/
 !/research/*/*.ps1
 !/research/*/*.sh
 !/research/*/*.atlas3k
+research/trees/tile_hf/

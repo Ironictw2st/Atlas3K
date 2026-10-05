@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using Atlas3K.Core.Campaign.GlobalMesh;
+using Atlas3K.Core.Campaign.Terrain;
+using Atlas3K.Formats.Packs;
 using Atlas3K.Core.Exporters;
 using Atlas3K.Formats.Maps;
 using Atlas3K.Formats.Terry;
@@ -12,8 +14,8 @@ namespace Atlas3K.Core.Campaign.Trees;
 /// (BOB "Campaign Trees", <see cref="CampaignTreeGenerator"/>).
 /// Heights: a tree whose regenerated (x, z) is bit-identical to the reference list's tree on that hex keeps the
 /// reference y (terrain unchanged there), so an unchanged map rebuilds byte for byte. Other trees take the lf height
-/// in BOB's tile space (x, z / 1.15476 over tiles × tile size): bit-exact on ~60% of vanilla trees and within a few
-/// float ulps on nearly all the rest; the per-tile hf detail of river/road/canal tiles is not added.
+/// in BOB's tile space (x, z / 1.15476 over tiles × tile size) plus the per-tile hf of river/road/canal tiles
+/// (<see cref="TileHfHeight"/>, when a tile list exists): vanilla bit-exact ~61%, within 1e-5 on 99.87%.
 /// </summary>
 public sealed class TreesStep : ICampaignBuildStep
 {
@@ -58,11 +60,12 @@ public sealed class TreesStep : ICampaignBuildStep
         if (File.Exists(lfPath))
             lf = new LfSampler(CompressedMap.Read(lfPath), map.Width * tileSize, map.Height * tileSize, tileSize);
         else notes.Add("no lf_height_map.compressed_map (run step 'rasters'); trees not in the reference list get y = 0");
+        var terrain = lf is null || !UseTileHf ? null : TileHeights(ctx, notes);
 
         int reused = 0, sampled = 0;
         var list = CampaignTreeGenerator.Generate(colours, grid, db, (col, row, x, z) =>
         {
-            var ground = lf?.Height(x, z / CampaignZScale);
+            var ground = terrain?.Height(x, z / CampaignZScale) ?? lf?.Height(x, z / CampaignZScale);
             // reuse only where the terrain is unchanged: same spot AND the reference y still on today's ground (lake
             // shaping / island flattening / terrain polish moved the ground under kept trees, 2026-10-04)
             if (reference != null && reference.TryGetValue((col, row), out var r) &&
@@ -83,6 +86,29 @@ public sealed class TreesStep : ICampaignBuildStep
                   $"heights: {reused} from the reference list, {sampled} from lf");
         if (list.TotalInstances == 0) notes.Add("the CampaignTree map has no tree colours: the list is empty");
         return new StepResult(Name, [path], notes, sw.Elapsed);
+    }
+
+    /// <summary>Add the per-tile hf of the tile list's tiles (rivers, roads, canals) to the lf height, as BOB does.</summary>
+    public bool UseTileHf { get; init; } = true;
+
+    /// <summary>BOB's tile-space terrain height (lf + per-tile hf) when a tile list and the game's tile database exist.</summary>
+    private static TileHfHeight? TileHeights(CampaignBuildContext ctx, List<string> notes)
+    {
+        var tl = new[] { ctx.OutFile("tile_list.bin"),
+                         Path.Combine(ctx.Paths.AkWorkingDir, "terrain", "campaigns", ctx.MapName, "tile_list.bin"),
+                         Path.Combine(ctx.Paths.TerrainDir, "tile_list.bin") }.FirstOrDefault(File.Exists);
+        if (tl is null || !Directory.Exists(ctx.Paths.GameDataDir))
+        {
+            notes.Add("no tile_list.bin or game data folder: tree heights are lf only (no river/road/canal hf)");
+            return null;
+        }
+        var packs = PackSet.OpenVanilla(ctx.Paths.GameDataDir);
+        var prefix = PackFile.Normalize(TileDatabase.Folder);
+        var db = TileDatabase.Load(packs.Packs.SelectMany(p => p.Entries.Keys).Where(k => k.StartsWith(prefix, StringComparison.Ordinal))
+            .Distinct().Select(k => packs.TryRead(k)).OfType<byte[]>());
+        var lfMap = CompressedMap.Read(ctx.OutFile("lf_height_map.compressed_map"));
+        notes.Add($"tree heights: lf + tile hf ({Path.GetFileName(Path.GetDirectoryName(tl))}/tile_list.bin)");
+        return new TileHfHeight(TileList.Read(tl), db, packs.TryRead, lfMap, GlobalMeshStep.TileSize);
     }
 
     /// <summary>The reference list's trees by hex (compiled root, then working_data), if it is on the same grid.</summary>

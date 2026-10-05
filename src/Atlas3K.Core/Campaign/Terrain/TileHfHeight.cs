@@ -1,0 +1,174 @@
+using Atlas3K.Formats.Maps;
+
+namespace Atlas3K.Core.Campaign.Terrain;
+
+/// <summary>
+/// BOB's campaign terrain height at a point in tile space (WARSCAPE::TERRAIN_RENDER_SETUP::get_height_worker,
+/// warscape 0x370e20 / 0x371030), all float32 in BOB's order:
+///  - tile instances are tried in tile_list record order; the first one that answers wins. A tile answers when the
+///    point lies inside its rotated bounds (both edges inclusive), the sub-tile under the point is valid (masked tiles
+///    only) and either that sub-tile is valid or its hf is non-zero.
+///  - lf: u = x / (tilesW · T), v = 1 − z / (tilesH · T); FUN_18039eea0 bilinear on lf_height_map (corners int(fx),
+///    int(fx)+1, int(fy)−1, int(fy)); height = (l · 5500) · f − f · 1200, f = (1/128) · T.
+///  - hf (get_high_frequency_height_new): the tile's hf_height_map.compressed_map sampled with the same bilinear at the
+///    tile-local (u, v) (rotation 0x20: (1 − v, u), 0x40: (1 − u, 1 − v), 0x80: (v, 1 − u)), value = raw/65535 ·
+///    (hi − lo) + lo, times f. Tiles with only the old hf_height_map.data (blockout cliffs, terrace farms ...) and
+///    version-2 maps add 0 here.
+///  - result = hf + lf; height_split returns (total − lf, lf) and the tree list stores their sum.
+/// Vanilla 3k_dlc07 (CA's shipped tree list): bit-exact on ~61% of trees, within 1e-5 on 99.87% (lf alone: 98.89%),
+/// the rest are 1–4 ulp differences of unknown origin (they occur on flat generic tiles too).
+/// </summary>
+public sealed class TileHfHeight
+{
+    private const float K = 1f / 65535f;
+    private readonly TileList _list;
+    private readonly TileInfo?[] _tileOfPath;
+    private readonly HfMap?[] _hfOfPath;
+    private readonly List<int>?[] _cells;
+    private readonly int _tilesW, _tilesH;
+    private readonly float _t, _invT, _f, _maxX, _maxZ;
+    private readonly HfMap _lf;
+
+    private sealed record HfMap(ushort[] Data, int W, int H, float Lo, float Hi);
+
+    /// <param name="readPack">reads a game file by internal path (null when missing)</param>
+    public TileHfHeight(TileList list, IReadOnlyDictionary<string, TileInfo> db, Func<string, byte[]?> readPack,
+                        CompressedMap.Map lf, float tileSize)
+    {
+        _list = list;
+        _tilesW = list.Ints[1];
+        _tilesH = list.Ints[2];
+        _t = tileSize;
+        _invT = 1f / tileSize;
+        _f = 1f / 128f * tileSize;
+        _maxX = _tilesW * tileSize;
+        _maxZ = _tilesH * tileSize;
+        _lf = new HfMap(lf.Raster.Data, lf.Raster.Width, lf.Raster.Height, lf.Header[1], lf.Header[4]);
+
+        _tileOfPath = new TileInfo?[list.Paths.Count];
+        _hfOfPath = new HfMap?[list.Paths.Count];
+        var cache = new Dictionary<string, HfMap?>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < list.Paths.Count; i++)
+        {
+            var key = TileDatabase.NormalisePath(list.Paths[i]);
+            db.TryGetValue(key, out var tile);
+            _tileOfPath[i] = tile;
+            if (!cache.TryGetValue(key, out var hf))
+            {
+                hf = null;
+                var bytes = readPack(key.Replace('\\', '/') + "hf_height_map.compressed_map");
+                if (bytes is not null)
+                {
+                    try
+                    {
+                        var m = CompressedMap.Decode(bytes);
+                        if (m.Header[1] != 0f || m.Header[4] != 0f)
+                            hf = new HfMap(m.Raster.Data, m.Raster.Width, m.Raster.Height, m.Header[1], m.Header[4]);
+                    }
+                    catch (InvalidDataException) { }        // version-2 maps (3 river junctions): not read
+                }
+                cache[key] = hf;
+            }
+            _hfOfPath[i] = hf;
+        }
+
+        _cells = new List<int>[_tilesW * _tilesH];
+        for (var r = 0; r < list.Records.Count; r++)
+        {
+            var rec = list.Records[r];
+            var tile = _tileOfPath[rec.Path];
+            if (tile is null) continue;
+            var (w, h) = Size(tile, rec.Orientation);
+            for (var y = rec.Y; y <= Math.Min(rec.Y + h, _tilesH - 1); y++)
+                for (var x = rec.X; x <= Math.Min(rec.X + w, _tilesW - 1); x++)
+                    (_cells[y * _tilesW + x] ??= []).Add(r);
+        }
+    }
+
+    private static (int W, int H) Size(TileInfo t, byte orientation) =>
+        (orientation & 0xF0) is 0x20 or 0x80 ? (t.Height, t.Width) : (t.Width, t.Height);
+
+    /// <summary>FUN_18039eea0 + COMPRESSED_MAP::value_float.</summary>
+    private static float Sample(HfMap m, float u, float v)
+    {
+        var fx = m.W * u;
+        var fy = m.H * v;
+        var fx0 = MathF.Floor(fx);
+        var fy0 = MathF.Floor(fy);
+        float xi = (int)fx, yi = (int)fy;
+        float maxC = m.W - 1, maxR = m.H - 1;
+        static float Clamp(float a, float hi) => a < 0f ? 0f : a > hi ? hi : a;
+        float Value(float c, float r)
+        {
+            var raw = m.Data[(int)Clamp(r, maxR) * m.W + (int)Clamp(c, maxC)];
+            return raw * K * (m.Hi - m.Lo) + m.Lo;
+        }
+        var a = Value(xi, yi - 1f);
+        var b = Value(xi + 1f, yi - 1f);
+        var top = (b - a) * (fx - fx0) + a;
+        var c = Value(xi, yi);
+        var d = Value(xi + 1f, yi);
+        var bot = (d - c) * (fx - fx0) + c;
+        return (bot - top) * (fy - fy0) + top;
+    }
+
+    /// <summary>lf height at a tile-space point (x, z already divided by the campaign z scale).</summary>
+    public float Lf(float x, float z)
+    {
+        var u = (x - 0f) / (_maxX - 0f);
+        var v = 1f - (z - 0f) / (_maxZ - 0f);
+        var l = Sample(_lf, u, v);
+        return l * 5500f * _f - _f * 1200f;
+    }
+
+    /// <summary>Tree height at a tile-space point: (total − lf) + lf, total = hf · f + lf of the first answering tile.</summary>
+    public float Height(float x, float z) => Split(x, z) is var (hf, lf) ? hf + lf : 0f;
+
+    /// <summary>height_split: (total − lf, lf).</summary>
+    public (float Hf, float Lf) Split(float x, float z)
+    {
+        var lf = Lf(x, z);
+        var tx = _invT * x;
+        var ty = _invT * z;
+        int cx = (int)tx, cy = (int)ty;
+        if (cx < 0 || cy < 0 || cx >= _tilesW || cy >= _tilesH) return (0f, lf);
+        var cell = _cells[cy * _tilesW + cx];
+        if (cell is null) return (0f, lf);
+        foreach (var r in cell)
+        {
+            var rec = _list.Records[r];
+            var tile = _tileOfPath[rec.Path]!;
+            var rot = rec.Orientation & 0xF0;
+            var (w, h) = Size(tile, rec.Orientation);
+            float x0 = rec.X, y0 = rec.Y, x1 = rec.X + w, y1 = rec.Y + h;
+            if (tx < x0 || x1 < tx || ty < y0 || y1 < ty) continue;
+            int ix = (int)(tx - x0), iy = (int)(ty - y0), col = ix, row = iy;
+            switch (rot)
+            {
+                case 0x20: col = tile.Width - iy - 1; row = ix; break;
+                case 0x40: col = tile.Width - ix - 1; row = tile.Height - iy - 1; break;
+                case 0x80: col = iy; row = tile.Height - ix - 1; break;
+            }
+            var valid = tile.SubtileValid(col, tile.Height - row - 1);
+            if (tile.Mask.Length > 0 && !valid) continue;
+            if (x < 0f || x > _maxX || z < 0f || z > _maxZ) continue;
+            var a = (tx - x0) / (x1 - x0);
+            var b = (ty - y0) / (y1 - y0);
+            float u = a, v = b;
+            switch (rot)
+            {
+                case 0x10: break;
+                case 0x20: u = 1f - b; v = a; break;
+                case 0x40: u = 1f - a; v = 1f - b; break;
+                case 0x80: u = b; v = 1f - a; break;
+                default: u = 0f; v = 0f; break;
+            }
+            var hfMap = _hfOfPath[rec.Path];
+            var hf = hfMap is null ? 0f : Sample(hfMap, u, v) * _f;
+            if (!valid && hf == 0f) continue;
+            var total = hf + lf;
+            return (total - lf, lf);
+        }
+        return (0f, lf);
+    }
+}
