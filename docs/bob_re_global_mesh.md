@@ -144,3 +144,28 @@ These notes come from Ghidra decompiles of the assembly-kit DLLs. The decompiled
 - MESH_SPLITTER.
 - The `land_mesh_N.compressed_map` writer.
 - Sea meshes.
+
+## main190 vs BOB, Frida-verified (2026-10-05)
+
+BOB references: `output/bob_runs/frida_gmesh_main190_bob_terrain` and `frida_gcombo_main190_bob_terrain` (two runs, files identical apart from uninitialised bytes 0x148–0x14B, plus 0xA5–0xA7 on sea meshes). Dumps from `research/bob_re/frida_gmesh.js`, `frida_gmesh_combo.js`, `frida_gheight3.js` and `frida_gmerge_trace.js`; analysis scripts in `research/gmesh/`.
+
+**Inputs.**
+- With the main190 pack at type 4 (the lock protocol), BOB reads `lf_height_map`, `lf_sea_height_map` and `tile_list.bin` from that pack, not from the kit's working_data (they differ). Native runs against the pack's copies (`research/gmesh/extract_pack_inputs.py`) reproduce BOB's hole pattern exactly: 0 differing grid points over 310 meshes. The kit's copies give 292.
+- The height query is `BobGlobalHeight` (FUN_18016ae30), still research-only (`ATLAS3K_GMESH_BOB_HEIGHT=1`):
+  - tiles with their tile set's `exclude_from_global_mesh` (read from `_tile_database/_settings.bin`) or a different `use_alt_lf` are skipped;
+  - `use_alt_lf` is the tile record's last byte (generic_sea and sea only);
+  - lf uses BOB's tile size T′ = (1/tilesW)·(tilesW·T), 0x3eaaca80 on main190, one ulp under 595.1/1784. The terrain bounds and the query grid step (maxTiles·T′)/(2·maxTiles) also use T′.
+- Every hf map of the included tile sets is all zero, so the heights are lf only.
+- Heights: bit-exact on 83.5% of the valid points (41 of 310 grids identical).
+- **Open:** the tile order. FUN_18016ae30 takes the first answering tile in TERRAIN_QUAD_TREE order (`intersect_non_empty_nodes_gproj`: STATIC_QUADTREE nodes, tiles in insertion order). That is neither ascending nor descending tile-list order; see `research/gmesh/tile_order.py` on BOB's dump of mesh k = 170. Decompiles are in `research/bob_re/ws_tquad`.
+
+**Merger inputs** (24 meshes dumped at TRIANGLE_MERGER::process):
+- x/z (I·ext/total in double), y, flags (8 probes at ±cell; DAT_1806b2c04 = the cell, read from BOB) and normals are identical, as are the input triangle lists;
+- the normals' second gradient (FUN_180134370) walks rows like the first, with the kernel transposed.
+
+**TRIANGLE_MERGER:**
+- 50 passes with step 64/50 = 1.28: FUN_18009b4d0 is max(64/6, 50), not min. This was found by a per-vertex trace of BOB against the native merger.
+- Candidates are sorted with an MSVC `std::sort` port (`MsvcSort`).
+- Fed BOB's height grids, the merged triangle lists are identical on 305 of 310 meshes. The other 5 are exactly the meshes whose grids differed in validity, so their flags differed.
+
+**Not done:** VERTEX_LIST_CLEANER + skirts (builder after the merger), MESH_SPLITTER, the `.rigid_model_v2` writer for terrain tiles, and the `land_mesh_N.compressed_map`.

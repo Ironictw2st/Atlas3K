@@ -55,6 +55,7 @@ public sealed class GlobalMeshStep : ICampaignBuildStep
             byte[]? Read(string k)
             {
                 var loose = Path.Combine(ctx.Paths.AkWorkingDir, k.Replace('\\', '/'));
+                if ((BobGlobalHeight.Variant & 1024) != 0 && packs.TryRead(PackFile.Normalize(k)) is { } packed) return packed;
                 return File.Exists(loose) ? File.ReadAllBytes(loose) : packs.TryRead(PackFile.Normalize(k));
             }
             var tileDbDir = Path.Combine(ctx.Paths.AkWorkingDir, "terrain", "tiles", "campaign", "_tile_database", "tiles");
@@ -62,7 +63,15 @@ public sealed class GlobalMeshStep : ICampaignBuildStep
             var settings = Read("terrain/tiles/campaign/_tile_database/_settings.bin");
             var excluded = settings is null ? new HashSet<string>() : BobGlobalHeight.ExcludedTileSets(settings);
             notes.Add($"BOB height query ({(bobDb == db ? "pack" : "working_data")} tiles); tile sets excluded from the global mesh: {string.Join(", ", excluded.Order())}");
-            bob = new BobGlobalHeight(tiles, bobDb, excluded, Read, land, sea, TileSize);
+            CompressedMap.Map FromTif(CompressedMap.Map map, string name)
+            {
+                var tif = Path.Combine(ctx.Paths.AkTerrainDir, name);
+                if ((BobGlobalHeight.Variant & 2048) == 0 || !File.Exists(tif)) return map;
+                var raster = TiffMap.ReadGray16(tif);
+                notes.Add($"lf from {name} ({raster.Width}x{raster.Height})");
+                return map with { Raster = raster, Header = [0, 0, 0, 0, 1, 0] };
+            }
+            bob = new BobGlobalHeight(tiles, bobDb, excluded, Read, FromTif(land, "lf_heights.tif"), FromTif(sea, "lf_sea_heights.tif"), TileSize);
         }
         var builder = new GlobalMeshBuilder(coverage, new LfSampler(land, worldW, worldH, TileSize),
             new LfSampler(sea, worldW, worldH, TileSize), tilesW, tilesH, TileSize, bob);

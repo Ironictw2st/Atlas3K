@@ -103,22 +103,10 @@ public sealed class TriangleMerger
                 if (w != v && CanCollapse(v, w, tri, adj, limit2)) candidates.Add(w);
         }
         float vx = _x[v], vz = _z[v];
-        if (Trace is not null)
-        {
-            // stable insertion sort by squared x/z distance, as BOB's (n <= 32)
-            var sorted = candidates.OrderBy(w => Dist2(w, vx, vz)).ToList();
-            Trace($"cand v {v} ok {(candidates.Count > 0 ? 1 : 0)} target {(sorted.Count > 0 ? sorted[0] : 0)} n {candidates.Count} [{string.Join(",", sorted)}]");
-        }
-        if (candidates.Count == 0) return -1;
-        // stable ordering by squared x/z distance (MSVC insertion sort for small lists)
-        var best = candidates[0];
-        var bestD = Dist2(best, vx, vz);
-        for (var i = 1; i < candidates.Count; i++)
-        {
-            var d = Dist2(candidates[i], vx, vz);
-            if (d < bestD) { best = candidates[i]; bestD = d; }
-        }
-        return best;
+        var keys = candidates.ToArray();
+        MsvcSort.Sort(keys, (a, b) => Dist2(a, vx, vz) < Dist2(b, vx, vz));
+        Trace?.Invoke($"cand v {v} ok {(keys.Length > 0 ? 1 : 0)} target {(keys.Length > 0 ? keys[0] : 0)} n {keys.Length} [{string.Join(",", keys)}]");
+        return keys.Length == 0 ? -1 : keys[0];
     }
 
     private float Dist2(int w, float vx, float vz)
@@ -177,5 +165,162 @@ public sealed class TriangleMerger
         if (abz * abz + abx * abx <= limit2 && acz * acz + acx * acx <= limit2 && bcx * bcx + bcz * bcz <= limit2)
             return (_z[c] - _z[a]) * (_x[b] - _x[a]) - (_z[b] - _z[a]) * (_x[c] - _x[a]) > 0;
         return true;
+    }
+}
+
+/// <summary>MSVC std::sort (_Sort_unchecked: insertion sort up to 32 elements, median-of-3/9 partition, heap sort when
+/// the depth budget runs out), as tooldatabuilder FUN_180133020 sorts TRIANGLE_MERGER's collapse candidates; the
+/// candidate order on ties decides the collapse target.</summary>
+internal static class MsvcSort
+{
+    public static void Sort(int[] a, Func<int, int, bool> less) => SortRange(a, 0, a.Length, a.Length, less);
+
+    private static void SortRange(int[] a, int first, int last, int ideal, Func<int, int, bool> less)
+    {
+        for (;;)
+        {
+            if (last - first <= 32) { Insertion(a, first, last, less); return; }
+            if (ideal <= 0) { HeapSort(a, first, last, less); return; }
+            var (pf, pl) = Partition(a, first, last, less);
+            ideal = (ideal >> 1) + (ideal >> 2);
+            if (pf - first < last - pl) { SortRange(a, first, pf, ideal, less); first = pl; }
+            else { SortRange(a, pl, last, ideal, less); last = pf; }
+        }
+    }
+
+    private static void Insertion(int[] a, int first, int last, Func<int, int, bool> less)
+    {
+        if (first == last) return;
+        for (var mid = first + 1; mid != last; mid++)
+        {
+            var val = a[mid];
+            if (less(val, a[first]))
+            {
+                Array.Copy(a, first, a, first + 1, mid - first);
+                a[first] = val;
+            }
+            else
+            {
+                var hole = mid;
+                for (var prev = hole - 1; less(val, a[prev]); hole = prev, prev--) a[hole] = a[prev];
+                a[hole] = val;
+            }
+        }
+    }
+
+    private static void Swap(int[] a, int i, int j) => (a[i], a[j]) = (a[j], a[i]);
+
+    private static void Med3(int[] a, int first, int mid, int last, Func<int, int, bool> less)
+    {
+        if (less(a[mid], a[first])) Swap(a, mid, first);
+        if (less(a[last], a[mid]))
+        {
+            Swap(a, last, mid);
+            if (less(a[mid], a[first])) Swap(a, mid, first);
+        }
+    }
+
+    private static void GuessMedian(int[] a, int first, int mid, int last, Func<int, int, bool> less)
+    {
+        var count = last - first;
+        if (40 < count)
+        {
+            var step = (count + 1) >> 3;
+            var two = step << 1;
+            Med3(a, first, first + step, first + two, less);
+            Med3(a, mid - step, mid, mid + step, less);
+            Med3(a, last - two, last - step, last, less);
+            Med3(a, first + step, mid, last - step, less);
+        }
+        else Med3(a, first, mid, last, less);
+    }
+
+    private static (int, int) Partition(int[] a, int first, int last, Func<int, int, bool> less)
+    {
+        var mid = first + ((last - first) >> 1);
+        GuessMedian(a, first, mid, last - 1, less);
+        var pfirst = mid;
+        var plast = pfirst + 1;
+        while (first < pfirst && !less(a[pfirst - 1], a[pfirst]) && !less(a[pfirst], a[pfirst - 1])) --pfirst;
+        while (plast < last && !less(a[plast], a[pfirst]) && !less(a[pfirst], a[plast])) ++plast;
+        var gfirst = plast;
+        var glast = pfirst;
+        for (;;)
+        {
+            for (; gfirst < last; ++gfirst)
+            {
+                if (less(a[pfirst], a[gfirst])) { }
+                else if (less(a[gfirst], a[pfirst])) break;
+                else if (plast != gfirst) { Swap(a, plast, gfirst); ++plast; }
+                else ++plast;
+            }
+            for (; first < glast; --glast)
+            {
+                if (less(a[glast - 1], a[pfirst])) { }
+                else if (less(a[pfirst], a[glast - 1])) break;
+                else if (--pfirst != glast - 1) Swap(a, pfirst, glast - 1);
+            }
+            if (glast == first && gfirst == last) return (pfirst, plast);
+            if (glast == first)
+            {
+                if (plast != gfirst) Swap(a, pfirst, plast);
+                ++plast;
+                Swap(a, pfirst, gfirst);
+                ++pfirst;
+                ++gfirst;
+            }
+            else if (gfirst == last)
+            {
+                if (--glast != --pfirst) Swap(a, glast, pfirst);
+                Swap(a, pfirst, --plast);
+            }
+            else
+            {
+                Swap(a, gfirst, --glast);
+                ++gfirst;
+            }
+        }
+    }
+
+    private static void HeapSort(int[] a, int first, int last, Func<int, int, bool> less)
+    {
+        // std::make_heap + std::sort_heap
+        var n = last - first;
+        for (var hole = n >> 1; hole > 0;)
+        {
+            --hole;
+            PopHoleDown(a, first, hole, n, a[first + hole], less);
+        }
+        for (; n >= 2; n--)
+        {
+            var val = a[first + n - 1];
+            a[first + n - 1] = a[first];
+            PopHoleDown(a, first, 0, n - 1, val, less);
+        }
+    }
+
+    private static void PopHoleDown(int[] a, int first, int hole, int bottom, int val, Func<int, int, bool> less)
+    {
+        var top = hole;
+        var idx = hole;
+        var maxNonLeaf = (bottom - 1) >> 1;
+        while (idx < maxNonLeaf)
+        {
+            idx = 2 * idx + 2;
+            if (less(a[first + idx], a[first + idx - 1])) --idx;
+            a[first + hole] = a[first + idx];
+            hole = idx;
+        }
+        if (idx == maxNonLeaf && bottom % 2 == 0)
+        {
+            a[first + hole] = a[first + bottom - 1];
+            hole = bottom - 1;
+        }
+        for (var parent = (hole - 1) >> 1; top < hole && less(a[first + parent], val); parent = (hole - 1) >> 1)
+        {
+            a[first + hole] = a[first + parent];
+            hole = parent;
+        }
+        a[first + hole] = val;
     }
 }

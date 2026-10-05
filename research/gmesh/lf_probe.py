@@ -7,7 +7,7 @@ from grid_cmp import *
 import compressed_map as C
 F = np.float32
 INP = ROOT + '/output/bob_runs/frida_gmesh_main190_bob_terrain/inputs/'
-cache = INP + 'lf.npy'
+cache = os.environ.get('LF_NPY', INP + 'lf.npy')
 if not os.path.exists(cache):
     r, hdr = C.decode(INP + 'lf_height_map.compressed_map'); np.save(cache, r); np.save(INP + 'lf_hdr.npy', np.array(hdr, np.float32))
 L = np.load(cache); hdr = np.load(INP + 'lf_hdr.npy')
