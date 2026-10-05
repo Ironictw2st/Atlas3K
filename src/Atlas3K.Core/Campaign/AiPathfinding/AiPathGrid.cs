@@ -102,7 +102,7 @@ public sealed class AiPathGrid
                 if (nb >= 0) EdgesPlain[nb * 6 + (d + 3) % 6] &= 0x3F;
             }
         }
-        foreach (var r in regions.Regions)
+        foreach (var r in regions.Regions.Where(r => r.Key != Environment.GetEnvironmentVariable("SPD_SKIP_SLOT")))
             foreach (var (x, y) in r.PrimarySlot.Concat(r.PortSlot))
                 if ((uint)x < (uint)Width && (uint)y < (uint)Height) Slot[Index(x, y)] = true;
         EdgesZero = (byte[])EdgesPlain.Clone();

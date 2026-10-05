@@ -21,6 +21,10 @@ namespace Atlas3K.Core.Campaign.AiPathfinding;
 /// </summary>
 public static class HlpBuilder
 {
+    // research traces: HLP_DEBUG_PAIR=<area id>,<area id> (centre path, refine steps, border sets), HLP_DEBUG_COST=x,y,x,y
+    private static readonly string? DebugPair = Environment.GetEnvironmentVariable("HLP_DEBUG_PAIR");
+    private static readonly string? DebugCost = Environment.GetEnvironmentVariable("HLP_DEBUG_COST");
+
     public sealed record Options
     {
         /// <summary>refine_path tolerance (0 = the game value: the half hex height, compared with squared distances). A segment is kept when no hex of its path is further than this (squared
@@ -147,6 +151,8 @@ public static class HlpBuilder
             // the reported cost is the sum of the path's waypoint costs (FUN_1805cc840): a bridge crossing
             // (prev -> type-5 hex -> linked type-5 hex -> next) counts 500 instead of its three steps
             var path = search0.PathTo(b);
+            if (DebugCost is not null && DebugCost == $"{a % W},{a / W},{b % W},{b / W}")
+                Console.Error.WriteLine($"cost path same={same} hlci {g.Hlci[a]}->{g.Hlci[b]}: {string.Join(" ", path.Select(h => $"({h % W},{h / W})t{g.Types[h]}c{search0.Cost(h)}"))}");
             for (var i = 0; i + 1 < path.Count; i++)
             {
                 if (g.Types[path[i + 1]] != 5) continue;
@@ -231,7 +237,7 @@ public static class HlpBuilder
         void Determine(Entry e, Seg s, Seg t, Entry f)
         {
             var f1 = (e.Type == 0) != (f.Type == 0);
-            DebugRefine = Environment.GetEnvironmentVariable("HLP_DEBUG_PAIR") == $"{e.Aid},{f.Aid}";
+            DebugRefine = DebugPair is not null && DebugPair == $"{e.Aid},{f.Aid}";
             var path = CentrePath(e.Centre, f.Centre);
             DebugRefine = false;
             int q = -1, p = -1;
@@ -241,7 +247,7 @@ public static class HlpBuilder
                     if (t.Border.Contains(h)) p = h;
                     if (q < 0 && s.Border.Contains(h)) q = h;
                 }
-            var dbg = Environment.GetEnvironmentVariable("HLP_DEBUG_PAIR") == $"{e.Aid},{f.Aid}";
+            var dbg = DebugPair is not null && DebugPair == $"{e.Aid},{f.Aid}";
             string H(int h) => $"({h % W},{h / W})";
             if (dbg) Console.Error.WriteLine($"centre path {string.Join(" ", path?.Select(H) ?? [])} halfrow {g.HalfRow} world {regions.WorldMin} {regions.WorldMax} grid {W}x{g.Height}");
             if (dbg) Console.Error.WriteLine($"pair {e.Aid}->{f.Aid}: path p {(p >= 0 ? H(p) : "-")} q {(q >= 0 ? H(q) : "-")}\n  S(in f, found by e) {string.Join(" ", s.Border.Select(H))}\n  T(in e, found by f) {string.Join(" ", t.Border.Select(H))}");

@@ -45,13 +45,13 @@ The formats are in `src/Atlas3K.Formats/Esf/`: `CaabFlat`, `CampaignAiData` and 
 
 | map | spd | hlp: identical areas | hlp: transitions with same hexes + target + cost | hlp: matrix values |
 |---|---|---|---|---|
-| 3k_dlc07_main_map | byte-identical | 317 / 334 | 2372 / 2398 | 18640 / 18700 |
-| 3k_dlc06_main_map | byte-identical | 322 / 339 | 2428 / 2454 | 19042 / 19102 |
-| 3k_dlc04_main_map (`--legacy-stl`) | byte-identical | 300 / 321 | 2438 / 2470 | 20130 / 20190 |
-| 8p_main_map (`--legacy-stl`) | byte-identical | 294 / 321 | 2438 / 2486 | 19766 / 19766 |
-| 3k_190e_expanded_map | 99.997 % of values, same box + landmarks | 601 / 644 | 4561 / 4644 | 42192 / 42312 |
+| 3k_dlc07_main_map | byte-identical | 330 / 334 | 2394 / 2398 | 19796 / 19796 |
+| 3k_dlc06_main_map | byte-identical | 335 / 339 | 2450 / 2454 | 20312 / 20312 |
+| 3k_dlc04_main_map (`--legacy-stl`) | byte-identical | 313 / 321 | 2460 / 2470 | 21270 / 21270 |
+| 8p_main_map (`--legacy-stl`) | byte-identical | 311 / 321 | 2474 / 2486 | 21318 / 21318 |
+| 3k_190e_expanded_map | 99.997 % of values, same box + landmarks (see below) | 633 / 644 | 4626 / 4644 | 46228 / 46228 |
 
-On every map these hlp fields match 100 %: node count, area set, centre, `a`, plus `b` (except 2 of the 190E areas). The matrix column counts only areas whose transition list is identical.
+On every map these hlp fields match 100 %: node count, area set, centre, `a`, plus `b` (except 2 of the 190E areas). The matrix column counts only areas whose transition list is identical; inside those, every matrix value matches. None of the hlp files is byte-identical yet, because every remaining differing area changes the file.
 
 ## Timing
 
@@ -59,8 +59,8 @@ Measured on this machine (Release build, all cores):
 
 | map | spd | hlp | total (incl. reading inputs) |
 |---|---|---|---|
-| vanilla (892×702) | ≈0.3 s | ≈1.1–1.5 s | ≈2 s |
-| 190E (1478×1133) | ≈0.7–0.9 s | ≈3.5 s | ≈4.7 s |
+| vanilla (892×702) | ≈0.2–0.3 s | ≈1.1–1.5 s | ≈1.9 s |
+| 190E (1478×1133) | ≈0.6–0.9 s | ≈3.1–3.5 s | ≈4.5 s |
 
 The Python research prototypes were much slower. What makes the C# versions fast:
 
@@ -89,7 +89,13 @@ In the game, these files come out of a startpos build that takes many minutes.
    - I confirmed both alias rules by loading the DLL in a Python harness and calling its sparse-map functions (`research/hlp_spd/oracle/`).
    - I also confirmed the neighbour order the same way. `LOGICAL_POSITION_UTILITIES::adjacent_hexes` in empireutility returns the same 6 directions as the ppd direction table.
 
-**Why 190E is not byte-identical.** About 160 of its 948k cells differ (0.017 %). Every one is a hex whose visited flag or value cell is shared with an x/y ≥ 1024 hex, or lies downstream of one. In those places the exact settle order decides which write wins. One example is (999,670) slot 0: mine 95580 / ref 95700, and the slots 0 and 1 are swapped. Hex order, neighbour order and the heap code all match the decompile, so the remaining source is still open.
+**Why 190E is not byte-identical.** 160 of its 948k cells differ (0.017 %).
+
+- **The search itself is exact.** `research/hlp_spd/oracle/search_oracle.py` runs the DLL's own landmark search loop (FUN_18059f480, with its own heap and visited sparse map) on a fake CAMPAIGN_PATHFINDER built from Atlas3K's grid (`hlp-spd --dump-grid`). For 190E landmark 0 it settles the same 382,331 hexes as `SearchGame`, in the same order with the same costs. So every remaining difference comes from the grid the game had, not from the search code.
+- **One settlement's slot area.** CA's file treats the slot area of `ironic_hexi_dunhuang_resource_1` (settlement 133,945) as ordinary terrain (240 per step, not 0). It is the only one of the 244 slot areas in the box that does this. Leaving that slot area out (`SPD_SKIP_SLOT=ironic_hexi_dunhuang_resource_1`) brings the difference down to 37 cells, all landmark 0/1 slots near (973..1023, 670..685), plus a few cells in slots 2/3/11.
+- **Those 37 cells.** They are equal-cost ties between hexes that share a visited flag across the 1024 wrap, for example (973,678) and (1037,678), both at cost 93780. Which one settles first depends on the whole push history. The values elsewhere match exactly, so the grid difference that decides these ties is invisible in the values.
+- **Likely cause.** The dunhuang slot area (and two roads through it, see the HLP gaps) suggests the game's campaign model at generation time (startpos settlements, garrisons, road levels) differed from the map files. That state exists only in the game runtime, so this gap stops here.
+- **Adjacency.** `LOGICAL_POSITION_UTILITIES::adjacent_hexes` (empireutility) returns the same direction order as the ppd table. Bridge link lists are assigned per hex, with the last bridge winning, as in the loader FUN_1811f7fa0.
 
 **Why the DLL cannot simply run the step.** The full `reprocess_spd_data` / `reprocess_hlp_data` entry needs a constructed CAMPAIGN_PATHFINDER and campaign model: DB tables, campaign setup and campaign variables. Those cannot be built outside the game.
 
@@ -100,23 +106,34 @@ In the game, these files come out of a startpos build that takes many minutes.
    - The centre is the settlement when it lies inside the area, else the map_data area centre. `a` is the area's map_data id.
 2. **Phase 1 (FIND_REGION_BORDER).**
    - A heuristic-free search runs from the centre over the AI grid.
-   - The grid uses nav bit 7, the move-type table, and type-5 port links at 500.
+   - The grid uses the navigation bit only (no move-type table; FUN_180538bd0), plus type-5 → type-5 port links at 500.
    - Beaches are gated by the centre's HLCI.
+     - Beach objects (FUN_181208f40 / FUN_181209d80) keep a counter per edge: an edge is open only while every beach side that lists it is on.
+     - A beach only switches edges that are navigable in the ppd (FUN_1812013e0 masks each entry with them).
    - `b` is the largest cost to a land or sea hex of the area itself.
    - Land or sea hexes of other areas (but not slot hexes) are recorded per neighbour area, in discovery order, and not expanded.
 3. **Transitions.**
-   - The first transition comes from the refined centre-to-centre path (refine threshold 0.4).
+   - The first transition comes from the refined centre-to-centre path. The refine_path tolerance is the map's half hex height (pathfinder +0x54 = hexSize·0.8660254), compared with squared distances.
    - The others come from border clusters: an integer-mean centroid, nearest hexes on both sides, the 2·nearest-distance acceptance test, and erasing hexes within distance 10.
-   - `cost` is the waypoint sum of the path (bridge crossing = 500). When both ends touch the same settlement, the path is costed without a faction.
+   - `cost` is the waypoint sum of the path. A bridge crossing (step on, link, step off) counts 500, but a step onto the bridge from a river hex still counts. When both ends touch the same settlement, the path is costed without a faction.
    - `f1` = exactly one of the two areas is land (type 0). `f2` = `f1` and cost 0.
 4. **Order.** Transitions are written in MSVC `unordered_multimap` iteration order: hash y·1016 + x, VS2019 rehash-before-insert, or VS2017 insert-then-rehash with `--legacy-stl`.
-5. **Matrix.** Costs between the transitions of an area, in creation order. Each search stays inside the region, with settlement slots blocked and beaches off.
+5. **Matrix.** Costs between the transitions of an area, in creation order. Each search stays inside the area itself (other areas of the same region are closed), with settlement slots blocked and beaches off.
 
-**Remaining HLP gaps:**
+**Remaining HLP gaps** (4 to 11 areas per map; trace one with `HLP_DEBUG_PAIR=<area>,<area>` or `HLP_DEBUG_COST=x,y,x,y`):
 
-- **Missing pairs.** A few land/sea pairs across bridges over one-hex "sea" river pieces are missing (8 pairs on dlc07). Example: area 207 at (371,190), where CA has cost 500 / 1280 / 3300 land↔sea links through bridge hexes. The game's type or edge rules for bridges next to sea hexes are not fully known.
-- **Cluster ties.** In some cases a different hex is chosen as the nearest cluster hex, for example (500,323) vs (500,324).
-- **Knock-on effects.** Both problems above shift the `idx` values and the matrix of the affected areas.
-- **190E sparse maps.** 2 of the 190E `b` values differ, probably from sparse-map effects beyond x 1024.
+- **Equal-cost path ties.**
+  - Examples:
+    - the centre paths 248↔252 and 265↔273 on dlc06/07, which are 230↔234 and 247↔255 on dlc04/8p;
+    - the 204/717/1229/661 group on dlc04/8p;
+    - 386↔390 on 190E;
+    - the 8p transition (358,120)→(359,121), where CA's path takes the bridge hex (cost 500) and mine takes the coast hex (1250).
+  - In the 8p case, both routes cost the same and have bit-identical tiebreak values (checked in float32). The heap comparator (FUN_1805316e0), pop/push sifts and grid float constants (FUN_18126b890) all match the DLL, so the order is decided by the push history.
+  - That points at a grid difference that is invisible in the costs. The prime suspect is the setup modifier lists (CAMPAIGN_PATHFINDER::setup: settlements, garrisons, armies) that apply in the 0x80 navigation-bit mode. They come from the campaign model at generation time.
+- **190E.**
+  - Areas 219, 220 and 314 border `ironic_hexi_dunhuang_resource_1`. CA's file treats that settlement's slot area as ordinary terrain, and roads 502/530 through it are not applied (CA's 120/240 against 100).
+  - Road 485 near (1333,703) is also not applied in CA's file. That causes the two different 190E `b` values (areas 1228/1229) and the transition choice.
+  - All of these need the game's campaign state.
+- **Knock-on effects.** A differing transition shifts the `idx` values in that area only.
 
 The game reads these files at campaign start. Small transition differences change AI route planning slightly, but the files stay structurally valid. Use the CA-built files when they are available.
