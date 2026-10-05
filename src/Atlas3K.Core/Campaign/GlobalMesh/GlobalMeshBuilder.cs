@@ -5,7 +5,9 @@ namespace Atlas3K.Core.Campaign.GlobalMesh;
 
 /// <summary>
 /// Native replacement for BOB's global mesh build (tooldatabuilder FUN_180124ed0), following the decompiled
-/// algorithm (docs/bob_re_global_mesh.md). Game-valid rather than byte-identical.
+/// algorithm (docs/bob_re_global_mesh.md). With a <see cref="BobGlobalHeight"/> (the default "bob" geometry) the files
+/// are identical to BOB's apart from the bytes it leaves uninitialised: its height query, skirts (<see cref="BobSkirts"/>),
+/// bounds and compressed map (<see cref="BobHeightMap"/>). Without one, the earlier game-valid approximation below.
 ///  - the map is cut into square meshes of <c>cells = (int)(maxTiles · 0.125)</c> cells (2 cells per tile-map pixel),
 ///    visited z-row by z-row from the south-west; empty meshes are skipped and the rest numbered in that order
 ///  - vertex heights: <see cref="LfSampler"/> where a tile of the mesh kind covers the point, holes elsewhere
@@ -223,18 +225,26 @@ public sealed class GlobalMeshBuilder
                 indices.Add(checked((ushort)id));
             }
 
-        AddSkirts(merged, n, i0, j0, x, y, z, Valid, positions, indices);
+        if (_bob is not null && (BobGlobalHeight.Variant & 8192) == 0)
+            BobSkirts(n, i0, j0, y, flags, remap, kind == MeshKind.Sea, positions, indices);
+        else
+            AddSkirts(merged, n, i0, j0, x, y, z, Valid, positions, indices);
         if (positions.Count > ushort.MaxValue)
             throw new InvalidDataException($"{kind} mesh ({row},{col}) has {positions.Count} vertices, more than 16-bit indices allow.");
 
         var model = RigidModelV2.NewTerrainTile(kind == MeshKind.Sea);
         model.Vertices = RigidModelV2.PackPositions(positions);
         model.Indices = [.. indices];
-        model.SetTileBounds(Coord(i0), Coord(j0), Coord(i0 + _cells), Coord(j0 + _cells));
+        if (_bob is not null)   // FUN_180124ed0 after MESH_SPLITTER: (1/total) · i0 · ext and ((cells + i0) / total) · ext
+            model.SetTileBounds(1f / _gridTotal * i0 * _bobExtent, 1f / _gridTotal * j0 * _bobExtent,
+                ((float)_cells + i0) / _gridTotal * _bobExtent, ((float)_cells + j0) / _gridTotal * _bobExtent);
+        else model.SetTileBounds(Coord(i0), Coord(j0), Coord(i0 + _cells), Coord(j0 + _cells));
 
         Raster<ushort>? heights = null;
         float[]? header = null;
-        if (kind == MeshKind.Land) (heights, header) = RasteriseSurface(merged, n, x, y, z);
+        if (kind == MeshKind.Land)
+            (heights, header) = _bob is not null && (BobGlobalHeight.Variant & 16384) == 0
+                ? BobHeightMap(positions, indices, model.Bounds, n) : RasteriseSurface(merged, n, x, y, z);
         return new MeshResult(row, col, model, heights, header, inputTriangles);
     }
 
@@ -270,6 +280,81 @@ public sealed class GlobalMeshBuilder
                 normals[o + 2] = up * inv;
             }
         return normals;
+    }
+
+    /// <summary>BOB's skirts (FUN_180124ed0 after VERTEX_LIST_CLEANER): for every kept grid vertex with flag 0 or 3, walk
+    /// +x and +z over vertices the cleaner dropped to the next kept one; if the edge's midpoint ±0.01 across it is a
+    /// hole, add a double-sided quad 1.0 deep. Positions are the height-query coordinates.</summary>
+    private void BobSkirts(int n, int i0, int j0, float[] y, byte[] flags, Dictionary<int, int> kept, bool sea,
+        List<(float, float, float)> positions, List<ushort> indices)
+    {
+        const float probe = 0.01f, half = 0.5f;
+        float H(float px, float pz) => _bob!.Height(px, pz, sea);
+        bool Kept(int k) => kept.ContainsKey(k);
+        static bool Edge(byte f) => f == 0 || f == 3;
+        void Quad(float ax, float ay, float az, float bx, float by, float bz)
+        {
+            var s = checked((ushort)positions.Count);
+            positions.Add((ax, ay, az));
+            positions.Add((bx, by, bz));
+            positions.Add((ax, ay - SkirtDepth, az));
+            positions.Add((bx, by - SkirtDepth, bz));
+            foreach (var q in (ReadOnlySpan<int>)[0, 1, 2, 2, 1, 3, 1, 0, 2, 1, 2, 3]) indices.Add((ushort)(s + q));
+        }
+        for (var row = 0; row < n; row++)
+            for (var col = 0; col < n; col++)
+            {
+                var idx = row * n + col;
+                if (!Kept(idx) || !Edge(flags[idx])) continue;
+                float qx = QueryCoord(col, i0), qz = QueryCoord(row, j0), yv = y[idx];
+                // +x: to the next kept vertex (n: a hole or an open map edge on the way)
+                var kx = 1;
+                if (col + 1 < n)
+                    for (var k = 1; ; )
+                    {
+                        float px = QueryCoord(col + k, i0), pz = QueryCoord(row, j0);
+                        if (H(px, pz) == Hole) { kx = n; break; }
+                        float mz = (pz - qz) * half + qz, mx = (px - qx) * half + qx;
+                        float hp = H(mx, mz + probe), hm = H(mx, mz - probe);
+                        if ((row == 0 && hp == Hole) || (row == n - 1 && hm == Hole)) { kx = n; break; }
+                        kx = k;
+                        if (Kept(row * n + col + k)) break;
+                        kx = ++k;
+                        if (n <= k + col) break;
+                    }
+                // +z: likewise, but a hole on the way ends the run at the last dropped vertex
+                var kz = 1;
+                if (row + 1 < n)
+                    for (int k = 1, prev = 0; ; )
+                    {
+                        float px = QueryCoord(col, i0), pz = QueryCoord(row + k, j0);
+                        if (H(px, pz) == Hole) { kz = prev == 0 ? n : prev; break; }
+                        float mx = (px - qx) * half + qx, mz = (pz - qz) * half + qz;
+                        float hp = H(mx + probe, mz), hm = H(mx - probe, mz);
+                        if ((col == 0 && hp == Hole) || (col == n - 1 && hm == Hole)) { kz = prev == 0 ? n : prev; break; }
+                        kz = k;
+                        if (Kept((row + k) * n + col)) break;
+                        prev = k;
+                        kz = ++k;
+                        if (n <= k + row) break;
+                    }
+                var e = col + kx;
+                if (e < n)
+                {
+                    float px = QueryCoord(e, i0), pz = QueryCoord(row, j0);
+                    float mz = (pz - qz) * half + qz, mx = (px - qx) * half + qx;
+                    if (Edge(flags[row * n + e]) && (H(mx, mz + probe) == Hole || H(mx, mz - probe) == Hole))
+                        Quad(qx, yv, qz, px, y[row * n + e], pz);
+                }
+                e = row + kz;
+                if (e < n)
+                {
+                    float px = QueryCoord(col, i0), pz = QueryCoord(e, j0);
+                    float mx = (px - qx) * half + qx, mz = (pz - qz) * half + qz;
+                    if (Edge(flags[e * n + col]) && (H(mx + probe, mz) == Hole || H(mx - probe, mz) == Hole))
+                        Quad(qx, yv, qz, px, y[e * n + col], pz);
+                }
+            }
     }
 
     /// <summary>Double-sided vertical quads under boundary edges that border a hole or the map edge.</summary>
@@ -308,6 +393,63 @@ public sealed class GlobalMeshBuilder
         else if (aj == bj && (aj == 0 || aj == n - 1)) outward = (0, aj == 0 ? -1 : 1);
         else return false;
         return valid(i0 + ai + outward.di, j0 + aj + outward.dj) && valid(i0 + bi + outward.di, j0 + bj + outward.dj);
+    }
+
+    /// <summary>BOB's land_mesh_N.compressed_map (FUN_180124ed0 → WARSCAPE::rasterise_max_heights, as for river height
+    /// patches): the final mesh (skirts included) mapped to an n × n field over the model's box, max height per pixel,
+    /// −50 where nothing covers; u16 = trunc((h − lo) / (hi − lo) · 65535), header (0, lo, 0, 0, hi, 0).</summary>
+    private static (Raster<ushort>, float[]) BobHeightMap(List<(float X, float Y, float Z)> positions, List<ushort> indices,
+        float[] bounds, int size)
+    {
+        const float invalid = -50f;
+        var field = new float[size * size];
+        Array.Fill(field, invalid);
+        var count = positions.Count;
+        var px = new float[count];
+        var py = new float[count];
+        var vy = new float[count];
+        for (var i = 0; i < count; i++)
+        {
+            var (vx, h, vz) = positions[i];
+            var u = (vx - bounds[0]) / (bounds[3] - bounds[0]) * size;
+            var v = (vz - bounds[2]) / (bounds[5] - bounds[2]) * size;
+            vy[i] = h;
+            px[i] = h * 0f + u * 1f + v * 0f + 0f;
+            py[i] = h * 0f + u * 0f + v * 1f + 0f;
+        }
+        for (var q = 0; q + 2 < indices.Count; q += 3)
+        {
+            int ia = indices[q], ib = indices[q + 1], ic = indices[q + 2];
+            float axp = px[ia], ayp = py[ia], bxp = px[ib], byp = py[ib], cxp = px[ic], cyp = py[ic];
+            var x0 = Math.Min((int)axp, Math.Min((int)bxp, (int)cxp)) - 1;
+            var x1 = Math.Max((int)axp, Math.Max((int)bxp, (int)cxp)) + 1;
+            var y0 = Math.Min((int)ayp, Math.Min((int)byp, (int)cyp)) - 1;
+            var y1 = Math.Max((int)ayp, Math.Max((int)byp, (int)cyp)) + 1;
+            if (x1 < 0 || size < x0 || y1 < 0 || size < y0) continue;
+            x0 = Math.Max(x0, 0); y0 = Math.Max(y0, 0); x1 = Math.Min(x1, size); y1 = Math.Min(y1, size);
+            var area = MathF.Abs((cxp - axp) * (byp - ayp) - (cyp - ayp) * (bxp - axp));
+            for (var j = y0; j < y1; j++)
+            {
+                float fy = j;
+                for (var i = x0; i < x1; i++)
+                {
+                    float fx = i;
+                    if (!Rivers.BobRiver.Inside(fx, fy, axp, ayp, bxp, byp, cxp, cyp)) continue;
+                    var inv = 2f / area;
+                    var wc = MathF.Abs((fy - ayp) * (bxp - axp) - (fx - axp) * (byp - ayp)) * 0.5f * inv;
+                    var wb = MathF.Abs((fy - ayp) * (cxp - axp) - (fx - axp) * (cyp - ayp)) * 0.5f * inv;
+                    var wa = 1f - wb - wc;
+                    var h = vy[ib] * wb + vy[ia] * wa + vy[ic] * wc;
+                    ref var cell = ref field[j * size + i];
+                    if (!(h <= cell)) cell = h;
+                }
+            }
+        }
+        float lo = field.Min(), hi = field.Max();
+        var scale = 1f / (lo == hi ? 1f : hi - lo);
+        var raster = new Raster<ushort>(size, size);
+        for (var k = 0; k < field.Length; k++) raster.Data[k] = (ushort)(int)((field[k] - lo) * scale * 65535f);
+        return (raster, [0, lo, 0, 0, hi, 0]);
     }
 
     /// <summary>Heights of the final surface at every grid point (barycentric), 0 where no triangle covers it.</summary>

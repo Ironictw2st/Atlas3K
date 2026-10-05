@@ -49,7 +49,10 @@ public sealed class GlobalMeshStep : ICampaignBuildStep
             notes.Add($"lf {land.Raster.Width}x{land.Raster.Height} is not 4x the tile list's {tilesW}x{tilesH}");
         float worldW = tilesW * TileSize, worldH = tilesH * TileSize;
         BobGlobalHeight? bob = null;
-        if (Environment.GetEnvironmentVariable("ATLAS3K_GMESH_BOB_HEIGHT") == "1")
+        // research override: ATLAS3K_GMESH_BOB_HEIGHT=1 / 0 forces the BOB / native path
+        var useBob = Environment.GetEnvironmentVariable("ATLAS3K_GMESH_BOB_HEIGHT") is { } force
+            ? force == "1" : !ctx.GlobalMeshGeometry.Equals("native", StringComparison.OrdinalIgnoreCase);
+        if (useBob)
         {
             // BOB reads the campaign tiles from the assembly kit's working_data (it can differ from the packs)
             byte[]? Read(string k)
@@ -100,6 +103,15 @@ public sealed class GlobalMeshStep : ICampaignBuildStep
             for (var index = 0; index < per * per; index++)
             {
                 if (results[(kind, index)] is not { } mesh) continue;
+                if (bob is not null)   // header bytes BOB leaves from its string buffers (identical across its runs)
+                {
+                    if (kind == MeshKind.Land) mesh.Model.LodQuality = [0, 0, (byte)number.ToString()[0], 0];
+                    var shader = (byte[])mesh.Model.Shader.Clone();
+                    Array.Clear(shader, 16, 16);
+                    shader[24] = 0x9E;
+                    shader[25] = 0xD4;
+                    mesh.Model.Shader = shader;
+                }
                 var model = Path.Combine(outDir, $"{stem}{number}.rigid_model_v2");
                 mesh.Model.Write(model);
                 written.Add(model);

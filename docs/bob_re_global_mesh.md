@@ -151,7 +151,7 @@ BOB references: `output/bob_runs/frida_gmesh_main190_bob_terrain` and `frida_gco
 
 **Inputs.**
 - With the main190 pack at type 4 (the lock protocol), BOB reads `lf_height_map`, `lf_sea_height_map` and `tile_list.bin` from that pack, not from the kit's working_data (they differ). Native runs against the pack's copies (`research/gmesh/extract_pack_inputs.py`) reproduce BOB's hole pattern exactly: 0 differing grid points over 310 meshes. The kit's copies give 292.
-- The height query is `BobGlobalHeight` (FUN_18016ae30), still research-only (`ATLAS3K_GMESH_BOB_HEIGHT=1`):
+- The height query is `BobGlobalHeight` (FUN_18016ae30), the default since 2026-10-05 (`--global-mesh native` or `ATLAS3K_GMESH_BOB_HEIGHT=0` for the old path):
   - tiles with their tile set's `exclude_from_global_mesh` (read from `_tile_database/_settings.bin`) or a different `use_alt_lf` are skipped;
   - `use_alt_lf` is the tile record's last byte (generic_sea and sea only);
   - lf uses BOB's tile size T′ = (1/tilesW)·(tilesW·T), 0x3eaaca80 on main190, one ulp under 595.1/1784. The terrain bounds and the query grid step (maxTiles·T′)/(2·maxTiles) also use T′.
@@ -168,4 +168,24 @@ BOB references: `output/bob_runs/frida_gmesh_main190_bob_terrain` and `frida_gco
 - Candidates are sorted with an MSVC `std::sort` port (`MsvcSort`).
 - Fed BOB's height grids, the merged triangle lists are identical on 305 of 310 meshes. The other 5 are exactly the meshes whose grids differed in validity, so their flags differed.
 
-**Not done:** VERTEX_LIST_CLEANER + skirts (builder after the merger), MESH_SPLITTER, the `.rigid_model_v2` writer for terrain tiles, and the `land_mesh_N.compressed_map`.
+**Byte-identical (2026-10-05).** The global_mesh step's default "bob" geometry reproduces all 494 main190 files of BOB's run (`output/bob_runs/frida_gmesh2_main190_bob`, 310 `.rigid_model_v2`, 184 `.compressed_map`), apart from the uninitialised bytes 0x148–0x14B and, on sea meshes, 0xA5–0xA7. `BobGlobalMeshTests` checks this; `--global-mesh native` keeps the earlier approximation.
+- **Tile order:** TERRAIN_QUAD_TREE pre-order.
+  - Root (−1, −1)..(maxX, maxZ); halve while T·16 < size, which gives depth 8 on main190.
+  - Children (min x, max z), (max x, max z), (min x, min z), (max x, min z).
+  - A tile sits in the leaf holding the centre of its rectangle; tiles inside a leaf keep tile-list order.
+  - This fits 99.0% of BOB's multi-tile call sequences (`research/gmesh/tree_fit.py`). The rest are generic_sea tiles inside one leaf, which don't change any height.
+- **Query coordinate** (FUN_18016b2f0): (i + i0) · (ext / total), with the step in **double**, ext = (float)(maxTiles · T′), rounded to float once. The float step is 1 ulp off on about 13% of rows; that was the remaining 13% of height mismatches (`research/gmesh/coord_fit.py`: 130,436/130,436 points of mesh k = 170). With it: 310/310 grids and 310/310 merged lists are bit-exact.
+- **Skirts** (after VERTEX_LIST_CLEANER = the first-use renumbering):
+  - Take every kept grid vertex with flag 0 or 3, row by row.
+  - Walk +x, then +z, over vertices the cleaner dropped, to the next kept one. A hole on the way ends the x walk with n; it ends the z walk at the last dropped vertex (n if none). At row 0 / row n−1 (col 0 / col n−1 for z), a hole at the midpoint ±0.01 outside also ends the walk.
+  - If the end vertex has flag 0 or 3 and the edge midpoint ±0.01 across it is a hole, emit four vertices (a, b, a − 1, b − 1) and indices 0 1 2 2 1 3 1 0 2 1 2 3.
+  - Positions are the query coordinates.
+- **Bounds:** x/z = ((1/total)·i0)·ext and ((cells + i0)/total)·ext in float; y = vertex extent.
+- **Header:**
+  - 0xA6 on land = the first digit of the mesh number (stale string memory, the same in both runs);
+  - 0xE8–0xEF = 0 and 0xF0 = 9e d4.
+- **land_mesh_N.compressed_map:** WARSCAPE::rasterise_max_heights of the final mesh (skirts included) into an n × n field filled with −50.
+  - u = (x − minX)/(maxX − minX)·n, likewise v, through an identity matrix.
+  - Same per-triangle rasteriser as the river height patches.
+  - u16 = trunc((h − lo)·(1/(hi − lo))·65535), header (0, lo, 0, 0, hi, 0).
+- MESH_SPLITTER never splits on main190 (all meshes are under 65,536 vertices).
