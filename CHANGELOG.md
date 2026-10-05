@@ -24,6 +24,14 @@
   - The card helper (`InfoCard.Card(key)`) and its text tables (`InfoCards.*.cs`, one per window) are shared, so other windows can use them.
 - **Clearer labels:** the *Profile* tab is now *Project settings*; *Build segments* is *Build steps (run top to bottom)*; *Output* / *Pack* log buttons are *Output folder* / *Pack file*; profile fields *Accepted tile-map errors*, *Delete before compile*, *Terrain backup folder* and *Pack mode*.
 
+### Start screen and Settings
+- **Map selector:** the start page picks the assembly kit (`assembly_kit*` folders next to the game) and the map (kit maps with a `.terry`, plus maps in linked packs). The choice is remembered, and every editor opened from the start page uses that map.
+- **Settings page:** reachable from the start page (*File › Settings* and a *Settings* tile) and from *Help › Settings* / *Window › Settings* in every editor. It covers all folders, linked packs, the tile map source, Prepare game data and developer mode, with info cards on every control.
+- **Linked packs:** add, remove and reorder mod `.pack` files as read-only sources for compiled map files, DB tables and assets (`linkedPacks` in settings.json, used as the paths' mod packs).
+- **Prepare game data lists every map:** vanilla, kit and linked-pack maps. It copies the chosen map from the linked packs first, then the vanilla packs. A map that is only in the kit says to build it or link its pack first.
+- **Original files are never written:** a tested guard (`SourceGuard`) refuses writes into the game's `data` folder, a linked pack or any `.pack`. Prepare game data and Settings check it.
+- Packs are read with the C# `PackFile` reader rather than RPFM's Rust `rpfm_lib` (see README, *Linked packs*).
+
 ## 0.1.0-alpha.2 (2026-10-05)
 
 ### Native build: byte-identical to BOB

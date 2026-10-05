@@ -49,10 +49,11 @@ public static class StandardMenus
             if (dialog.ShowDialog(owner) == true) new BattleWindow(dialog.FolderName, paths).Show();
         }));
         window.Items.Add(Item("Bu_ild", () => BuildWindow.Show(owner, paths)));
+        window.Items.Add(Item("Se_ttings…", () => OpenSettings(owner), tooltip: SettingsTip));
         window.SubmenuOpened += (_, _) =>
         {
             // the open windows, to switch between them
-            while (window.Items.Count > 6) window.Items.RemoveAt(6);
+            while (window.Items.Count > 7) window.Items.RemoveAt(7);
             var open = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w.Owner is null && !string.IsNullOrEmpty(w.Title)).ToList();
             if (open.Count < 2) return;
             window.Items.Add(new Separator());
@@ -69,6 +70,8 @@ public static class StandardMenus
     public static MenuItem Help(Window owner)
     {
         var help = new MenuItem { Header = "_Help" };
+        help.Items.Add(Item("_Settings…", () => OpenSettings(owner), tooltip: SettingsTip));
+        help.Items.Add(new Separator());
         help.Items.Add(Item("_Read me", () => OpenFile(Path.Combine(AppContext.BaseDirectory, "README.md"))));
         help.Items.Add(Item("_Known issues", () => OpenFile(Path.Combine(AppContext.BaseDirectory, "KNOWN_ISSUES.md"))));
         help.Items.Add(Item("Open _log folder", () => OpenFolder(ErrorDialog.LogDir)));
@@ -77,6 +80,11 @@ public static class StandardMenus
         help.Items.Add(Item("_About Atlas3K", () => new AboutWindow { Owner = owner }.ShowDialog()));
         return help;
     }
+
+    private static string SettingsTip => InfoCards.Get("menu.settings").Text;
+
+    /// <summary>The Settings page, from any editor.</summary>
+    public static void OpenSettings(Window owner) => new SettingsWindow { Owner = owner }.ShowDialog();
 
     public static MenuItem Item(string header, Action click, string gesture = "", string? tooltip = null)
     {

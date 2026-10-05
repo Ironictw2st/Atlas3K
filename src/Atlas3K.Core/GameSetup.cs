@@ -70,9 +70,17 @@ public static partial class GameSetup
     private static partial Regex LibraryPath();
 
     /// <summary>The DB tables (vanilla database packs) the tree tools read, as RPFM-style TSVs under <paramref name="dbRoot"/>.</summary>
-    public static IReadOnlyList<string> ExtractDbTables(string gameDataDir, string dbRoot, Action<string>? log = null)
+    public static IReadOnlyList<string> ExtractDbTables(string gameDataDir, string dbRoot, Action<string>? log = null) =>
+        ExtractDbTables(gameDataDir, dbRoot, [], log);
+
+    /// <summary>As above, with the linked mod packs' table files added (read-only; a file that does not decode with
+    /// the built-in schema is skipped with a log line).</summary>
+    public static IReadOnlyList<string> ExtractDbTables(string gameDataDir, string dbRoot, IReadOnlyList<string> linkedPacks, Action<string>? log = null)
     {
-        var packs = PackSet.OpenVanilla(gameDataDir, n => n.StartsWith("database", StringComparison.OrdinalIgnoreCase));
+        SourceGuard.EnsureWritable(dbRoot, gameDataDir, linkedPacks);
+        var vanilla = PackSet.OpenVanilla(gameDataDir, n => n.StartsWith("database", StringComparison.OrdinalIgnoreCase));
+        var mods = linkedPacks.Where(File.Exists).Select(PackFile.Open).ToList();
+        var packs = new PackSet(mods.Concat(vanilla.Packs));
         var written = new List<string>();
         foreach (var table in DbBinaryTable.Schemas.Keys.Select(k => k.Table).Distinct())
         {
@@ -83,7 +91,13 @@ public static partial class GameSetup
             DbBinaryTable.Table? merged = null;
             foreach (var file in files)
             {
-                var t = DbBinaryTable.Read(table, packs.TryRead(file)!);
+                DbBinaryTable.Table t;
+                try { t = DbBinaryTable.Read(table, packs.TryRead(file)!); }
+                catch (Exception e) when (mods.Contains(packs.FindOwner(file)!) && e is InvalidDataException or NotSupportedException or EndOfStreamException or ArgumentException)
+                {
+                    log?.Invoke($"{file} in {Path.GetFileName(packs.FindOwner(file)!.SourcePath)} skipped: {e.Message}");
+                    continue;
+                }
                 if (merged is null) merged = t;
                 else merged.Rows.AddRange(t.Rows);
             }
@@ -117,13 +131,22 @@ public static partial class GameSetup
 
     /// <summary>A campaign map's compiled files (terrain\campaigns\&lt;map&gt; and campaign_maps\&lt;map&gt;) from the vanilla
     /// packs into <paramref name="compiledRoot"/>, the folder the editors read.</summary>
-    public static int ExtractCompiledMap(string gameDataDir, string map, string compiledRoot, Action<string>? log = null)
+    public static int ExtractCompiledMap(string gameDataDir, string map, string compiledRoot, Action<string>? log = null) =>
+        ExtractCompiledMap(gameDataDir, map, compiledRoot, [], log);
+
+    /// <summary>As above, reading the linked mod packs first (highest priority first), then the vanilla packs. Packs
+    /// are only read; <paramref name="compiledRoot"/> may not be inside the game data folder.</summary>
+    public static int ExtractCompiledMap(string gameDataDir, string map, string compiledRoot, IReadOnlyList<string> linkedPacks,
+                                         Action<string>? log = null)
     {
-        var packs = PackSet.OpenVanilla(gameDataDir);
+        SourceGuard.EnsureWritable(compiledRoot, gameDataDir, linkedPacks);
+        var packs = OpenWithLinked(gameDataDir, linkedPacks);
         var prefixes = new[] { PackFile.Normalize($"terrain/campaigns/{map}/"), PackFile.Normalize($"campaign_maps/{map}/") };
         var files = packs.Packs.SelectMany(p => p.Entries.Keys).Where(k => prefixes.Any(x => k.StartsWith(x, StringComparison.Ordinal)))
             .Distinct().ToList();
-        if (files.Count == 0) throw new FileNotFoundException($"no compiled files for {map} in the vanilla packs ({gameDataDir})");
+        if (files.Count == 0)
+            throw new FileNotFoundException($"no compiled files for {map} in the linked or vanilla packs ({gameDataDir}). " +
+                                            "A map that is only in the assembly kit has to be built (Build) or its pack linked first.");
         var n = 0;
         foreach (var file in files)
         {
@@ -135,6 +158,13 @@ public static partial class GameSetup
         }
         log?.Invoke($"{map}: {n} files");
         return n;
+    }
+
+    /// <summary>The linked packs (highest priority first) in front of the vanilla packs.</summary>
+    public static PackSet OpenWithLinked(string gameDataDir, IReadOnlyList<string> linkedPacks, Func<string, bool>? vanillaFilter = null)
+    {
+        var mods = linkedPacks.Where(File.Exists).Select(PackFile.Open);
+        return new PackSet(mods.Concat(PackSet.OpenVanilla(gameDataDir, vanillaFilter).Packs));
     }
 
     /// <summary>Campaign maps in the vanilla packs (folders under campaign_maps\ that have terrain).</summary>

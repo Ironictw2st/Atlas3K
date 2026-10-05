@@ -49,7 +49,28 @@ model.
    - Pick a map and press **Prepare game data**. This copies the map's compiled files and the tree tables out of
      your own game packs into `%LocalAppData%\Atlas3K`. Atlas3K ships none of the game's data.
 
-Settings live in `%AppData%\Atlas3K\settings.json`. Change them later from **File › Settings** on the start page.
+Settings live in `%AppData%\Atlas3K\settings.json`. Change them later from **File › Settings** on the start page, the
+**Settings** tile, or **Help › Settings** / **Window › Settings** in any editor.
+
+### Choosing the map
+
+The start page has an **Assembly kit** list (the `assembly_kit*` folders next to the game) and a **Map** list: the maps
+in that kit's `raw_data\terrain\campaigns` that have a `.terry`, plus the maps in your linked packs. The choice is
+remembered, and the Scene editor, Tile map, Terrain painter and Build all open on it.
+
+### Linked packs (read-only)
+
+**Settings › Linked packs** links mod `.pack` files, for example your map mod in the game's `data` folder. Atlas3K reads
+them before the vanilla packs (top of the list wins) for compiled map files, DB tables and assets. **Prepare game data**
+then lists every map (vanilla, kit and linked packs) and copies the chosen map's compiled files out of the linked packs
+first, then the vanilla packs.
+
+Atlas3K never writes to a pack or to the game's `data` folder. Edits go to the assembly kit (`raw_data`) or the output
+folder, and Settings refuses a cache or output folder inside `data`.
+
+Packs are read by Atlas3K's own C# reader (`Atlas3K.Formats\Packs\PackFile`). RPFM's library (`rpfm_lib`) is a Rust
+crate, so using it would mean shipping a native bridge for no gain: listing and reading uncompressed pack entries is all
+these features need, and the DB tables decode with the built-in schemas. RPFM itself stays the tool for editing packs.
 
 ## Building a map
 
