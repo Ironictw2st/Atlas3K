@@ -11,6 +11,13 @@ public sealed class MapDataRegions
     public int Width { get; private init; }
     public int Height { get; private init; }
     public List<Region> Regions { get; } = [];
+    /// <summary>REGION_AREA_INDEX per hex (region | area &lt;&lt; 9), row-major; from MASKED_REGIONS_DATA's run-length array.</summary>
+    public ushort[] AreaMap { get; private init; } = [];
+    /// <summary>World rectangle of the campaign map (THEATRES_AND_REGIONS_FOR_UI / CAMPAIGN_THEATRE: min, max).</summary>
+    public (float X, float Y) WorldMin { get; private init; }
+    public (float X, float Y) WorldMax { get; private init; }
+
+    public Area AreaOf(int areaIndex) => Regions[areaIndex & 0x1FF].Areas[areaIndex >> 9];
 
     public sealed class Region
     {
@@ -43,7 +50,25 @@ public sealed class MapDataRegions
     public static MapDataRegions Read(EsfTree esf)
     {
         var hexMap = esf.Root.Descendants("HEX_MAP_DATA").First().Values;
-        var result = new MapDataRegions { Width = (int)hexMap[0].Int, Height = (int)hexMap[1].Int };
+        int w = (int)hexMap[0].Int, h = (int)hexMap[1].Int;
+        var masked = esf.Root.Descendants("MASKED_REGIONS_DATA").First();
+        var runs = masked.Children.OfType<EsfArray>().Last().U16s();
+        var areaMap = new ushort[w * h];
+        var o = 0;
+        for (var k = 0; k + 1 < runs.Length; k += 2)
+        {
+            var n = runs[k + 1];
+            if (o + n > areaMap.Length) throw new InvalidDataException("MASKED_REGIONS_DATA runs exceed the hex map");
+            Array.Fill(areaMap, runs[k], o, n);
+            o += n;
+        }
+        if (o != areaMap.Length) throw new InvalidDataException($"MASKED_REGIONS_DATA covers {o} of {areaMap.Length} hexes");
+        var theatre = esf.Root.Descendants("CAMPAIGN_THEATRE").First().Values;
+        var result = new MapDataRegions
+        {
+            Width = w, Height = h, AreaMap = areaMap,
+            WorldMin = theatre[0].Vec2, WorldMax = theatre[1].Vec2,
+        };
         var block = esf.Root.Descendants("REGIONS_BLOCK").First();
         var i = 0;
         foreach (var group in block.Groups)

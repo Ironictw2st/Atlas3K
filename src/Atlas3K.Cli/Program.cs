@@ -94,6 +94,8 @@ switch (command)
         return TileCommands.Run(paths, c, args.Skip(1).ToArray());
     case var c when BuildCommands.Names.Contains(c):
         return BuildCommands.Run(paths, c, args.Skip(1).ToArray());
+    case var c when AiPathfindingCommands.Names.Contains(c):
+        return AiPathfindingCommands.Run(paths, c, args.Skip(1).ToArray());
     default:
         Console.WriteLine("Commands: info | trees-roundtrip | find-textures | render [mapX mapY scale width height]");
         Console.WriteLine("          props-to-layers [targetDir|ak] [shiftX shiftZ]");
@@ -104,6 +106,8 @@ switch (command)
         Console.WriteLine("                [--out <dir>] [--pack-output <file>] [--json]      a project's build (as the GUI's Build window)");
         Console.WriteLine("          new-project <file.atlas3k>                          project with the default build profile (global --map / --ak)");
         Console.WriteLine("          parity <builtDir> <referenceDir> [--mask-junk] [--json]");
+        Console.WriteLine("          hlp-spd [--in <dir: pathfinding.ppd + map_data.esf>] [--out <dir>] [--compare <dir with reference hlp/spd>] [--only hlp|spd] [--legacy-stl]");
+        Console.WriteLine("                                         campaign AI pathfinding data (hlp_data.esf / spd_data.esf) without the game");
         Console.WriteLine("          validate-tilemap [--tilemap <png>] [--climate-dir <dir>] [--db <_tile_database>] [--simulate] [--overlay <png>] [--tilemap-only] [--json]");
         Console.WriteLine("                                         pre-flight check of tile_map.png before Tilemap (exit 1 on errors)");
         Console.WriteLine("          validate-tilemap --pass-order <db|0-5|tile:<name>>   tile-matching diagnostics (candidate order, tile links)");

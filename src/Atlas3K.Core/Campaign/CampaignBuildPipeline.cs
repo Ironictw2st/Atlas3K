@@ -22,6 +22,7 @@ public sealed class CampaignBuildPipeline
         new CameraHeightmapStep(),
         new Trees.TreesStep(),
         new LookupStep(),
+        new AiPathfinding.AiPathfindingStep(),
     ];
 
     /// <summary>Steps that run when none are named: every one that is native.</summary>
