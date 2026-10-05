@@ -1,0 +1,2490 @@
+{
+  "FilesScanned": 3864,
+  "EntitiesScanned": 317813,
+  "Components": {
+    "ECAIHint": {
+      "Name": "ECAIHint",
+      "Count": 3,
+      "Fields": [
+        {
+          "Name": "type",
+          "Type": "Enum",
+          "Count": 3,
+          "Default": "AIH_FORT_APPROACH",
+          "Values": [
+            "AIH_FORT_APPROACH"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBattleProperties": {
+      "Name": "ECBattleProperties",
+      "Count": 4062,
+      "Fields": [
+        {
+          "Name": "allow_in_outfield",
+          "Type": "Bool",
+          "Count": 1398,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "visible_beyond_outfield",
+          "Type": "Bool",
+          "Count": 2664,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBattlefieldZone": {
+      "Name": "ECBattlefieldZone",
+      "Count": 1,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBuilding": {
+      "Name": "ECBuilding",
+      "Count": 24876,
+      "Fields": [
+        {
+          "Name": "key",
+          "Type": "String",
+          "Count": 24876,
+          "Default": "",
+          "Source": "corpus"
+        },
+        {
+          "Name": "damage",
+          "Type": "Int",
+          "Count": 24876,
+          "Default": "0",
+          "Values": [
+            "0",
+            "1",
+            "10",
+            "100",
+            "13",
+            "2",
+            "3",
+            "57",
+            "6",
+            "74"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "indestructible",
+          "Type": "Bool",
+          "Count": 24876,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "toggleable",
+          "Type": "Bool",
+          "Count": 24876,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "capture_location",
+          "Type": "Id",
+          "Count": 24876,
+          "Default": "",
+          "Source": "corpus"
+        },
+        {
+          "Name": "export_as_prop",
+          "Type": "Bool",
+          "Count": 24876,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "allow_in_outfield_as_prop",
+          "Type": "Bool",
+          "Count": 7935,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "visible_beyond_outfield",
+          "Type": "Bool",
+          "Count": 16941,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "height_map_modification",
+          "Type": "Enum",
+          "Count": 12656,
+          "Default": "Maximum",
+          "Values": [
+            "Absolute",
+            "Maximum"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBuildingProjectileEmitter": {
+      "Name": "ECBuildingProjectileEmitter",
+      "Count": 106,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECCampaignProperties": {
+      "Name": "ECCampaignProperties",
+      "Count": 254203,
+      "Fields": [
+        {
+          "Name": "visible_inside_snow_region",
+          "Type": "Bool",
+          "Count": 254203,
+          "Default": "true",
+          "Values": [
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "visible_outside_snow_region",
+          "Type": "Bool",
+          "Count": 254203,
+          "Default": "true",
+          "Values": [
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "visible_inside_destruction_region",
+          "Type": "Bool",
+          "Count": 254203,
+          "Default": "true",
+          "Values": [
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "visible_outside_destruction_region",
+          "Type": "Bool",
+          "Count": 254203,
+          "Default": "true",
+          "Values": [
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "visible_in_unseen_shroud",
+          "Type": "Bool",
+          "Count": 254203,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "visible_in_seen_shroud",
+          "Type": "Bool",
+          "Count": 254203,
+          "Default": "true",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "no_culling",
+          "Type": "Bool",
+          "Count": 254203,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "culture_mask",
+          "Type": "String",
+          "Count": 254203,
+          "Default": "",
+          "Values": [
+            ""
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "season_mask",
+          "Type": "Enum",
+          "Count": 254203,
+          "Default": "",
+          "Values": [
+            "",
+            "season_autumn",
+            "season_autumn,season_spring,season_summer,season_harvest",
+            "season_autumn,season_winter",
+            "season_harvest",
+            "season_harvest,season_autumn,season_spring,season_summer",
+            "season_harvest,season_spring,season_summer",
+            "season_harvest,season_summer",
+            "season_harvest,season_summer,season_autumn,season_spring",
+            "season_harvest,season_summer,season_spring",
+            "season_spring",
+            "season_spring,season_harvest,season_winter,season_summer",
+            "season_spring,season_summer",
+            "season_spring,season_summer,season_harvest",
+            "season_spring,season_summer,season_harvest,season_autumn",
+            "season_spring,season_summer,season_winter,season_harvest",
+            "season_summer",
+            "season_summer,season_harvest",
+            "season_summer,season_harvest,season_spring,season_autumn",
+            "season_summer,season_spring",
+            "season_summer,season_spring,season_harvest",
+            "season_winter",
+            "season_winter,season_harvest"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECCaptureLocation": {
+      "Name": "ECCaptureLocation",
+      "Count": 52,
+      "Fields": [
+        {
+          "Name": "importance",
+          "Type": "Enum",
+          "Count": 52,
+          "Default": "CLIT_MINOR",
+          "Values": [
+            "CLIT_MINOR"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "type",
+          "Type": "Enum",
+          "Count": 52,
+          "Default": "tower",
+          "Values": [
+            "gate",
+            "tower"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "flag_position",
+          "Type": "Vec2",
+          "Count": 52,
+          "Default": "0 0",
+          "Source": "corpus"
+        },
+        {
+          "Name": "min_players",
+          "Type": "Int",
+          "Count": 52,
+          "Default": "2",
+          "Values": [
+            "1",
+            "2"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "max_players",
+          "Type": "Int",
+          "Count": 52,
+          "Default": "8",
+          "Values": [
+            "8"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "flag_facing_direction",
+          "Type": "Float",
+          "Count": 52,
+          "Default": "0",
+          "Source": "corpus"
+        },
+        {
+          "Name": "destroy_building_on_capture",
+          "Type": "Bool",
+          "Count": 52,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECCircle": {
+      "Name": "ECCircle",
+      "Count": 30,
+      "Fields": [
+        {
+          "Name": "radius",
+          "Type": "Float",
+          "Count": 30,
+          "Default": "22",
+          "Source": "corpus"
+        },
+        {
+          "Name": "is_semicircle",
+          "Type": "Bool",
+          "Count": 30,
+          "Default": "true",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECCivilianDeployment": {
+      "Name": "ECCivilianDeployment",
+      "Count": 16,
+      "Fields": [
+        {
+          "Name": "type",
+          "Type": "Enum",
+          "Count": 16,
+          "Default": "group_civilian_rural",
+          "Values": [
+            "",
+            "group_civilian_rural"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "amount",
+          "Type": "Enum",
+          "Count": 16,
+          "Default": "3k_main_civilian_amount_low",
+          "Values": [
+            "",
+            "3k_main_civilian_amount_low"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECCivilianShelter": {
+      "Name": "ECCivilianShelter",
+      "Count": 16,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECCompositeScene": {
+      "Name": "ECCompositeScene",
+      "Count": 9607,
+      "Fields": [
+        {
+          "Name": "path",
+          "Type": "Path",
+          "Count": 9607,
+          "Default": "",
+          "Source": "corpus"
+        },
+        {
+          "Name": "autoplay",
+          "Type": "Bool",
+          "Count": 9607,
+          "Default": "true",
+          "Values": [
+            "true"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECDLCMask": {
+      "Name": "ECDLCMask",
+      "Count": 243181,
+      "Fields": [
+        {
+          "Name": "type",
+          "Type": "Enum",
+          "Count": 243181,
+          "Default": "Exclude",
+          "Values": [
+            "Exclude"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "mask",
+          "Type": "String",
+          "Count": 243181,
+          "Default": "",
+          "Values": [
+            ""
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECDecal": {
+      "Name": "ECDecal",
+      "Count": 3653,
+      "Fields": [
+        {
+          "Name": "model_path",
+          "Type": "Path",
+          "Count": 3653,
+          "Default": "",
+          "Source": "corpus"
+        },
+        {
+          "Name": "parallax_scale",
+          "Type": "Float",
+          "Count": 3653,
+          "Default": "1",
+          "Source": "known-default"
+        },
+        {
+          "Name": "tiling",
+          "Type": "Float",
+          "Count": 3653,
+          "Default": "1",
+          "Source": "known-default"
+        },
+        {
+          "Name": "tiling_affects_alpha",
+          "Type": "Bool",
+          "Count": 1903,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "normal_mode",
+          "Type": "Enum",
+          "Count": 3653,
+          "Default": "DNM_DECAL_OVERRIDE",
+          "Values": [
+            "DNM_BLEND",
+            "DNM_DECAL_OVERRIDE"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "apply_to_terrain",
+          "Type": "Bool",
+          "Count": 3653,
+          "Default": "true",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "apply_to_objects",
+          "Type": "Bool",
+          "Count": 3653,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "render_above_snow",
+          "Type": "Bool",
+          "Count": 3653,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECDeploymentZone": {
+      "Name": "ECDeploymentZone",
+      "Count": 34,
+      "Fields": [
+        {
+          "Name": "facing_direction",
+          "Type": "Int",
+          "Count": 34,
+          "Default": "0",
+          "Values": [
+            "0"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "deployment_type",
+          "Type": "Enum",
+          "Count": 34,
+          "Default": "DZT_1V1",
+          "Values": [
+            "DZT_1V1"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "deployment_category",
+          "Type": "Enum",
+          "Count": 34,
+          "Default": "DZC_DEFAULT",
+          "Values": [
+            "DZC_DEFAULT"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "deployment_zone_id",
+          "Type": "Int",
+          "Count": 34,
+          "Default": "0",
+          "Values": [
+            "0"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "alliance_id",
+          "Type": "Int",
+          "Count": 34,
+          "Default": "0",
+          "Values": [
+            "0",
+            "1"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "configuration",
+          "Type": "Int",
+          "Count": 34,
+          "Default": "0",
+          "Values": [
+            "0"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECDeploymentZoneRegion": {
+      "Name": "ECDeploymentZoneRegion",
+      "Count": 36,
+      "Fields": [
+        {
+          "Name": "region_type",
+          "Type": "Enum",
+          "Count": 36,
+          "Default": "DZRT_ADDITIVE",
+          "Values": [
+            "DZRT_ADDITIVE",
+            "DZRT_SUBTRACTIVE"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECFileLayer": {
+      "Name": "ECFileLayer",
+      "Count": 182,
+      "Fields": [
+        {
+          "Name": "export",
+          "Type": "Bool",
+          "Count": 179,
+          "Default": "true",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "bmd_export_type",
+          "Type": "String",
+          "Count": 179,
+          "Default": "",
+          "Values": [
+            ""
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "version",
+          "Type": "Int",
+          "Count": 3,
+          "Default": "25",
+          "Values": [
+            "25"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {
+        "entities": 3,
+        "associations": 3
+      },
+      "InConfiguration": false
+    },
+    "ECGoRegion": {
+      "Name": "ECGoRegion",
+      "Count": 12,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECGroup": {
+      "Name": "ECGroup",
+      "Count": 6,
+      "Fields": [],
+      "Children": {
+        "group": 6
+      },
+      "InConfiguration": true
+    },
+    "ECLayer": {
+      "Name": "ECLayer",
+      "Count": 9154,
+      "Fields": [
+        {
+          "Name": "export",
+          "Type": "Bool",
+          "Count": 21,
+          "Default": "true",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "bmd_export_type",
+          "Type": "String",
+          "Count": 21,
+          "Default": "",
+          "Values": [
+            ""
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECLayerExport": {
+      "Name": "ECLayerExport",
+      "Count": 9133,
+      "Fields": [
+        {
+          "Name": "export",
+          "Type": "Bool",
+          "Count": 9133,
+          "Default": "true",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "export_as_separate_file_if_not_meta_tagged",
+          "Type": "Bool",
+          "Count": 5555,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "buildings_have_linked_destruction",
+          "Type": "Bool",
+          "Count": 8508,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECLayerExportTags": {
+      "Name": "ECLayerExportTags",
+      "Count": 7429,
+      "Fields": [
+        {
+          "Name": "tags",
+          "Type": "String",
+          "Count": 7429,
+          "Default": "",
+          "Source": "corpus"
+        },
+        {
+          "Name": "force_tags",
+          "Type": "Bool",
+          "Count": 1653,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECLayerFile": {
+      "Name": "ECLayerFile",
+      "Count": 2474,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECLayerInternal": {
+      "Name": "ECLayerInternal",
+      "Count": 6768,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECLightProbe": {
+      "Name": "ECLightProbe",
+      "Count": 15,
+      "Fields": [
+        {
+          "Name": "primary",
+          "Type": "Bool",
+          "Count": 15,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECLivePrefab": {
+      "Name": "ECLivePrefab",
+      "Count": 2,
+      "Fields": [
+        {
+          "Name": "entity_map",
+          "Type": "String",
+          "Count": 2,
+          "Default": "",
+          "Values": [
+            ""
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {
+        "prefab": 2
+      },
+      "InConfiguration": true
+    },
+    "ECMesh": {
+      "Name": "ECMesh",
+      "Count": 231576,
+      "Fields": [
+        {
+          "Name": "model_path",
+          "Type": "Path",
+          "Count": 231576,
+          "Default": "",
+          "Source": "corpus"
+        },
+        {
+          "Name": "animation_path",
+          "Type": "String",
+          "Count": 231576,
+          "Default": "",
+          "Values": [
+            ""
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "opacity",
+          "Type": "Int",
+          "Count": 183,
+          "Default": "1",
+          "Values": [
+            "1"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "burn",
+          "Type": "Bool",
+          "Count": 1,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "burn_amount",
+          "Type": "Int",
+          "Count": 1,
+          "Default": "0",
+          "Values": [
+            "0"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "glow_amount",
+          "Type": "Int",
+          "Count": 1,
+          "Default": "0",
+          "Values": [
+            "0"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECMeshRenderSettings": {
+      "Name": "ECMeshRenderSettings",
+      "Count": 264322,
+      "Fields": [
+        {
+          "Name": "inherit_from_parent",
+          "Type": "Bool",
+          "Count": 261621,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "cast_shadow",
+          "Type": "Bool",
+          "Count": 264322,
+          "Default": "true",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "alpha",
+          "Type": "Float",
+          "Count": 262404,
+          "Default": "1",
+          "Source": "corpus"
+        },
+        {
+          "Name": "tint_colour",
+          "Type": "Colour",
+          "Count": 262404,
+          "Default": "255 255 255 255",
+          "Source": "corpus"
+        },
+        {
+          "Name": "faction_colour",
+          "Type": "Colour",
+          "Count": 262404,
+          "Default": "255 255 255 255",
+          "Source": "corpus"
+        },
+        {
+          "Name": "set_tint_colour_from_colour_overlay",
+          "Type": "Bool",
+          "Count": 258738,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECNoGoRegion": {
+      "Name": "ECNoGoRegion",
+      "Count": 192,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECPlayableArea": {
+      "Name": "ECPlayableArea",
+      "Count": 1,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECPlayerDeploymentLocations": {
+      "Name": "ECPlayerDeploymentLocations",
+      "Count": 1,
+      "Fields": [
+        {
+          "Name": "deployment_locations",
+          "Type": "Enum",
+          "Count": 1,
+          "Default": "North,South,East,West",
+          "Values": [
+            "North,South,East,West"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECPointCloud": {
+      "Name": "ECPointCloud",
+      "Count": 64,
+      "Fields": [],
+      "Children": {
+        "point_cloud": 64
+      },
+      "InConfiguration": true
+    },
+    "ECPointLight": {
+      "Name": "ECPointLight",
+      "Count": 1368,
+      "Fields": [
+        {
+          "Name": "colour",
+          "Type": "Colour",
+          "Count": 1368,
+          "Default": "255 210 131 255",
+          "Source": "corpus"
+        },
+        {
+          "Name": "colour_scale",
+          "Type": "Int",
+          "Count": 1368,
+          "Default": "100000",
+          "Values": [
+            "100000",
+            "21000",
+            "30000",
+            "50000",
+            "80000"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "radius",
+          "Type": "Float",
+          "Count": 1368,
+          "Default": "10",
+          "Source": "known-default"
+        },
+        {
+          "Name": "animation_type",
+          "Type": "Enum",
+          "Count": 1368,
+          "Default": "LAT_NONE",
+          "Values": [
+            "LAT_NONE"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "animation_speed_scale",
+          "Type": "Vec2",
+          "Count": 1368,
+          "Default": "0 0",
+          "Source": "corpus"
+        },
+        {
+          "Name": "colour_min",
+          "Type": "Int",
+          "Count": 1368,
+          "Default": "0",
+          "Values": [
+            "0"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "random_offset",
+          "Type": "Int",
+          "Count": 1368,
+          "Default": "0",
+          "Values": [
+            "0"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "falloff_type",
+          "Type": "Enum",
+          "Count": 1368,
+          "Default": "WPLFT_SMOOTH",
+          "Values": [
+            "WPLFT_LINEAR",
+            "WPLFT_SMOOTH"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "for_light_probes_only",
+          "Type": "Bool",
+          "Count": 1368,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECPolygonMesh": {
+      "Name": "ECPolygonMesh",
+      "Count": 19,
+      "Fields": [
+        {
+          "Name": "material",
+          "Type": "Path",
+          "Count": 19,
+          "Default": "materials/battle_rice_paddies.xml.material",
+          "Source": "corpus"
+        },
+        {
+          "Name": "affects_mesh_optimization",
+          "Type": "Bool",
+          "Count": 18,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "ground_type",
+          "Type": "Enum",
+          "Count": 17,
+          "Default": "shallow_water",
+          "Values": [
+            "",
+            "shallow_water"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "affects_protection_map",
+          "Type": "Bool",
+          "Count": 1,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECPolyline": {
+      "Name": "ECPolyline",
+      "Count": 574,
+      "Fields": [],
+      "Children": {
+        "polyline": 574
+      },
+      "InConfiguration": true
+    },
+    "ECPrefab": {
+      "Name": "ECPrefab",
+      "Count": 8527,
+      "Fields": [
+        {
+          "Name": "key",
+          "Type": "String",
+          "Count": 8527,
+          "Default": "",
+          "Source": "corpus"
+        },
+        {
+          "Name": "turn_buildings_into_props",
+          "Type": "Bool",
+          "Count": 5760,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "damage",
+          "Type": "Int",
+          "Count": 90,
+          "Default": "0",
+          "Values": [
+            "0"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "indestructible",
+          "Type": "Bool",
+          "Count": 90,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "toggleable",
+          "Type": "Bool",
+          "Count": 90,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "capture_location",
+          "Type": "String",
+          "Count": 90,
+          "Default": "",
+          "Values": [
+            ""
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "export_as_prop",
+          "Type": "Bool",
+          "Count": 90,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "allow_in_outfield_as_prop",
+          "Type": "Bool",
+          "Count": 90,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {
+        "override": 72
+      },
+      "InConfiguration": true
+    },
+    "ECPrefabOverride": {
+      "Name": "ECPrefabOverride",
+      "Count": 23200,
+      "Fields": [
+        {
+          "Name": "enabled",
+          "Type": "Bool",
+          "Count": 23200,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "id",
+          "Type": "String",
+          "Count": 23200,
+          "Default": "",
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECProceduralExclusionZone2": {
+      "Name": "ECProceduralExclusionZone2",
+      "Count": 215,
+      "Fields": [
+        {
+          "Name": "exclude_vegetation",
+          "Type": "Bool",
+          "Count": 215,
+          "Default": "true",
+          "Values": [
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "exclude_grass",
+          "Type": "Bool",
+          "Count": 215,
+          "Default": "true",
+          "Values": [
+            "true"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECPropHeightPatch": {
+      "Name": "ECPropHeightPatch",
+      "Count": 231121,
+      "Fields": [
+        {
+          "Name": "has_height_patch",
+          "Type": "Bool",
+          "Count": 231121,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "apply_height_patch",
+          "Type": "Bool",
+          "Count": 231121,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECPropMesh": {
+      "Name": "ECPropMesh",
+      "Count": 231576,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECRectangle": {
+      "Name": "ECRectangle",
+      "Count": 8,
+      "Fields": [
+        {
+          "Name": "width",
+          "Type": "Int",
+          "Count": 8,
+          "Default": "32",
+          "Values": [
+            "2048",
+            "32",
+            "96"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "height",
+          "Type": "Int",
+          "Count": 8,
+          "Default": "32",
+          "Values": [
+            "16",
+            "2048",
+            "32",
+            "58"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECRiver": {
+      "Name": "ECRiver",
+      "Count": 93,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECRiverSpline": {
+      "Name": "ECRiverSpline",
+      "Count": 93,
+      "Fields": [
+        {
+          "Name": "spline_step_size",
+          "Type": "Float",
+          "Count": 93,
+          "Default": "1",
+          "Source": "known-default"
+        },
+        {
+          "Name": "terrain_relative",
+          "Type": "Bool",
+          "Count": 93,
+          "Default": "true",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "material",
+          "Type": "Path",
+          "Count": 93,
+          "Default": "materials/campaign_navigable_river_plane_default.xml.material",
+          "Source": "corpus"
+        },
+        {
+          "Name": "reverse_direction",
+          "Type": "Bool",
+          "Count": 93,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {
+        "spline": 93
+      },
+      "InConfiguration": true
+    },
+    "ECSiegeAIBoundary": {
+      "Name": "ECSiegeAIBoundary",
+      "Count": 9,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECSiegeAIEdge": {
+      "Name": "ECSiegeAIEdge",
+      "Count": 2,
+      "Fields": [
+        {
+          "Name": "siege_ai_edge_type",
+          "Type": "Enum",
+          "Count": 2,
+          "Default": "SAET_STREET",
+          "Values": [
+            "SAET_STREET"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECSiegeAINode": {
+      "Name": "ECSiegeAINode",
+      "Count": 5,
+      "Fields": [
+        {
+          "Name": "siege_ai_node_type",
+          "Type": "Enum",
+          "Count": 5,
+          "Default": "SANT_AREA",
+          "Values": [
+            "SANT_AREA",
+            "SANT_ENTRY",
+            "SANT_INTERSECTION"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECSignature": {
+      "Name": "ECSignature",
+      "Count": 6,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": false
+    },
+    "ECSoundMarker": {
+      "Name": "ECSoundMarker",
+      "Count": 2009,
+      "Fields": [
+        {
+          "Name": "key",
+          "Type": "String",
+          "Count": 2009,
+          "Default": "Sound_Environment_River_Small",
+          "Values": [
+            "Sound_Environment_Coastal_Waves_River_Opening",
+            "Sound_Environment_Coastal_Waves_Rock",
+            "Sound_Environment_Coastal_Waves_Sand",
+            "Sound_Environment_Fauna_Panda",
+            "Sound_Environment_Fire_Lantern",
+            "Sound_Environment_Lake",
+            "Sound_Environment_Lake_Cold",
+            "Sound_Environment_Monastery",
+            "Sound_Environment_Oasis",
+            "Sound_Environment_Prop_Smelter_Fire",
+            "Sound_Environment_Prop_Water_Wheel",
+            "Sound_Environment_Rice_Fields",
+            "Sound_Environment_River_Large",
+            "Sound_Environment_River_Small",
+            "Sound_Environment_Rock_Fall_Debris_Large",
+            "Sound_Environment_Rock_Fall_Debris_Small",
+            "Sound_Environment_Swamp",
+            "Sound_Environment_Tent_Flaps",
+            "Sound_Environment_Waterfall",
+            "Sound_Environment_Waterfall_Large",
+            "Sound_Environment_Waterfall_Small",
+            "Sound_Environment_Wildlife_Chinese_Cicadas",
+            "Sound_Environment_Wildlife_Coastal_Cormorants",
+            "Sound_Environment_Wildlife_Coastal_Seagulls",
+            "Sound_Environment_Wildlife_Coastal_Seals",
+            "Sound_Environment_Wildlife_Jungle_Cliffs",
+            "Sound_Environment_Wildlife_Mountains",
+            "Sound_Environment_Wind_High_Altitude_Peaks",
+            "Sound_Environment_Wind_Mountain_Cold_Light",
+            "Sound_Environment_Wind_Mountain_Cold_Strong",
+            "Sound_Environment_Wind_Mountain_Warm_Light",
+            "Sound_Environment_Wind_Mountain_Warm_Strong",
+            "Sound_Environment_Wood_Creaks_Quiet"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECSphere": {
+      "Name": "ECSphere",
+      "Count": 15,
+      "Fields": [
+        {
+          "Name": "radius",
+          "Type": "Int",
+          "Count": 15,
+          "Default": "1",
+          "Values": [
+            "1",
+            "100"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECTapeMeasure": {
+      "Name": "ECTapeMeasure",
+      "Count": 12,
+      "Fields": [
+        {
+          "Name": "_3d_view_render",
+          "Type": "Bool",
+          "Count": 12,
+          "Default": "true",
+          "Values": [
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "segments",
+          "Type": "Int",
+          "Count": 12,
+          "Default": "1",
+          "Values": [
+            "1"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECTerrainClamp": {
+      "Name": "ECTerrainClamp",
+      "Count": 304251,
+      "Fields": [
+        {
+          "Name": "active",
+          "Type": "Bool",
+          "Count": 304251,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "clamp_to_sea_level",
+          "Type": "Bool",
+          "Count": 304251,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "terrain_oriented",
+          "Type": "Bool",
+          "Count": 304250,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "ignore_low_frequency",
+          "Type": "Bool",
+          "Count": 20707,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECTerrainHole": {
+      "Name": "ECTerrainHole",
+      "Count": 21,
+      "Fields": [
+        {
+          "Name": "procedural_exclusion_zone",
+          "Type": "Bool",
+          "Count": 21,
+          "Default": "true",
+          "Values": [
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "procedural_exclusion_zone_margin",
+          "Type": "Int",
+          "Count": 21,
+          "Default": "5",
+          "Values": [
+            "5"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECTerryBattlefieldZone": {
+      "Name": "ECTerryBattlefieldZone",
+      "Count": 1,
+      "Fields": [
+        {
+          "Name": "locked",
+          "Type": "Bool",
+          "Count": 1,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "rank_distance",
+          "Type": "Int",
+          "Count": 1,
+          "Default": "3",
+          "Values": [
+            "3"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "zone_skirt_distance",
+          "Type": "Int",
+          "Count": 1,
+          "Default": "3",
+          "Values": [
+            "3"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECTransform": {
+      "Name": "ECTransform",
+      "Count": 308469,
+      "Fields": [
+        {
+          "Name": "position",
+          "Type": "Vec3",
+          "Count": 308469,
+          "Default": "0 0 0",
+          "Source": "corpus"
+        },
+        {
+          "Name": "rotation",
+          "Type": "Vec3",
+          "Count": 308469,
+          "Default": "0 0 0",
+          "Source": "corpus"
+        },
+        {
+          "Name": "scale",
+          "Type": "Vec3",
+          "Count": 308469,
+          "Default": "1 1 1",
+          "Source": "known-default"
+        },
+        {
+          "Name": "pivot",
+          "Type": "Vec3",
+          "Count": 305161,
+          "Default": "0 0 0",
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECTransform2D": {
+      "Name": "ECTransform2D",
+      "Count": 572,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECVFX": {
+      "Name": "ECVFX",
+      "Count": 10104,
+      "Fields": [
+        {
+          "Name": "vfx",
+          "Type": "String",
+          "Count": 10104,
+          "Default": "3k_main_campaign_enviro_leaves",
+          "Values": [
+            "3k_main_campaign_enviro_blossoms",
+            "3k_main_campaign_enviro_butterflies",
+            "3k_main_campaign_enviro_cloud_peaks",
+            "3k_main_campaign_enviro_clouds",
+            "3k_main_campaign_enviro_clouds_static",
+            "3k_main_campaign_enviro_dust_cloud",
+            "3k_main_campaign_enviro_dust_single",
+            "3k_main_campaign_enviro_fireflies",
+            "3k_main_campaign_enviro_flies",
+            "3k_main_campaign_enviro_heat_haze",
+            "3k_main_campaign_enviro_leaves",
+            "3k_main_campaign_enviro_leaves_orange",
+            "3k_main_campaign_enviro_leaves_yellow",
+            "3k_main_campaign_enviro_mist",
+            "3k_main_campaign_enviro_pollen",
+            "3k_main_campaign_enviro_snow_drift",
+            "3k_main_campaign_enviro_snow_drift_light",
+            "3k_main_campaign_enviro_snow_drift_single",
+            "3k_main_campaign_enviro_snow_drift_wide",
+            "3k_main_campaign_enviro_waterfall",
+            "3k_main_campaign_enviro_waterfall_splashes",
+            "3k_main_campaign_enviro_wind",
+            "3k_main_enviro_butterflies",
+            "3k_main_enviro_fire_flies",
+            "3k_main_enviro_flies",
+            "3k_main_enviro_incense_smoke",
+            "3k_main_enviro_incense_smoke_circle",
+            "3k_main_enviro_incense_smoke_square",
+            "3k_main_enviro_leaves_green",
+            "3k_main_enviro_smoke_chimney",
+            "3k_main_enviro_watermill_beam_mini2",
+            "3k_main_enviro_watermill_beam_mini3",
+            "3k_main_generic_fire_loop",
+            "3k_main_generic_fire_smoke_loop",
+            "3k_main_generic_smoke_loop",
+            "3k_main_obj_lantern_glow",
+            "cine_embers_large_1"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "autoplay",
+          "Type": "Bool",
+          "Count": 10104,
+          "Default": "true",
+          "Values": [
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "scale",
+          "Type": "Int",
+          "Count": 10104,
+          "Default": "1",
+          "Values": [
+            "1"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "instance_name",
+          "Type": "String",
+          "Count": 10104,
+          "Default": "",
+          "Values": [
+            ""
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECVegetation": {
+      "Name": "ECVegetation",
+      "Count": 15909,
+      "Fields": [
+        {
+          "Name": "key",
+          "Type": "Path",
+          "Count": 15909,
+          "Default": "",
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECWall": {
+      "Name": "ECWall",
+      "Count": 11,
+      "Fields": [
+        {
+          "Name": "weak_wall",
+          "Type": "Bool",
+          "Count": 11,
+          "Default": "false",
+          "Values": [
+            "false"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "ai_breachable",
+          "Type": "Bool",
+          "Count": 11,
+          "Default": "false",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        },
+        {
+          "Name": "dockable",
+          "Type": "Bool",
+          "Count": 11,
+          "Default": "true",
+          "Values": [
+            "false",
+            "true"
+          ],
+          "Source": "corpus"
+        }
+      ],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECAISeparator": {
+      "Name": "ECAISeparator",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBattleCatchmentArea": {
+      "Name": "ECBattleCatchmentArea",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECTileAlignment": {
+      "Name": "ECTileAlignment",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBattleCatchmentAreaBoundary": {
+      "Name": "ECBattleCatchmentAreaBoundary",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBattleCatchmentAreaInTile": {
+      "Name": "ECBattleCatchmentAreaInTile",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECTileCellAlignment": {
+      "Name": "ECTileCellAlignment",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBattleXML": {
+      "Name": "ECBattleXML",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBuildingDestructionLevel": {
+      "Name": "ECBuildingDestructionLevel",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBuildingSlot": {
+      "Name": "ECBuildingSlot",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBuildingSlotPreview": {
+      "Name": "ECBuildingSlotPreview",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECCamera": {
+      "Name": "ECCamera",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECCameraBounds": {
+      "Name": "ECCameraBounds",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECBox": {
+      "Name": "ECBox",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECCameraZone": {
+      "Name": "ECCameraZone",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECEnvironmentVolume": {
+      "Name": "ECEnvironmentVolume",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECDoubleSphere": {
+      "Name": "ECDoubleSphere",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECDoubleCylinder": {
+      "Name": "ECDoubleCylinder",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECEFLine": {
+      "Name": "ECEFLine",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECFactionPrefab": {
+      "Name": "ECFactionPrefab",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECFlatLowFrequencyArea": {
+      "Name": "ECFlatLowFrequencyArea",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECLayout": {
+      "Name": "ECLayout",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECSpline2D": {
+      "Name": "ECSpline2D",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECLiteBuildingOutline": {
+      "Name": "ECLiteBuildingOutline",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECMarker": {
+      "Name": "ECMarker",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECRawSpline": {
+      "Name": "ECRawSpline",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECSpline": {
+      "Name": "ECSpline",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECRoadSpline": {
+      "Name": "ECRoadSpline",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECSpotLight": {
+      "Name": "ECSpotLight",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECUnit": {
+      "Name": "ECUnit",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECLineOfSight": {
+      "Name": "ECLineOfSight",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    },
+    "ECWaterMesh": {
+      "Name": "ECWaterMesh",
+      "Count": 0,
+      "Fields": [],
+      "Children": {},
+      "InConfiguration": true
+    }
+  },
+  "EntityTemplates": {
+    "AIHint": {
+      "Count": 3,
+      "Components": [
+        "ECAIHint",
+        "ECTransform",
+        "ECTransform2D",
+        "ECPolyline"
+      ],
+      "Variants": {}
+    },
+    "BattlefieldZone": {
+      "Count": 1,
+      "Components": [
+        "ECBattlefieldZone",
+        "ECTerryBattlefieldZone",
+        "ECTransform",
+        "ECTransform2D",
+        "ECPolyline"
+      ],
+      "Variants": {}
+    },
+    "Building": {
+      "Count": 24876,
+      "Components": [
+        "ECBuilding",
+        "ECMeshRenderSettings",
+        "ECTransform",
+        "ECTerrainClamp",
+        "ECPrefabOverride"
+      ],
+      "Variants": {
+        "ECBuilding,ECMeshRenderSettings,ECTransform,ECTerrainClamp": 1682,
+        "ECTransform,ECTerrainClamp,ECBuilding,ECMeshRenderSettings,ECPrefabOverride": 103,
+        "ECBuilding,ECWall,ECMeshRenderSettings,ECTransform,ECTerrainClamp,ECPrefabOverride": 11
+      }
+    },
+    "BuildingProjectileEmitter": {
+      "Count": 106,
+      "Components": [
+        "ECBuildingProjectileEmitter",
+        "ECTransform"
+      ],
+      "Variants": {}
+    },
+    "CaptureLocation": {
+      "Count": 52,
+      "Components": [
+        "ECCaptureLocation",
+        "ECTransform",
+        "ECTransform2D",
+        "ECCircle"
+      ],
+      "Variants": {
+        "ECCaptureLocation,ECTransform,ECTransform2D,ECPolyline": 22
+      }
+    },
+    "CivilianDeployment": {
+      "Count": 16,
+      "Components": [
+        "ECCivilianDeployment",
+        "ECPolyline",
+        "ECTransform",
+        "ECTransform2D"
+      ],
+      "Variants": {}
+    },
+    "CivilianShelter": {
+      "Count": 16,
+      "Components": [
+        "ECCivilianShelter",
+        "ECPolyline",
+        "ECTransform",
+        "ECTransform2D"
+      ],
+      "Variants": {}
+    },
+    "CompositeScene": {
+      "Count": 9607,
+      "Components": [
+        "ECCompositeScene",
+        "ECTransform",
+        "ECCampaignProperties",
+        "ECTerrainClamp"
+      ],
+      "Variants": {
+        "ECCompositeScene,ECTransform,ECTerrainClamp": 7,
+        "ECCompositeScene,ECTransform": 1
+      }
+    },
+    "Decal": {
+      "Count": 3653,
+      "Components": [
+        "ECDecal",
+        "ECBattleProperties",
+        "ECMeshRenderSettings",
+        "ECTransform",
+        "ECTerrainClamp"
+      ],
+      "Variants": {
+        "ECDecal,ECBattleProperties,ECTransform,ECTerrainClamp": 449,
+        "ECDecal,ECCampaignProperties,ECDLCMask,ECMeshRenderSettings,ECTransform,ECTerrainClamp": 204
+      }
+    },
+    "DeploymentZone": {
+      "Count": 34,
+      "Components": [
+        "ECDeploymentZone"
+      ],
+      "Variants": {}
+    },
+    "DeploymentZoneRegion": {
+      "Count": 36,
+      "Components": [
+        "ECDeploymentZoneRegion",
+        "ECTransform",
+        "ECTransform2D",
+        "ECPolyline"
+      ],
+      "Variants": {
+        "ECDeploymentZoneRegion,ECTransform,ECTransform2D,ECRectangle": 2
+      }
+    },
+    "GoRegion": {
+      "Count": 12,
+      "Components": [
+        "ECGoRegion",
+        "ECTransform",
+        "ECTransform2D",
+        "ECPolyline"
+      ],
+      "Variants": {}
+    },
+    "Group": {
+      "Count": 6,
+      "Components": [
+        "ECGroup",
+        "ECTransform"
+      ],
+      "Variants": {}
+    },
+    "Layer": {
+      "Count": 21,
+      "Components": [
+        "ECLayer"
+      ],
+      "Variants": {}
+    },
+    "LayerFile": {
+      "Count": 2521,
+      "Components": [
+        "ECLayerFile",
+        "ECLayer",
+        "ECLayerExport"
+      ],
+      "Variants": {
+        "ECLayerFile,ECLayer,ECLayerExport,ECLayerExportTags": 619,
+        "ECFileLayer": 130,
+        "ECLayerFile,ECLayer,ECLayerExport,ECLayerFile": 67,
+        "ECLayerFile,ECLayer,ECLayerExport,ECLayerExportTags,ECLayerFile": 42,
+        "ECFileLayer,ECFileLayer": 26
+      }
+    },
+    "LightProbe": {
+      "Count": 15,
+      "Components": [
+        "ECLightProbe",
+        "ECTransform",
+        "ECSphere"
+      ],
+      "Variants": {}
+    },
+    "LivePrefab": {
+      "Count": 2,
+      "Components": [
+        "ECLivePrefab",
+        "ECTransform"
+      ],
+      "Variants": {}
+    },
+    "NoGoRegion": {
+      "Count": 192,
+      "Components": [
+        "ECNoGoRegion",
+        "ECTransform",
+        "ECTransform2D",
+        "ECPolyline"
+      ],
+      "Variants": {}
+    },
+    "PlayableArea": {
+      "Count": 1,
+      "Components": [
+        "ECPlayableArea",
+        "ECPlayerDeploymentLocations",
+        "ECTransform",
+        "ECTransform2D",
+        "ECRectangle"
+      ],
+      "Variants": {}
+    },
+    "PointLight": {
+      "Count": 1368,
+      "Components": [
+        "ECPointLight",
+        "ECCampaignProperties",
+        "ECTransform"
+      ],
+      "Variants": {
+        "ECPointLight,ECTransform": 41
+      }
+    },
+    "PolygonMesh": {
+      "Count": 19,
+      "Components": [
+        "ECPolygonMesh",
+        "ECTransform",
+        "ECPolyline"
+      ],
+      "Variants": {
+        "ECPolygonMesh,ECCampaignProperties,ECTransform,ECPolyline": 4
+      }
+    },
+    "Prefab": {
+      "Count": 8527,
+      "Components": [
+        "ECPrefab",
+        "ECMeshRenderSettings",
+        "ECTransform",
+        "ECTerrainClamp"
+      ],
+      "Variants": {
+        "ECPrefab,ECTransform,ECTerrainClamp": 3861,
+        "ECPrefab,ECMeshRenderSettings,ECTransform,ECTerrainClamp,ECPrefabOverride": 6
+      }
+    },
+    "ProceduralExclusionZone": {
+      "Count": 215,
+      "Components": [
+        "ECProceduralExclusionZone2",
+        "ECTransform",
+        "ECTransform2D",
+        "ECPolyline"
+      ],
+      "Variants": {}
+    },
+    "Prop": {
+      "Count": 231576,
+      "Components": [
+        "ECPropMesh",
+        "ECMesh",
+        "ECMeshRenderSettings",
+        "ECPropHeightPatch",
+        "ECCampaignProperties",
+        "ECDLCMask",
+        "ECTransform",
+        "ECTerrainClamp"
+      ],
+      "Variants": {
+        "ECPropMesh,ECMesh,ECMeshRenderSettings,ECBattleProperties,ECTransform,ECTerrainClamp": 455
+      }
+    },
+    "River": {
+      "Count": 93,
+      "Components": [
+        "ECRiver",
+        "ECTransform",
+        "ECRiverSpline",
+        "ECCampaignProperties"
+      ],
+      "Variants": {
+        "ECRiver,ECTransform,ECRiverSpline": 1
+      }
+    },
+    "SiegeAIBoundary": {
+      "Count": 9,
+      "Components": [
+        "ECSiegeAIBoundary",
+        "ECTransform",
+        "ECTransform2D",
+        "ECPolyline"
+      ],
+      "Variants": {}
+    },
+    "SiegeAIEdge": {
+      "Count": 2,
+      "Components": [
+        "ECSiegeAIEdge",
+        "ECTransform",
+        "ECTransform2D",
+        "ECPolyline"
+      ],
+      "Variants": {}
+    },
+    "SiegeAINode": {
+      "Count": 5,
+      "Components": [
+        "ECSiegeAINode",
+        "ECTransform",
+        "ECTransform2D",
+        "ECRectangle"
+      ],
+      "Variants": {}
+    },
+    "Signature": {
+      "Count": 6,
+      "Components": [
+        "ECSignature",
+        "ECTransform"
+      ],
+      "Variants": {}
+    },
+    "SoundMarker": {
+      "Count": 2009,
+      "Components": [
+        "ECSoundMarker",
+        "ECTransform",
+        "ECCampaignProperties",
+        "ECDLCMask"
+      ],
+      "Variants": {
+        "ECSoundMarker,ECTransform": 97,
+        "ECSoundMarker,ECTransform,ECPointCloud,ECCampaignProperties,ECDLCMask": 62,
+        "ECSoundMarker,ECTransform,ECPointCloud": 2
+      }
+    },
+    "TagLayer": {
+      "Count": 6768,
+      "Components": [
+        "ECLayerInternal",
+        "ECLayer",
+        "ECLayerExport",
+        "ECLayerExportTags"
+      ],
+      "Variants": {}
+    },
+    "TapeMeasure": {
+      "Count": 12,
+      "Components": [
+        "ECTapeMeasure",
+        "ECTransform",
+        "ECTransform2D",
+        "ECPolyline"
+      ],
+      "Variants": {}
+    },
+    "TerrainHole": {
+      "Count": 21,
+      "Components": [
+        "ECTerrainHole",
+        "ECTransform",
+        "ECPolyline"
+      ],
+      "Variants": {}
+    },
+    "VFX": {
+      "Count": 10104,
+      "Components": [
+        "ECVFX",
+        "ECCampaignProperties",
+        "ECDLCMask",
+        "ECTransform",
+        "ECTerrainClamp"
+      ],
+      "Variants": {
+        "ECVFX,ECBattleProperties,ECTransform,ECTerrainClamp": 158
+      }
+    },
+    "Vegetation": {
+      "Count": 15909,
+      "Components": [
+        "ECVegetation",
+        "ECTransform",
+        "ECTerrainClamp"
+      ],
+      "Variants": {}
+    }
+  },
+  "UnclassifiedSignatures": {
+    "ECMeshRenderSettings,ECPrefab,ECPrefabOverride,ECTerrainClamp,ECTransform": 6
+  }
+}

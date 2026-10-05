@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "rpfm": {
+      "type": "http",
+      "url": "http://127.0.0.1:45127/mcp"
+    },
+    "bob": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "Z:/Claude/TerryClone/tools/bob_mcp/server.py"
+      ],
+      "env": {}
+    },
+    "terry": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "Z:/Claude/TerryClone/tools/terry_mcp/server.py"
+      ],
+      "env": {}
+    },
+    "discord": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--script",
+        "Z:/Claude/190Expanded/tools/discord/discord_mcp.py"
+      ],
+      "env": {}
+    }
+  }
+}

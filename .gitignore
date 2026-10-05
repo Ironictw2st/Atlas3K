@@ -1,0 +1,38 @@
+# Whitelist: only source, tools, docs and research scripts are tracked.
+# Data (Vanilla/, cache/, output/, research data, *.PML) stays out — it is large and derived from the game.
+/*
+!/.gitignore
+!/.mcp.json
+!/*.slnx
+!/global.json
+!/Directory.Build.props
+!/README.md
+!/CHANGELOG.md
+!/KNOWN_ISSUES.md
+!/THIRD_PARTY_NOTICES.md
+!/src/
+!/tools/
+!/docs/
+!/research/
+
+bin/
+obj/
+__pycache__/
+*.user
+/src/err.txt
+/tools/scratch/
+/docs/reference/
+
+# research: scripts and notes two levels deep, no data
+/research/*
+!/research/*.py
+!/research/*.md
+!/research/*.ps1
+!/research/*.sh
+!/research/*/
+/research/*/*
+!/research/*/*.py
+!/research/*/*.md
+!/research/*/*.ps1
+!/research/*/*.sh
+!/research/*/*.atlas3k

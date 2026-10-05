@@ -1,0 +1,88 @@
+using System.Globalization;
+using System.Xml.Linq;
+using TerryClone.Formats.Maps;
+
+namespace TerryClone.Core.Campaign.Props;
+
+/// <summary>
+/// BOB's region for a campaign object: the map.hex region under the entity's ECTransform position. Port of
+/// bob_terrain FUN_18005fe10 with the hex geometry of EMPIREUTILITY::HEX_MAP_DATA_FILE_DATA::load (float maths, as
+/// BOB): flat-top hexes of radius R = (2/3)·(maxx − minx)/(columns − 1) over the map's bounds, odd columns half a
+/// hex north. Checked on main190: matches BOB's region for every one of 66,268 objects (docs/native_campaign_build.md).
+/// </summary>
+public sealed class HexRegionLookup
+{
+    private readonly MapHexFile _hex;
+    private readonly float _minX, _minY, _r, _h, _inv2H, _inv15R;
+
+    public HexRegionLookup(MapHexFile hex, float minX, float minY, float maxX)
+    {
+        _hex = hex;
+        _minX = minX;
+        _minY = minY;
+        _r = 0.6666667f / (hex.Width - 1f) * (maxX - minX);
+        _h = _r * 0.8660254f;
+        _inv2H = 1f / (_h + _h);
+        _inv15R = 1f / (_r * 1.5f);
+    }
+
+    /// <summary>Hex (col, row) holding world point (x, z).</summary>
+    public (int Col, int Row) HexAt(float x, float z)
+    {
+        var fc = (x - _minX + _r) * _inv15R;
+        var col = (int)fc;
+        var fz = z - _minY;
+        if ((col & 1) == 0) fz += _h;
+        var row = (int)(fz * _inv2H);
+        var t = (fc - col) * 3f;
+        if (t < 1f)
+        {
+            // near the slanted edges: the point may belong to the column on the left
+            var u = fz * _inv2H - row - 0.5f;
+            var parity = col & 1;
+            if (u + u < t)
+            {
+                if (!(u * -2f < t)) { row += parity - 1; col--; }
+            }
+            else { row += parity; col--; }
+        }
+        return (Math.Clamp(col, 0, _hex.Width - 1), Math.Clamp(row, 0, _hex.Height - 1));
+    }
+
+    public MapHexFile Hex => _hex;
+
+    /// <summary>World centre of hex (col, row) (the inverse of <see cref="HexAt"/>: columns 1.5 R apart, even
+    /// columns half a hex south).</summary>
+    public (float X, float Z) HexCentre(int col, int row) =>
+        (_minX + col * 1.5f * _r, _minY + (row + 0.5f) * (_h + _h) - ((col & 1) == 0 ? _h : 0));
+
+    /// <summary>Region index (land then sea, see <see cref="MapHexFile.RegionIndexAt"/>) at a world point, -1 none.</summary>
+    public int RegionIndexAt(double x, double z)
+    {
+        var (c, r) = HexAt((float)x, (float)z);
+        return _hex.RegionIndexAt(c, r);
+    }
+
+    public string? RegionAt(double x, double z)
+    {
+        var (c, r) = HexAt((float)x, (float)z);
+        return _hex.RegionAt(c, r);
+    }
+
+    /// <summary>The lookup for a map: its map.hex and the bounds of its campaign_map_playable_areas row in
+    /// EmpireDesignData (BOB takes the bounds from map_data.esf, which CAIME writes from that row). Null when either
+    /// is missing.</summary>
+    public static HexRegionLookup? ForMap(ProjectPaths paths, out string reason)
+    {
+        var hexPath = Path.Combine(paths.AkDesignCampaignMapDir, "map.hex");
+        var areas = Path.Combine(paths.AssemblyKitRoot, "raw_data", "EmpireDesignData", "campaign_map_playable_areas.xml");
+        if (!File.Exists(hexPath)) { reason = $"no {hexPath}"; return null; }
+        if (!File.Exists(areas)) { reason = $"no {areas}"; return null; }
+        var row = XDocument.Load(areas).Descendants("campaign_map_playable_areas")
+            .FirstOrDefault(e => (string?)e.Element("mapname") == paths.MapName);
+        if (row is null) { reason = $"no campaign_map_playable_areas row for {paths.MapName}"; return null; }
+        float F(string n) => float.Parse((string?)row.Element(n) ?? "0", CultureInfo.InvariantCulture);
+        reason = "";
+        return new HexRegionLookup(MapHexFile.Read(hexPath), F("minx"), F("miny"), F("maxx"));
+    }
+}
