@@ -28,7 +28,7 @@ public sealed class GlobalPropsBuilder
     /// <param name="EntityX">The entity's ECTransform position, which BOB's region lookup uses (differs from X/Z for
     /// river models, placed at the origin, and polygon meshes).</param>
     private sealed record Obj(string Kind, double X, double Z, double Radius, string SeasonMask, Func<BmdBody, byte[]> Build, string? PropPath,
-                              double? EntityX = null, double? EntityZ = null, int? Bucket = null);
+                              double? EntityX = null, double? EntityZ = null, int? Bucket = null, float[]? Box = null);
 
     private readonly Templates _t;
     private readonly PackSet _packs;
@@ -38,6 +38,10 @@ public sealed class GlobalPropsBuilder
     /// <summary>Campaign prefab library: Prefab instances in the layers are flattened into their entities (the game
     /// has no campaign prefab .bmd files for them to reference). Null = instances are skipped with a note.</summary>
     public PrefabLibrary? Prefabs { get; init; }
+
+    /// <summary>Rectangle the bmd quadtree covers (minX, minZ, maxX, maxZ); BOB uses the map bounds' x range and the hex
+    /// grid's z extent (<see cref="HexRegionLookup.QuadRoot"/>). Null = (0, 0, world width, world height).</summary>
+    public (float X0, float Z0, float X1, float Z1)? QuadRoot { get; init; }
 
     public GlobalPropsBuilder(PackSet packs, double worldWidth, double worldHeight)
     {
@@ -71,7 +75,9 @@ public sealed class GlobalPropsBuilder
         }
         foreach (var (region, objects) in byRegion)
         {
-            foreach (var cell in objects.GroupBy(o => Cell(o.X, o.Z, o.Radius)).OrderBy(g => g.Key))
+            var outside = objects.Where(o => CellOf(o) < 0).ToList();
+            if (outside.Count > 0) Notes.Add($"{outside.Count} objects in {region} reach outside the quadtree root: dropped (as BOB)");
+            foreach (var cell in objects.Where(o => CellOf(o) >= 0).GroupBy(CellOf).OrderBy(g => g.Key))
             {
                 var cellBody = BmdBody.EmptyLike(_t.Framing);
                 foreach (var bucket in cell.GroupBy(o => o.Bucket ?? Bucket(o.SeasonMask)).OrderBy(g => g.Key))
@@ -109,6 +115,99 @@ public sealed class GlobalPropsBuilder
             case "probe": body.LightProbes.Add(record); break;
             case "poly": body.PolyMeshes.Add(record); break;
         }
+    }
+
+    private int CellOf(Obj o)
+    {
+        if (o.Radius >= 1e8) return 0;                                         // rivers, polygon meshes: the root
+        var b = o.Box ?? [(float)o.X, (float)o.Z, (float)o.X, (float)o.Z];
+        return BobCell(b[0], b[1], b[2], b[3]);
+    }
+
+    /// <summary>bob_terrain FUN_180064280 / FUN_18005f880: -1 when the box leaves the root (BOB skips the object), else
+    /// the deepest of 7 levels reached by descending into the first child (NW, NE, SW, SE; row 0 = north) whose rectangle
+    /// holds the box (min &gt;= child min, max &lt;= child max). Child rectangles split at (max - min) * 0.5 + min in float32
+    /// (FUN_180060e10).</summary>
+    public int BobCell(float x0, float z0, float x1, float z1)
+    {
+        var (rx0, rz0, rx1, rz1) = QuadRoot ?? (0f, 0f, (float)_worldW, (float)_worldH);
+        if (x0 < rx0 || z0 < rz0 || x1 > rx1 || z1 > rz1) return -1;
+        int row = 0, col = 0, level = 0;
+        for (var l = 1; l <= 6; l++)
+        {
+            var mx = (rx1 - rx0) * 0.5f + rx0;
+            var mz = (rz1 - rz0) * 0.5f + rz0;
+            (float, float, float, float)[] kids = [(rx0, mz, mx, rz1), (mx, mz, rx1, rz1), (rx0, rz0, mx, mz), (mx, rz0, rx1, mz)];
+            var k = -1;
+            for (var i = 0; i < 4; i++)
+            {
+                var (a0, b0, a1, b1) = kids[i];
+                if (x0 >= a0 && z0 >= b0 && x1 <= a1 && z1 <= b1) { k = i; break; }
+            }
+            if (k < 0) break;
+            (rx0, rz0, rx1, rz1) = kids[k];
+            row = row * 2 + (k >= 2 ? 1 : 0); col = col * 2 + (k & 1); level = l;
+        }
+        var first = 0;
+        for (var l = 0; l < level; l++) first += 1 << (2 * l);
+        return first + row * (1 << level) + col;
+    }
+
+    /// <summary>bob_terrain FUN_18005e050 for an ECMesh entity: the model AABB (a .wsmodel path, or a model that doesn't
+    /// load, uses the default [-1, 1]^3), its 8 corners through the world matrix in float32 in BOB's order, x/z min/max.</summary>
+    private float[] MeshBox(string modelPath, double[] m, (double X, double Y, double Z) p)
+    {
+        var (mn, mx) = ModelAabb(modelPath);
+        float m0 = (float)m[0], m1 = (float)m[1], m2 = (float)m[2], m3 = (float)p.X;
+        float m8 = (float)m[6], m9 = (float)m[7], m10 = (float)m[8], m11 = (float)p.Z;
+        var minX = mn[0] * m0 + mn[1] * m1 + mn[2] * m2 + m3;
+        var minZ = mn[0] * m8 + mn[1] * m9 + mn[2] * m10 + m11;
+        float maxX = minX, maxZ = minZ;
+        for (var c = 1; c < 8; c++)
+        {
+            float x = mn[0], y = mx[1], z = mx[2];
+            switch (c)
+            {
+                case 1: x = mx[0]; y = mn[1]; z = mn[2]; break;
+                case 2: x = mx[0]; z = mn[2]; break;
+                case 3: z = mn[2]; break;
+                case 4: y = mn[1]; break;
+                case 5: x = mx[0]; y = mn[1]; break;
+                case 6: x = mx[0]; break;
+            }
+            var wz = m9 * y + m8 * x + m10 * z + m11;
+            var wx = m0 * x + m1 * y + m2 * z + m3;
+            if (wx <= minX) minX = wx;
+            if (wz <= minZ) minZ = wz;
+            if (maxX <= wx) maxX = wx;
+            if (maxZ <= wz) maxZ = wz;
+        }
+        return [minX, minZ, maxX, maxZ];
+    }
+
+    private readonly Dictionary<string, (float[] Min, float[] Max)> _aabb = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>QTU::WarscapeModelData::aabb: the union of the rmv2 mesh header boxes over every LOD (matches BOB's cells
+    /// better than LOD0 vertices); .wsmodel paths and unreadable models give [-1, 1]^3 (FUN_18005e050 skips the model load
+    /// for the "wsmodel" suffix).</summary>
+    private (float[] Min, float[] Max) ModelAabb(string path)
+    {
+        if (_aabb.TryGetValue(path, out var hit)) return hit;
+        (float[], float[]) box = ([-1f, -1f, -1f], [1f, 1f, 1f]);
+        if (!path.EndsWith("wsmodel", StringComparison.Ordinal) && _packs.TryRead(path.ToLowerInvariant()) is { } bytes)
+        {
+            try
+            {
+                var rm = Atlas3K.Formats.Models.RigidModel.Read(bytes);
+                var meshes = rm.Lods.SelectMany(l => l.Meshes).ToList();
+                if (meshes.Count > 0)
+                    box = ([meshes.Min(q => q.BoundsMin[0]), meshes.Min(q => q.BoundsMin[1]), meshes.Min(q => q.BoundsMin[2])],
+                           [meshes.Max(q => q.BoundsMax[0]), meshes.Max(q => q.BoundsMax[1]), meshes.Max(q => q.BoundsMax[2])]);
+            }
+            catch (Exception) { }
+        }
+        _aabb[path] = box;
+        return box;
     }
 
     /// <summary>Deepest quadtree cell whose rectangle contains the object's circle.</summary>
@@ -194,10 +293,12 @@ public sealed class GlobalPropsBuilder
                 var hp = e.Element("ECPropHeightPatch");
                 // cell by position only: BOB's main190 cells match a radius-0 point for 92% of objects; the model radius
                 // put mountain props in much coarser cells than BOB's, and the game didn't draw them (checked in game)
-                objects.Add(PropObj(model, tr.Position, tr.Matrix, 0, tags, seasons, decal is not null,
+                var propObj = PropObj(model, tr.Position, tr.Matrix, 0, tags, seasons, decal is not null,
                     (string?)decal?.Attribute("apply_to_terrain") != "false", (string?)decal?.Attribute("apply_to_objects") == "true", Cp,
                     (string?)rs?.Attribute("cast_shadow") != "false", (string?)hp?.Attribute("has_height_patch") == "true",
-                    (string?)hp?.Attribute("apply_height_patch") == "true"));
+                    (string?)hp?.Attribute("apply_height_patch") == "true");
+                // BOB bounds (FUN_18005e050): ECMesh entities use the transformed model box; decals (no ECMesh) a point
+                objects.Add(decal is null && e.Element("ECMesh") is not null ? propObj with { Box = MeshBox(model, tr.Matrix, tr.Position) } : propObj);
                 continue;
             }
             if (e.Element("ECVFX") is { } vfx)
@@ -219,13 +320,19 @@ public sealed class GlobalPropsBuilder
                 float A(string n, float d) => light.Attribute(n) is { } a ? float.Parse((string)a, CultureInfo.InvariantCulture) : d;
                 var falloff = (string?)light.Attribute("falloff_type") ?? "";
                 var probesOnly = (string?)light.Attribute("for_light_probes_only") == "true";
+                // FUN_18005e050: radius x (sum of the 3 matrix column lengths / 3) x 0.5 around the position
+                var mm = tr.Matrix;
+                var avg = (MathF.Sqrt((float)(mm[3] * mm[3] + mm[0] * mm[0] + mm[6] * mm[6])) + MathF.Sqrt((float)(mm[4] * mm[4] + mm[1] * mm[1] + mm[7] * mm[7]))
+                           + MathF.Sqrt((float)(mm[5] * mm[5] + mm[2] * mm[2] + mm[8] * mm[8]))) * 0.33333334f;
+                var lr = A("radius", 1) * avg * 0.5f;
+                float lx = (float)tr.Position.X, lz = (float)tr.Position.Z;
                 objects.Add(new Obj("light", tr.Position.X, tr.Position.Z, 0, seasons, b =>
                 {
                     var (f, m) = b.EncodeTags(tags);
                     return BmdRecords.PointLight(_t.Light, tr.Position, A("radius", 1), (c[0] / 255f, c[1] / 255f, c[2] / 255f),
                         A("colour_scale", 1), anim, speed.ElementAtOrDefault(0), speed.ElementAtOrDefault(1), A("colour_min", 0),
                         A("random_offset", 0), falloff, probesOnly, f, m, b.EncodeSeasons(seasons));
-                }, null));
+                }, null) { Box = [lx - lr, lz - lr, lx + lr, lz + lr] });
                 continue;
             }
             if (e.Element("ECCompositeScene") is { } scene)

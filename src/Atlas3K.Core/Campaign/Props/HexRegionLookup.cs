@@ -13,13 +13,14 @@ namespace Atlas3K.Core.Campaign.Props;
 public sealed class HexRegionLookup
 {
     private readonly MapHexFile _hex;
-    private readonly float _minX, _minY, _r, _h, _inv2H, _inv15R;
+    private readonly float _minX, _minY, _maxX, _r, _h, _inv2H, _inv15R;
 
     public HexRegionLookup(MapHexFile hex, float minX, float minY, float maxX)
     {
         _hex = hex;
         _minX = minX;
         _minY = minY;
+        _maxX = maxX;
         _r = 0.6666667f / (hex.Width - 1f) * (maxX - minX);
         _h = _r * 0.8660254f;
         _inv2H = 1f / (_h + _h);
@@ -50,6 +51,11 @@ public sealed class HexRegionLookup
     }
 
     public MapHexFile Hex => _hex;
+
+    /// <summary>The rectangle BOB's bmd quadtree covers (bob_terrain FUN_180060e10 root): the map bounds' x range and the
+    /// hex grid's z extent, (rows + 0.5) x row step from minY (main190: 0..986.051 x 0..873.7957; fitted to BOB's
+    /// level-6 cells 2026-10-04).</summary>
+    public (float X0, float Z0, float X1, float Z1) QuadRoot => (_minX, _minY, _maxX, _minY + (_hex.Height + 0.5f) * (_h + _h));
 
     /// <summary>World centre of hex (col, row) (the inverse of <see cref="HexAt"/>: columns 1.5 R apart, even
     /// columns half a hex south).</summary>

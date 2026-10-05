@@ -31,10 +31,6 @@ public sealed class GlobalPropsStep : ICampaignBuildStep
         var worldW = lf.Raster.Width * RiversStep.WorldPerPixelX;
         var worldH = lf.Raster.Height * RiversStep.WorldPerPixelZ;
         ctx.Log("templates and model bounds from the game packs...");
-        var builder = new GlobalPropsBuilder(PackSet.OpenVanilla(ctx.Paths.GameDataDir), worldW, worldH)
-        {
-            Prefabs = PrefabLibrary.ForKit(ctx.Paths.AssemblyKitRoot, "campaign"),
-        };
 
         var project = TerryProject.Load(ctx.TerryFile);
         // BOB keeps a layer's region only if the map has it (campaign_map_regions); other layers go to the
@@ -49,6 +45,11 @@ public sealed class GlobalPropsStep : ICampaignBuildStep
         else notes.Add($"{layers.Count(l => l.Region == NonPlayable)} layers without a region on this map -> {NonPlayable}");
         // BOB puts every object in the map.hex region under its entity's position, whatever layer it came from
         var lookup = HexRegionLookup.ForMap(ctx.Paths, out var why);
+        var builder = new GlobalPropsBuilder(PackSet.OpenVanilla(ctx.Paths.GameDataDir), worldW, worldH)
+        {
+            Prefabs = PrefabLibrary.ForKit(ctx.Paths.AssemblyKitRoot, "campaign"),
+            QuadRoot = lookup?.QuadRoot,
+        };
         if (lookup is null) notes.Add($"region by layer name only ({why})");
         else notes.Add("regions from map.hex at each object's position (as BOB)");
         ctx.Log($"{layers.Count} exported layers...");
