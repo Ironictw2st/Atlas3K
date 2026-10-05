@@ -2,7 +2,6 @@
 # Data (Vanilla/, cache/, output/, research data, *.PML) stays out — it is large and derived from the game.
 /*
 !/.gitignore
-!/.mcp.json
 !/*.slnx
 !/global.json
 !/Directory.Build.props
@@ -37,3 +36,16 @@ __pycache__/
 !/research/*/*.sh
 !/research/*/*.atlas3k
 research/trees/tile_hf/
+
+# 2026-10-05 repo clean-up (user): the program + the research on moving the build off BOB only.
+# The 190 Expanded mod's own map work stays local.
+/research/main190/
+/research/guandu/*
+!/research/guandu/hexgrid.py
+!/research/guandu/rebuild_hex.py
+!/research/guandu/hexfields.py
+!/research/guandu/caime_3k_tilemap_issue.md
+/docs/main190_*
+/docs/north_regions_sources.md
+/docs/proposals/
+/tools/blender/

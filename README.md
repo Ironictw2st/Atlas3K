@@ -112,6 +112,10 @@ Atlas3K.Cli.exe validate-tilemap                   # tile-map pre-flight
 
 Run it without arguments for every command.
 
+## Research: building without BOB
+
+The native build reproduces BOB's output byte for byte. [`research/README.md`](research/README.md) describes the method (Ghidra, Frida instrumentation of BOB, field-level diffs), the non-obvious rules for each step, and the tools, so the same can be done for other Warscape games. Per-step details: [`docs/native_campaign_build.md`](docs/native_campaign_build.md).
+
 ## Building from source
 
 ```
