@@ -11,7 +11,7 @@ Total War: THREE KINGDOMS:
 | `global_props.bin` | byte-identical to BOB |
 | river models, `height_patches\` | byte-identical to BOB, except bytes BOB leaves uninitialised |
 | `global_meshes\` (land / sea meshes, `.compressed_map`) | byte-identical to BOB, except uninitialised bytes |
-| `trees.campaign_tree_list` | 99.999% of tree heights bit-exact (one tree on a tile boundary) |
+| `trees.campaign_tree_list` | byte-identical to BOB's own Campaign Trees output (all 205,767 vanilla trees) |
 
 The *uninitialised bytes* are bytes BOB fills with leftover memory: they differ between two BOB runs of the same
 input. The parity tools mask them.
