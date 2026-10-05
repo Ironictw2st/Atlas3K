@@ -327,7 +327,9 @@ public sealed class GlobalPropsBuilder
                     (string?)rs?.Attribute("cast_shadow") != "false", (string?)hp?.Attribute("has_height_patch") == "true",
                     (string?)hp?.Attribute("apply_height_patch") == "true");
                 // BOB bounds (FUN_18005e050): ECMesh entities use the transformed model box; decals (no ECMesh) a point
-                objects.Add(decal is null && e.Element("ECMesh") is not null ? propObj with { Box = MeshBox(model, tr.Matrix, tr.Position) } : propObj);
+                // FUN_1800660a0: an entity without ECMesh (a decal) isn't season-bucketed: bucket 16
+                objects.Add(decal is null && e.Element("ECMesh") is not null ? propObj with { Box = MeshBox(model, tr.Matrix, tr.Position) }
+                    : e.Element("ECMesh") is null ? propObj with { Bucket = 16, Build = decal is null ? propObj.Build : b => DecalExtras(propObj.Build(b), decal) } : propObj);
                 return;
             }
             if (e.Element("ECVFX") is { } vfx)
@@ -423,12 +425,21 @@ public sealed class GlobalPropsBuilder
                     castShadow, hasHp, applyHp);
                 if (decal)
                 {
-                    rec[BmdRecords.PropApplyToTerrain] = applyToTerrain ? (byte)0 : (byte)1;
+                    rec[BmdRecords.PropApplyToTerrain] = applyToTerrain ? (byte)1 : (byte)0;   // decal bytes checked against BOB 2026-10-05
                     rec[BmdRecords.PropApplyToObjects] = applyToObjects ? (byte)1 : (byte)0;
                 }
                 if (model.Contains("_anim", StringComparison.OrdinalIgnoreCase)) rec[BmdRecords.PropAnimated] = 1;
                 return rec;
             }, model);
+    }
+
+    /// <summary>Decal parallax scale (bytes 80..83) and render above snow (byte 103) from the ECDecal, as BOB.</summary>
+    private static byte[] DecalExtras(byte[] rec, XElement decal)
+    {
+        var parallax = float.Parse((string?)decal.Attribute("parallax_scale") ?? "0", CultureInfo.InvariantCulture);
+        BitConverter.TryWriteBytes(rec.AsSpan(BmdRecords.PropDecalParallaxScale), parallax);
+        rec[BmdRecords.PropRenderAboveSnow] = (string?)decal.Attribute("render_above_snow") == "true" ? (byte)1 : (byte)0;
+        return rec;
     }
 
     private static readonly double[] Identity = [1, 0, 0, 0, 1, 0, 0, 0, 1];

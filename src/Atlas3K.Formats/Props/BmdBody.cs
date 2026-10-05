@@ -427,7 +427,7 @@ public static class BmdRecords
     public const int PropHeadSize = 105, PropTailSize = 24;
     public const int PropPathIndex = 2, PropTags = 6, PropTransform = 24, PropDecal = 72, PropSnowIn = 75, PropSnowOut = 76,
         PropDestructionIn = 77, PropDestructionOut = 78, PropSeasonMask = 96, PropSeenShroud = 100, PropUnseenShroud = 101,
-        PropApplyToTerrain = 103, PropApplyToObjects = 104;
+        PropApplyToTerrain = 102, PropRenderAboveSnow = 103, PropApplyToObjects = 104, PropDecalParallaxScale = 80;
     public const int PropTailCastShadow = 4, PropTailHasHeightPatch = 5, PropTailApplyHeightPatch = 23;
     /// <summary>Byte 91 (in the 7 bytes after override gbuffer normal): 1 on river props only (vanilla and BOB);
     /// without it the game culls the river water.</summary>
