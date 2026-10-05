@@ -671,6 +671,14 @@ public sealed class Renderer3D : IDisposable
     /// </summary>
     public void SetTerrainHeight(ushort[] raw, int width, int height, float worldW, float worldH, float step, float offset)
     {
+        if (_terrainHeightTex is { } existing && (_terrainHeightSize) == (width, height))
+        {
+            // After a height edit: re-upload into the same texture rather than allocating a new one.
+            var data = new byte[raw.Length * 2];
+            Buffer.BlockCopy(raw, 0, data, 0, data.Length);
+            _pendingUploads.Enqueue((existing, 0, data, width * 2));
+            return;
+        }
         var tex = Device.CreateTexture2D(new Texture2DDescription
         {
             Width = (uint)width, Height = (uint)height, MipLevels = 1, ArraySize = 1, Format = Format.R16_UNorm,
@@ -680,8 +688,12 @@ public sealed class Renderer3D : IDisposable
         Buffer.BlockCopy(raw, 0, bytes, 0, bytes.Length);
         _pendingUploads.Enqueue((tex, 0, bytes, width * 2));
         _terrainHeight = Device.CreateShaderResourceView(tex);
+        _terrainHeightTex = tex;
+        _terrainHeightSize = (width, height);
         _terrainConstants = new Vector4(worldW, worldH, step * 65535, offset);
     }
+    private ID3D11Texture2D? _terrainHeightTex;
+    private (int W, int H) _terrainHeightSize;
 
     /// <summary>Uploads every instance of the frame at once (one map); draw ranges of it with <see cref="DrawInstanceRange"/>.</summary>
     public void UploadInstances(ReadOnlySpan<InstanceData> instances)

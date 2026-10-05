@@ -5,6 +5,14 @@
 ### Scene editor
 - **Layer filters:** filter the layer tree by name, region, entity type and visible / hidden. Parents of matches stay in the tree, and filtering never changes visibility.
 - **Show all / Hide all / Show only filtered:** each is one undo step, and locked layers are left as they are.
+- **Terrain & trees tab:** paint the kit's land and sea height maps and the CampaignTree map in the 2D view.
+  - Height modes: raise, lower, smooth, flatten, set to value (sea-level preset) and noise.
+  - Trees: paint, erase, and fill by connected species or by map.hex region.
+  - Alt+click picks the value or species under the cursor.
+  - Edited hexes' trees are regenerated as the build places them, and the 3D view re-meshes after each stroke.
+  - Undo and redo work per stroke.
+  - Save writes only the changed TIFs, in their own format: height TIFs are patched in place, so only pixel bytes change. The originals are backed up in `output\terrain_edits`.
+  - The tab warns when the build output is older than the sources. See `docs/terry_entity_editing.md`.
 
 ### Tile map
 - **Tile map source:** read `tile_map.png` from the kit (default), any file or folder, or an entry inside a `.pack`. Set it in *File > Tile map source…*, in Settings, or in the `.atlas3k` project (`tileMap`).

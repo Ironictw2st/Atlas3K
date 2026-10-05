@@ -352,56 +352,108 @@ public sealed class Viewport3DControl : Grid
     private GpuTexture? TextureFor(ModelLibrary lib, Renderer3D r, string path) => _gpuTextures.GetOrAdd(path, p =>
         lib.Texture(p, 512) is { } img ? r.CreateTexture(img.Width, img.Height, img.Rgba) : null);
 
+    /// <summary>Re-reads the model's trees (after the tree map or the ground under them was edited).</summary>
+    public void ReloadTrees()
+    {
+        _treeCache = null;
+        Invalidate();
+    }
+
+    /// <summary>Re-meshes the terrain and water from the (edited) height rasters; the ground textures are kept and the
+    /// current mesh stays on screen until the new one is ready.</summary>
+    public void ReloadTerrain()
+    {
+        if (_terrain is null) return;   // first build still running (it reads the current rasters anyway)
+        if (_terrainRequested && _terrainReloading) { _terrainReloadAgain = true; return; }
+        _terrainRequested = false;
+        Invalidate();
+    }
+    private bool _terrainReloading, _terrainReloadAgain;
+
     private void EnsureTerrain()
     {
         if (_terrainRequested || _model?.Terrain is not var (raster, worldW, worldH) || _r is null) return;
         _terrainRequested = true;
         var r = _r;
+        if (_terrain is { } oldTerrain)
+        {
+            // Reload after an edit: same ground, new mesh and water.
+            _terrainReloading = true;
+            var keptGround = _ground;
+            var oldWater = _water;
+            Task.Run(() =>
+            {
+                var t = CreateTerrainMesh(r, raster, worldW, worldH);
+                var water = _model.SeaHeight is { } sea ? CreateWater(r, raster, sea, (float)worldW, (float)worldH) : null;
+                Dispatcher.BeginInvoke(() =>
+                {
+                    _terrain = t;
+                    _water = water;
+                    _ground = keptGround;
+                    oldTerrain.V.Dispose(); oldTerrain.I.Dispose();
+                    if (oldWater is { } ow) { ow.V.Dispose(); ow.I.Dispose(); }
+                    UploadTerrainHeight(r, raster, worldW, worldH);
+                    _terrainReloading = false;
+                    if (_terrainReloadAgain) { _terrainReloadAgain = false; _terrainRequested = false; }
+                    Invalidate();
+                });
+            });
+            return;
+        }
         Task.Run(() =>
         {
-            var step = Math.Max(1, (int)Math.Ceiling(Math.Max(raster.Width, raster.Height) / 2048.0));
-            int cols = (raster.Width - 1) / step + 1, rows = (raster.Height - 1) / step + 1;
-            double px = worldW / raster.Width, pz = worldH / raster.Height;
-            float H(int c, int rr) => (float)(raster[Math.Clamp(c, 0, raster.Width - 1), Math.Clamp(rr, 0, raster.Height - 1)]
-                                              * CameraHeightmapStep.HeightStep + CameraHeightmapStep.HeightOffset);
-            var v = new float[cols * rows * 6];
-            Parallel.For(0, rows, j =>
-            {
-                for (var i = 0; i < cols; i++)
-                {
-                    int c = i * step, rr = j * step, o = (j * cols + i) * 6;
-                    v[o] = (float)((c + 0.5) * px);
-                    v[o + 1] = H(c, rr);
-                    v[o + 2] = (float)(worldH - (rr + 0.5) * pz);
-                    var dx = (H(c + step, rr) - H(c - step, rr)) / (float)(2 * step * px);
-                    var dz = (H(c, rr - step) - H(c, rr + step)) / (float)(2 * step * pz);
-                    var n = Vector3.Normalize(new Vector3(-dx, 1, -dz));
-                    (v[o + 3], v[o + 4], v[o + 5]) = (n.X, n.Y, n.Z);
-                }
-            });
-            var idx = new uint[(cols - 1) * (rows - 1) * 6];
-            Parallel.For(0, rows - 1, j =>
-            {
-                for (var i = 0; i < cols - 1; i++)
-                {
-                    var o = (j * (cols - 1) + i) * 6;
-                    uint a = (uint)(j * cols + i), b = a + 1, c = a + (uint)cols, d = c + 1;
-                    (idx[o], idx[o + 1], idx[o + 2], idx[o + 3], idx[o + 4], idx[o + 5]) = (a, b, c, b, d, c);
-                }
-            });
-            var t = r.CreateTerrain(v, idx);
-            // Heights for the LF-offset mountain shader (at most 4096 px across).
-            {
-                var hs = Math.Max(1, (int)Math.Ceiling(Math.Max(raster.Width, raster.Height) / 4096.0));
-                int hw = raster.Width / hs, hh = raster.Height / hs;
-                var raw = new ushort[hw * hh];
-                Parallel.For(0, hh, y => { for (var x = 0; x < hw; x++) raw[y * hw + x] = raster[x * hs, y * hs]; });
-                r.SetTerrainHeight(raw, hw, hh, (float)worldW, (float)worldH, (float)CameraHeightmapStep.HeightStep, (float)CameraHeightmapStep.HeightOffset);
-            }
+            var t = CreateTerrainMesh(r, raster, worldW, worldH);
+            UploadTerrainHeight(r, raster, worldW, worldH);
             var ground = _model.TerrainBlend is var (groups, arrays) ? CreateGround(r, groups, arrays, (float)worldW, (float)worldH) : null;
             var water = _model.SeaHeight is { } sea ? CreateWater(r, raster, sea, (float)worldW, (float)worldH) : null;
             Dispatcher.BeginInvoke(() => { _terrain = t; _ground = ground; _water = water; Invalidate(); });
         });
+    }
+
+    private static (Vortice.Direct3D11.ID3D11Buffer, Vortice.Direct3D11.ID3D11Buffer, int) CreateTerrainMesh(Renderer3D r,
+        Atlas3K.Formats.Maps.Raster<ushort> raster, double worldW, double worldH)
+    {
+        var step = Math.Max(1, (int)Math.Ceiling(Math.Max(raster.Width, raster.Height) / 2048.0));
+        int cols = (raster.Width - 1) / step + 1, rows = (raster.Height - 1) / step + 1;
+        double px = worldW / raster.Width, pz = worldH / raster.Height;
+        float H(int c, int rr) => (float)(raster[Math.Clamp(c, 0, raster.Width - 1), Math.Clamp(rr, 0, raster.Height - 1)]
+                                          * CameraHeightmapStep.HeightStep + CameraHeightmapStep.HeightOffset);
+        var v = new float[cols * rows * 6];
+        Parallel.For(0, rows, j =>
+        {
+            for (var i = 0; i < cols; i++)
+            {
+                int c = i * step, rr = j * step, o = (j * cols + i) * 6;
+                v[o] = (float)((c + 0.5) * px);
+                v[o + 1] = H(c, rr);
+                v[o + 2] = (float)(worldH - (rr + 0.5) * pz);
+                var dx = (H(c + step, rr) - H(c - step, rr)) / (float)(2 * step * px);
+                var dz = (H(c, rr - step) - H(c, rr + step)) / (float)(2 * step * pz);
+                var n = Vector3.Normalize(new Vector3(-dx, 1, -dz));
+                (v[o + 3], v[o + 4], v[o + 5]) = (n.X, n.Y, n.Z);
+            }
+        });
+        var idx = new uint[(cols - 1) * (rows - 1) * 6];
+        Parallel.For(0, rows - 1, j =>
+        {
+            for (var i = 0; i < cols - 1; i++)
+            {
+                var o = (j * (cols - 1) + i) * 6;
+                uint a = (uint)(j * cols + i), b = a + 1, c = a + (uint)cols, d = c + 1;
+                (idx[o], idx[o + 1], idx[o + 2], idx[o + 3], idx[o + 4], idx[o + 5]) = (a, b, c, b, d, c);
+            }
+        });
+        return r.CreateTerrain(v, idx);
+    }
+
+    /// <summary>Heights for the LF-offset mountain shader (at most 4096 px across).</summary>
+    private static void UploadTerrainHeight(Renderer3D r, Atlas3K.Formats.Maps.Raster<ushort> raster, double worldW, double worldH)
+    {
+        var hs = Math.Max(1, (int)Math.Ceiling(Math.Max(raster.Width, raster.Height) / 4096.0));
+        int hw = raster.Width / hs, hh = raster.Height / hs;
+        var raw = new ushort[hw * hh];
+        Parallel.For(0, hh, y => { for (var x = 0; x < hw; x++) raw[y * hw + x] = raster[x * hs, y * hs]; });
+        r.SetTerrainHeight(raw, hw, hh, (float)worldW, (float)worldH, (float)CameraHeightmapStep.HeightStep, (float)CameraHeightmapStep.HeightOffset);
     }
 
     /// <summary>

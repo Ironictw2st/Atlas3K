@@ -147,7 +147,7 @@ public sealed partial class SceneWindow : Window
         Grid.SetColumn(centrePanel, 2);
         grid.Children.Add(centrePanel);
         grid.Children.Add(Splitter(3));
-        var right = new Border { Background = Theme.Brush("Panel"), Child = _inspector };
+        var right = new Border { Background = Theme.Brush("Panel"), Child = RightPanel(_inspector) };
         Grid.SetColumn(right, 4);
         grid.Children.Add(right);
         dock.Children.Add(grid);
@@ -346,6 +346,7 @@ public sealed partial class SceneWindow : Window
                 _view.FrameSelection();
             }
         };
+        WireTerrainTools();
         PreviewKeyDown += OnKey;
     }
 
@@ -389,6 +390,7 @@ public sealed partial class SceneWindow : Window
             Title = AppInfo.Title($"Scene — {Path.GetFileName(model.TerryPath)} ({model.Project.Database} {model.Project.ProjectType})");
             _view.Attach(model);
             _view3d.Attach(model);
+            TerrainTools.Attach(model);
             _tree.Attach(model);
             _selection.RemoveWhere(id => model.Find(id) is null);
             ShowSelection();
@@ -403,6 +405,7 @@ public sealed partial class SceneWindow : Window
 
     private async Task Switch(string? terryPath)
     {
+        if (!TerrainTools.ConfirmDiscard(this)) return;
         _model.Changed -= ModelChanged;
         _model = new SceneModel(_paths, terryPath);
         _selection.Clear();

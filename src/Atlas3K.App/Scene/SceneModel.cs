@@ -528,16 +528,53 @@ public sealed class SceneModel
             var (map, palette) = TiffMap.ReadPalette8(Project.LayerTifPath(treeMap));
             var (height, worldW, _) = Terrain!.Value;
             var grid = Atlas3K.Core.Campaign.Trees.HexGrid.ForTreeMap(map.Width, map.Height, (float)worldW);
+            TreeMap = (map, palette, grid);
             var colours = Atlas3K.Core.Campaign.Trees.CampaignTreeGenerator.ReadTreeMap(map, palette, grid, Atlas3K.Core.Exporters.AkExporter.NoTreeIndex);
             var list = Atlas3K.Core.Campaign.Trees.CampaignTreeGenerator.Generate(colours, grid, _treeDb, (_, _, x, z) => (float)GroundY(x, z));
-            var trees = new List<Tree>(list.TotalInstances);
+            _treeByHex = new Tree?[grid.Columns * grid.Rows];
             foreach (var type in list.Types)
                 foreach (var t in type.Instances)
-                    trees.Add(new Tree(type.Name, t.X, t.Y, t.Z, t.Variant * 60f));
-            Trees = trees;
-            TreesNote = $"{trees.Count} trees of {list.Types.Count} types";
+                {
+                    var (col, row) = grid.HexAt(t.X, t.Z);
+                    if ((uint)col < grid.Columns && (uint)row < grid.Rows)
+                        _treeByHex[row * grid.Columns + col] = new Tree(type.Name, t.X, t.Y, t.Z, t.Variant * 60f);
+                }
+            Trees = [.. _treeByHex.OfType<Tree>()];
+            TreesNote = $"{Trees.Count} trees of {list.Types.Count} types";
         }
         catch (Exception ex) { TreesNote = "trees not generated: " + ex.Message; }
+    }
+
+    /// <summary>The CampaignTree map the forests come from (the tree editor paints this raster in place).</summary>
+    public (Raster<byte> Map, TiffMap.Palette Palette, Atlas3K.Core.Campaign.Trees.HexGrid Grid)? TreeMap { get; private set; }
+    public Atlas3K.Formats.Trees.TreeDatabase? TreeDb => _treeDb;
+    private Tree?[] _treeByHex = [];
+
+    /// <summary>Re-generates the trees of some hexes (row · columns + col) from the current tree map and ground, as the
+    /// build would place them; the 3D view picks them up on its next Refresh.</summary>
+    public void RegenerateTrees(IEnumerable<int> hexes)
+    {
+        if (TreeMap is not var (map, palette, grid) || _treeDb is null || _treeByHex.Length != grid.Columns * grid.Rows) return;
+        var touched = hexes.Where(i => (uint)i < (uint)_treeByHex.Length).ToHashSet();
+        if (touched.Count == 0) return;
+        var all = Atlas3K.Core.Campaign.Trees.CampaignTreeGenerator.ReadTreeMap(map, palette, grid, Atlas3K.Core.Exporters.AkExporter.NoTreeIndex);
+        var colours = new int[all.Length];
+        Array.Fill(colours, Atlas3K.Core.Campaign.Trees.CampaignTreeGenerator.NoTree);
+        foreach (var i in touched)
+        {
+            colours[i] = all[i];
+            _treeByHex[i] = null;
+        }
+        var list = Atlas3K.Core.Campaign.Trees.CampaignTreeGenerator.Generate(colours, grid, _treeDb, (_, _, x, z) => (float)GroundY(x, z));
+        foreach (var type in list.Types)
+            foreach (var t in type.Instances)
+            {
+                var (col, row) = grid.HexAt(t.X, t.Z);
+                if ((uint)col < grid.Columns && (uint)row < grid.Rows)
+                    _treeByHex[row * grid.Columns + col] = new Tree(type.Name, t.X, t.Y, t.Z, t.Variant * 60f);
+            }
+        Trees = [.. _treeByHex.OfType<Tree>()];
+        TreesNote = $"{Trees.Count} trees";
     }
 
     /// <summary>Terrain height (world y) at a world point, bilinear over the lf raster.</summary>

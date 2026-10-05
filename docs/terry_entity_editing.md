@@ -148,6 +148,45 @@ It runs search, select, a scalar edit, a single-component vector edit, a refused
 
 It passed on a copy of 3k_dlc07 (9 edits undone, 268 files identical) and on a battle prefab. **Only run it on a copy of a project.**
 
+### Terrain & trees tab
+
+The right column has a second tab, **Terrain & trees**. It edits the kit sources of a campaign project directly: the `.terry`'s `LowFrequencyHeight` (land), `LowFrequencyHeightSea` (sea surface, half resolution) and `CampaignTree` TIFs. Because these are the sources, edits survive every rebuild.
+
+- **Tool:** Off (select / move entities as usual), Land height, Sea height, or Trees. While a tool is chosen, left-drag in the 2D view paints. Right or middle drag still pans.
+- **Height brushes:**
+  - Modes: Raise, Lower, Smooth, Flatten (towards the value where the stroke started), Set to value, Noise.
+  - Settings: radius in world units (`[` / `]` resize it), strength and softness (cosine falloff).
+  - *Sea level* sets the value to 14219, the vanilla open-sea surface.
+  - The sea target paints at the sea raster's own resolution. *Show water* tints where the sea surface is above the land, coloured by water level.
+- **Trees:** one tree colour per hex, 2×2 px per hex, the palette being the sorted `campaign_tree_ids` colours (index 19 = no tree).
+  - Modes:
+    - Paint species and Erase.
+    - Fill connected: every hex reachable through the clicked hex's species.
+    - Fill region: every hex of the clicked map.hex region.
+  - Optional fill limit (world units).
+  - Restrict: any hex, only empty hexes, or only hexes that already have trees.
+  - The species list shows each colour's tree ids and its hex count.
+  - *Show tree map* draws the map over the 2D view.
+- **Alt+click** picks the height value or the species under the cursor. The panel reads out the land and sea raw values, their world heights, and the hex and species under the cursor.
+- **Live view:** the 2D view redraws while you paint. When a stroke ends:
+  - the trees of the touched hexes are regenerated with BOB's placement (`CampaignTreeGenerator`);
+  - height strokes also move the trees on them;
+  - the 3D view re-meshes the terrain and water. It keeps the ground textures and re-uploads into the same height texture.
+- **Undo / redo:** each stroke or fill is one step (the Undo / Redo buttons, or Ctrl+Z / Ctrl+Y while the tab is shown). These steps are in memory, separate from the entity journal.
+- **Save:**
+  - Writes only the changed TIFs.
+  - Land also updates `lf_heights.tif` and sea updates `lf_sea_heights.tif` when they exist at the same size.
+  - Writing is through a `FileJournal` in `output\terrain_edits\<map>` (a copied project gets `custom_<hash>`), which backs up the originals first.
+  - Uncompressed TIFs (the height maps) are patched in place, so only pixel bytes change and the Photoshop header and metadata stay byte for byte. Compressed ones (the LZW tree map) are rewritten with the same compression, rows per strip and palette.
+  - An unchanged save is byte-identical for the height maps and for tree maps written by Atlas3K. CA's original LZW tree map comes back pixel-identical but not byte-identical, because the encoder differs.
+  - Save refuses files changed on disk since they were loaded, unless you confirm.
+  - Switching project or closing with unsaved edits asks first.
+- **Stale build warning:** the tab warns when the default build output (`output\compiled\<map>`) is older than the saved sources. It names the steps to re-run: rasters, tile_list, global_mesh and camera_heightmap for heights, and trees. *Build…* opens the Build window.
+
+Code: `Core/Editing/KitTerrainEditSession.cs` (session, `KitHeightBrush`, hex helpers), `TiffMap.SaveGray16Like` / `SavePalette8Like`, `App/Scene/TerrainToolsPanel.cs`, and the `SceneView.ITool` hook. Tests: `KitTerrainEditTests` cover TIF round trips (hand-made Photoshop-like files in both byte orders, and the vanilla and 190E kit TIFs), brush math, hex↔pixel mapping, fills, save, dirty tracking and mirrors.
+
+Self-test: `Atlas3K.App --scene <copy>.terry --terrain-selftest <out dir>`. It runs land raise, undo and redo, trees following the ground, sea set-to-value, tree paint, fill and erase, then save. It checks that the TIFs hold the edited rasters and that only pixel bytes changed. It passed on a copy of vanilla 3k_dlc07. **It saves into the project, so only run it on a copy.**
+
 ### Not done yet
 
 - Editing child elements: polyline and spline points, prefab overrides.

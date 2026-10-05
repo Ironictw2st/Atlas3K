@@ -17,6 +17,34 @@ public sealed class SceneView : FrameworkElement
 {
     public enum SelectMode { Replace, Add, Toggle }
 
+    /// <summary>A painting tool (terrain / tree brushes) that takes over the left button while set.</summary>
+    public interface ITool
+    {
+        void Begin(double x, double z);
+        void Drag(double x, double z);
+        void End();
+        /// <summary>Brush circle radius in world units (0: none).</summary>
+        double CursorRadius { get; }
+        /// <summary>Draws over the terrain into the view's BGRA buffer; world x at pixel column c is ox + (c + 0.5)·scale,
+        /// world z at row r is oz − (r + 0.5)·scale.</summary>
+        void DrawOverlay(uint[] buffer, int w, int h, double ox, double oz, double scale);
+    }
+
+    /// <summary>Active painting tool, or null for select / move.</summary>
+    public ITool? Tool
+    {
+        get => _tool;
+        set
+        {
+            _tool = value;
+            Cursor = value is null ? null : Cursors.Cross;
+            Invalidate();
+            InvalidateVisual();
+        }
+    }
+    private ITool? _tool;
+    private bool _painting;
+
     private sealed record Marker(string Id, double X, double Z, uint Colour, bool Frozen, (double X, double Z)[][] Outlines)
     {
         /// <summary>Prefab instances: the positions of the entities inside, drawn as faint dots.</summary>
@@ -185,6 +213,7 @@ public sealed class SceneView : FrameworkElement
         DrawTerrain(w, h);
         DrawTiles(w, h);
         DrawRegions(w, h);
+        _tool?.DrawOverlay(_buffer, w, h, _ox, _oz, _scale);
         var selected = Selection;
         foreach (var m in _markers)
         {
@@ -410,6 +439,12 @@ public sealed class SceneView : FrameworkElement
         dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(32, 32, 32)), null, new Rect(RenderSize));
         if (_bitmap is not null) dc.DrawImage(_bitmap, new Rect(0, 0, ActualWidth, ActualHeight));
         DrawCities(dc);
+        if (_tool is { CursorRadius: > 0 } tool && IsMouseOver)
+        {
+            var radius = tool.CursorRadius / _scale / _dpi;
+            dc.DrawEllipse(null, new Pen(Brushes.White, 1.2), _mouse, radius, radius);
+            dc.DrawEllipse(null, new Pen(Brushes.Black, 0.6), _mouse, radius + 1.2, radius + 1.2);
+        }
         if (_boxStart is { } b)
         {
             var r = new Rect(b, _mouse);
@@ -498,6 +533,14 @@ public sealed class SceneView : FrameworkElement
             return;
         }
         if (e.ChangedButton != MouseButton.Left) return;
+        if (_tool is { } tool)
+        {
+            _painting = true;
+            CaptureMouse();
+            var (tx, tz) = ToWorld(p);
+            tool.Begin(tx, tz);
+            return;
+        }
         var hit = Pick(p);
         if (hit is not null && Selection.Contains(hit.Id) && ModeFromKeys() == SelectMode.Replace)
             _moveStart = p;
@@ -521,7 +564,12 @@ public sealed class SceneView : FrameworkElement
             _oz = _panOrigin.Oz + d.Y * _dpi * _scale;
             Invalidate();
         }
-        if (_boxStart is not null || _moveStart is not null) InvalidateVisual();
+        if (_boxStart is not null || _moveStart is not null || _tool is not null) InvalidateVisual();
+        if (_painting && _tool is { } tool)
+        {
+            var (tx, tz) = ToWorld(p);
+            tool.Drag(tx, tz);
+        }
         HoverChanged?.Invoke(ToWorld(p));
     }
 
@@ -536,6 +584,12 @@ public sealed class SceneView : FrameworkElement
         }
         if (e.ChangedButton != MouseButton.Left) return;
         ReleaseMouseCapture();
+        if (_painting)
+        {
+            _painting = false;
+            _tool?.End();
+            return;
+        }
         if (_moveStart is { } m)
         {
             _moveStart = null;
@@ -564,5 +618,17 @@ public sealed class SceneView : FrameworkElement
         }
     }
 
-    protected override void OnMouseLeave(MouseEventArgs e) => HoverChanged?.Invoke(null);
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        HoverChanged?.Invoke(null);
+        if (_tool is not null) InvalidateVisual();
+    }
+
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        if (!_painting) return;
+        _painting = false;
+        _tool?.End();
+    }
 }
