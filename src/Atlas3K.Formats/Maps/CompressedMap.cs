@@ -40,9 +40,21 @@ public static class CompressedMap
         var tw = (int)BinaryPrimitives.ReadUInt32LittleEndian(b[18..]);
         var th = (int)BinaryPrimitives.ReadUInt32LittleEndian(b[22..]);
         var header = new float[6];
-        for (var i = 0; i < 6; i++)
-            header[i] = BinaryPrimitives.ReadSingleLittleEndian(b[(26 + 4 * i)..]);
-        var pos = 50;
+        int pos;
+        if (version >= 3)
+        {
+            for (var i = 0; i < 6; i++)
+                header[i] = BinaryPrimitives.ReadSingleLittleEndian(b[(26 + 4 * i)..]);
+            pos = 50;
+        }
+        else
+        {
+            // version 2 (3 river / roads_tracks junction hf maps in terrain2.pack): only lo and hi; kept at the
+            // version-3 positions (header[1] = lo, header[4] = hi) so readers treat both alike
+            header[1] = BinaryPrimitives.ReadSingleLittleEndian(b[26..]);
+            header[4] = BinaryPrimitives.ReadSingleLittleEndian(b[30..]);
+            pos = 34;
+        }
         var nameLength = BinaryPrimitives.ReadUInt16LittleEndian(b[pos..]);
         if (Encoding.ASCII.GetString(b.Slice(pos + 2, nameLength)) != TableName)
             throw new InvalidDataException("Only TABLE_INDEXED compressed maps are supported.");

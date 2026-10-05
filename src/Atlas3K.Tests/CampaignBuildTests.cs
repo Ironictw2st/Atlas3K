@@ -318,6 +318,21 @@ public class CampaignBuildTests
     }
 
     [Fact]
+    public void CompressedMap_Version2_HfMapsDecode()
+    {
+        // version 2: lo/hi only (3 river and roads_tracks junction hf maps in terrain2.pack), kept at header[1] / [4]
+        if (!Directory.Exists(Paths.GameDataDir)) return;
+        var packs = Atlas3K.Formats.Packs.PackSet.OpenVanilla(Paths.GameDataDir);
+        var bytes = packs.TryRead("terrain/tiles/campaign/river/junction6_c/hf_height_map.compressed_map");
+        if (bytes is null) return;
+        var map = CompressedMap.Decode(bytes);
+        Assert.Equal(2, map.Version);
+        Assert.Equal(513, map.Raster.Width);
+        Assert.True(map.Header[1] < 0f && map.Header[4] > 0f, $"lo {map.Header[1]} hi {map.Header[4]}");
+        Assert.Contains(map.Raster.Data, v => v != map.Raster.Data[0]);
+    }
+
+    [Fact]
     public void TileHfHeight_VanillaTrees_MatchShippedHeights()
     {
         if (!File.Exists(Vanilla("tile_list.bin")) || !File.Exists(Paths.TreeList) || !Directory.Exists(Paths.GameDataDir)) return;

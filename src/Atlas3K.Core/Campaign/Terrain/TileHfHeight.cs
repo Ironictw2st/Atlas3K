@@ -14,8 +14,8 @@ namespace Atlas3K.Core.Campaign.Terrain;
 ///    the same value as (l · 5500) · f − f · 1200 with f = T/128, but rounded differently in float32.
 ///  - hf (get_high_frequency_height_new): the tile's hf_height_map.compressed_map sampled with the same bilinear at the
 ///    tile-local (u, v) (rotation 0x20: (1 − v, u), 0x40: (1 − u, 1 − v), 0x80: (v, 1 − u)), value = raw/65535 ·
-///    (hi − lo) + lo, times f. Tiles with only the old hf_height_map.data (blockout cliffs, terrace farms ...) and
-///    version-2 maps add 0 here.
+///    (hi − lo) + lo, times f. Version-2 maps (lo/hi only, 3 junctions) are read like version 3. Tiles with only the
+///    old hf_height_map.data (blockout cliffs, terrace farms ...) add 0 here; no vanilla tree lands on one.
 ///  - result = hf + lf; height_split returns (total − lf, lf) and the tree list stores their sum.
 /// Vanilla 3k_dlc07: the lf part equals BOB's (Frida dump of "Campaign Trees") on 99.9995% of trees; see
 /// docs/native_campaign_build.md for the per-tree totals against CA's shipped list.
@@ -68,7 +68,7 @@ public sealed class TileHfHeight
                         if (m.Header[1] != 0f || m.Header[4] != 0f)
                             hf = new HfMap(m.Raster.Data, m.Raster.Width, m.Raster.Height, m.Header[1], m.Header[4]);
                     }
-                    catch (InvalidDataException) { }        // version-2 maps (3 river junctions): not read
+                    catch (InvalidDataException) { }        // unreadable map: no hf
                 }
                 cache[key] = hf;
             }
