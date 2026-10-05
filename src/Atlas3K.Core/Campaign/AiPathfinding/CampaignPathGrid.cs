@@ -30,6 +30,8 @@ public sealed class CampaignPathGrid
     public byte[] Types { get; }
     /// <summary>Cost of leaving hex h in direction d: Forward[h*6+d] (NoEdge when the move is not allowed).</summary>
     public uint[] Forward { get; }
+    /// <summary>The game's HEX edge bytes after roads / slots (cost index in the low 7 bits).</summary>
+    public byte[] EdgeBytes { get; }
     /// <summary>Reverse search: cost of the neighbour's edge back into h, gated like the game by the type of h first:
     /// Reverse[h*6+d] = allowed(type h → type n) ? cost(n, d+3) : NoEdge.</summary>
     public uint[] Reverse { get; }
@@ -119,7 +121,8 @@ public sealed class CampaignPathGrid
         if (regions is not null)
         {
             var slot = new bool[n];
-            foreach (var r in regions.Regions)
+            // research: SPD_SKIP_SLOT=<region key> leaves one settlement's slot area out
+            foreach (var r in regions.Regions.Where(r => r.Key != Environment.GetEnvironmentVariable("SPD_SKIP_SLOT")))
                 foreach (var (x, y) in r.PrimarySlot.Concat(r.PortSlot))
                     if ((uint)x < (uint)Width && (uint)y < (uint)Height) slot[Index(x, y)] = true;
             for (var h = 0; h < n; h++)
@@ -161,20 +164,15 @@ public sealed class CampaignPathGrid
             }
         }
         MaxEdgeCost = max;
+        EdgeBytes = edges;
 
         var lists = new Dictionary<int, List<int>>();
         foreach (var (a, b) in ppd.Bridges)
         {
-            foreach (var (x, y) in a)
-            {
-                if (!lists.TryGetValue(Index(x, y), out var l)) lists[Index(x, y)] = l = [];
-                l.AddRange(b.Select(p => Index(p.X, p.Y)));
-            }
-            foreach (var (x, y) in b)
-            {
-                if (!lists.TryGetValue(Index(x, y), out var l)) lists[Index(x, y)] = l = [];
-                l.AddRange(a.Select(p => Index(p.X, p.Y)));
-            }
+            // CAMPAIGN_PATHFINDER load (FUN_1811f7fa0) assigns, not appends: a hex listed by several bridges keeps the
+            // last bridge's other bank
+            foreach (var (x, y) in a) lists[Index(x, y)] = b.Select(p => Index(p.X, p.Y)).ToList();
+            foreach (var (x, y) in b) lists[Index(x, y)] = a.Select(p => Index(p.X, p.Y)).ToList();
         }
         LinkStart = new int[n + 1];
         var all = new List<int>();
@@ -197,6 +195,9 @@ public sealed class CampaignPathGrid
     /// share the visited flag of 960 + (c &amp; 63) (64-hex leaves), so on maps wider or taller than 1024 hexes some hexes are never
     /// settled. <paramref name="visit"/> gets every settled hex in pop order.
     /// </summary>
+    /// <summary>Research: landmark hexes for SPD_TRACE.</summary>
+    public int[] TraceSources = [];
+
     public void SearchGame(int source, bool reverse, bool aliasVisited, Action<int, uint> visit)
     {
         var n = Width * Height;
@@ -259,11 +260,21 @@ public sealed class CampaignPathGrid
             return (topH, topC);
         }
         var costs = reverse ? Reverse : Forward;
+        var trace = Environment.GetEnvironmentVariable("SPD_TRACE") is { } tr && tr.Split(',') is [var tx, var ty, var tk] &&
+                    int.Parse(tk) == (reverse ? 1 : 0) + 2 * Array.IndexOf(TraceSources, source)
+            ? Key(int.Parse(ty) * Width + int.Parse(tx)) : -1;
         Push(source, 0);
         while (heapH.Count > 0)
         {
             var (h, c) = Pop();
             var k = Key(h);
+            if (trace >= 0)
+            {
+                int hx = h % Width, hy = h / Width;
+                int V(int q) => q < 1024 ? q : 992 + (q & 31);
+                if (k == trace || V(hx) == trace % 1024 && V(hy) == trace / 1024)
+                    Console.Error.WriteLine($"pop ({hx},{hy}) cost {c} key ({k % 1024},{k / 1024}) {(visited[k] ? "skip" : "SETTLE")}");
+            }
             if (visited[k]) continue;
             visited[k] = true;
             visit(h, c);

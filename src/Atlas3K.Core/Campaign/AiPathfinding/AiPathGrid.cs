@@ -116,8 +116,9 @@ public sealed class AiPathGrid
         var lists = new Dictionary<int, List<int>>();
         foreach (var (sa, sb) in ppd.Bridges)
         {
-            foreach (var (x, y) in sa) { if (!lists.TryGetValue(Index(x, y), out var l)) lists[Index(x, y)] = l = []; l.AddRange(sb.Select(p => Index(p.X, p.Y))); }
-            foreach (var (x, y) in sb) { if (!lists.TryGetValue(Index(x, y), out var l)) lists[Index(x, y)] = l = []; l.AddRange(sa.Select(p => Index(p.X, p.Y))); }
+            // the game assigns (not appends): a hex listed by several bridges keeps the last bridge's other bank
+            foreach (var (x, y) in sa) lists[Index(x, y)] = sb.Select(p => Index(p.X, p.Y)).ToList();
+            foreach (var (x, y) in sb) lists[Index(x, y)] = sa.Select(p => Index(p.X, p.Y)).ToList();
         }
         PortLinkStart = new int[n + 1];
         var all = new List<int>();

@@ -39,6 +39,14 @@ static class AiPathfindingCommands
         {
             var t = Stopwatch.StartNew();
             var grid = new CampaignPathGrid(ppd, regions, settings);
+            if (Option(a, "--dump-grid") is { } dump) // research: forward edge costs (u32 per hex·6) + types
+            {
+                File.WriteAllBytes(dump + ".fwd", System.Runtime.InteropServices.MemoryMarshal.AsBytes(grid.Forward.AsSpan()).ToArray());
+                File.WriteAllBytes(dump + ".types", grid.Types);
+                File.WriteAllBytes(dump + ".edges", grid.EdgeBytes);
+                File.WriteAllLines(dump + ".regions.txt", regions.Regions.Select((r, i) =>
+                    $"{i}\t{r.Key}\t{r.IsSea}\t{r.Settlement}\t{r.Port}\t{string.Join(";", r.PrimarySlot)}\t{string.Join(";", r.PortSlot)}"));
+            }
             var refPath = compare is null ? null : Path.Combine(compare, "spd_data.esf");
             var refSpd = refPath is not null && File.Exists(refPath) ? SpdData.Read(refPath) : null;
             var spd = SpdBuilder.Build(grid, refSpd?.Timestamp ?? ts, maxThreads: threads);

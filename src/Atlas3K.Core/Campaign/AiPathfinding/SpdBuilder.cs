@@ -64,6 +64,7 @@ public static class SpdBuilder
         var values = new uint[w * h * 16];
         Array.Fill(values, SpdData.NoPath);
         var written = new bool[w * h];
+        grid.TraceSources = landmarks.Select(l => grid.Index(l.X, l.Y)).ToArray();
         var po = new ParallelOptions { MaxDegreeOfParallelism = maxThreads > 0 ? maxThreads : Environment.ProcessorCount };
         Parallel.For(0, 16, po, k =>
         {
@@ -84,12 +85,16 @@ public static class SpdBuilder
             else
             {
                 // big maps: the game's own heap order and its 1024-wide sparse visited map decide which hexes settle
+                var pops = Environment.GetEnvironmentVariable("SPD_POPS") is { } sp && sp.Split('|') is [var pk, var pp] && int.Parse(pk) == k
+                    ? new BinaryWriter(File.Create(pp)) : null;
                 grid.SearchGame(grid.Index(lm.X, lm.Y), (k & 1) == 1, true, (h, d) =>
                 {
+                    if (pops is not null) { pops.Write((ushort)(h % grid.Width)); pops.Write((ushort)(h / grid.Width)); pops.Write(d); }
                     var c = Alias(h / grid.Width) * w + Alias(h % grid.Width);
                     values[c * 16 + k] = d;
                     written[c] = true;
                 });
+                pops?.Dispose();
             }
         });
         int bx0 = int.MaxValue, by0 = int.MaxValue, bx1 = -1, by1 = -1;
