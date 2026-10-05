@@ -9,14 +9,16 @@ namespace Atlas3K.Core.Campaign.Terrain;
 ///    point lies inside its rotated bounds (both edges inclusive), the sub-tile under the point is valid (masked tiles
 ///    only) and either that sub-tile is valid or its hf is non-zero.
 ///  - lf: u = x / (tilesW · T), v = 1 − z / (tilesH · T); FUN_18039eea0 bilinear on lf_height_map (corners int(fx),
-///    int(fx)+1, int(fy)−1, int(fy)); height = (l · 5500) · f − f · 1200, f = (1/128) · T.
+///    int(fx)+1, int(fy)−1, int(fy)); height = (l · 1100) · f′ − f′ · 240, f′ = (1/25.6) · T (= 5/128 · T). These are
+///    TERRAIN_RENDER_SETUP's own fields (+0x8c = 1100, +0x84 = 240, +0x324 = T, read from BOB's memory 2026-10-04):
+///    the same value as (l · 5500) · f − f · 1200 with f = T/128, but rounded differently in float32.
 ///  - hf (get_high_frequency_height_new): the tile's hf_height_map.compressed_map sampled with the same bilinear at the
 ///    tile-local (u, v) (rotation 0x20: (1 − v, u), 0x40: (1 − u, 1 − v), 0x80: (v, 1 − u)), value = raw/65535 ·
 ///    (hi − lo) + lo, times f. Tiles with only the old hf_height_map.data (blockout cliffs, terrace farms ...) and
 ///    version-2 maps add 0 here.
 ///  - result = hf + lf; height_split returns (total − lf, lf) and the tree list stores their sum.
-/// Vanilla 3k_dlc07 (CA's shipped tree list): bit-exact on ~61% of trees, within 1e-5 on 99.87% (lf alone: 98.89%),
-/// the rest are 1–4 ulp differences of unknown origin (they occur on flat generic tiles too).
+/// Vanilla 3k_dlc07: the lf part equals BOB's (Frida dump of "Campaign Trees") on 99.9995% of trees; see
+/// docs/native_campaign_build.md for the per-tree totals against CA's shipped list.
 /// </summary>
 public sealed class TileHfHeight
 {
@@ -26,7 +28,7 @@ public sealed class TileHfHeight
     private readonly HfMap?[] _hfOfPath;
     private readonly List<int>?[] _cells;
     private readonly int _tilesW, _tilesH;
-    private readonly float _t, _invT, _f, _maxX, _maxZ;
+    private readonly float _t, _invT, _f, _fLf, _maxX, _maxZ;
     private readonly HfMap _lf;
 
     private sealed record HfMap(ushort[] Data, int W, int H, float Lo, float Hi);
@@ -40,7 +42,8 @@ public sealed class TileHfHeight
         _tilesH = list.Ints[2];
         _t = tileSize;
         _invT = 1f / tileSize;
-        _f = 1f / 128f * tileSize;
+        _f = 1f / 128f * tileSize;              // hf multiplier (TERRAIN_RENDER_SETUP +0x320)
+        _fLf = 0.0390625f * tileSize;           // (1/25.6) · T, exact in float32: render_params scale · T (+0x324)
         _maxX = _tilesW * tileSize;
         _maxZ = _tilesH * tileSize;
         _lf = new HfMap(lf.Raster.Data, lf.Raster.Width, lf.Raster.Height, lf.Header[1], lf.Header[4]);
@@ -118,7 +121,7 @@ public sealed class TileHfHeight
         var u = (x - 0f) / (_maxX - 0f);
         var v = 1f - (z - 0f) / (_maxZ - 0f);
         var l = Sample(_lf, u, v);
-        return l * 5500f * _f - _f * 1200f;
+        return l * 1100f * _fLf - _fLf * 240f;
     }
 
     /// <summary>Tree height at a tile-space point: (total − lf) + lf, total = hf · f + lf of the first answering tile.</summary>
@@ -127,13 +130,18 @@ public sealed class TileHfHeight
     /// <summary>height_split: (total − lf, lf).</summary>
     public (float Hf, float Lf) Split(float x, float z)
     {
+        // get_height_worker returns 0 (and no tile answers) outside the terrain bounds (+0x340..+0x34c = 0, 0, maxX,
+        // maxZ): jittered trees past the map edge get height 0 (213 trees on vanilla)
+        if (x < 0f || x > _maxX || z < 0f || z > _maxZ) return (0f, 0f);
         var lf = Lf(x, z);
         var tx = _invT * x;
         var ty = _invT * z;
         int cx = (int)tx, cy = (int)ty;
-        if (cx < 0 || cy < 0 || cx >= _tilesW || cy >= _tilesH) return (0f, lf);
+        // no answering tile -> get_height_worker returns 0 for the whole height (BOB's dump: (0, 0) on vanilla trees in
+        // tile holes / on invalid unmasked sub-tiles with zero hf)
+        if (cx < 0 || cy < 0 || cx >= _tilesW || cy >= _tilesH) return (0f, 0f);
         var cell = _cells[cy * _tilesW + cx];
-        if (cell is null) return (0f, lf);
+        if (cell is null) return (0f, 0f);
         foreach (var r in cell)
         {
             var rec = _list.Records[r];
@@ -169,6 +177,6 @@ public sealed class TileHfHeight
             var total = hf + lf;
             return (total - lf, lf);
         }
-        return (0f, lf);
+        return (0f, 0f);
     }
 }

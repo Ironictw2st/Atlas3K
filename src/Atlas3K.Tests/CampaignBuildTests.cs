@@ -329,15 +329,19 @@ public class CampaignBuildTests
             CompressedMap.Read(Vanilla("lf_height_map.compressed_map")), Atlas3K.Core.Campaign.GlobalMesh.GlobalMeshStep.TileSize);
         var trees = Atlas3K.Formats.Trees.CampaignTreeList.Load(Paths.TreeList);
         int n = 0, exact = 0, close = 0;
+        var misses = new List<string>();
         foreach (var t in trees.Types.SelectMany(type => type.Instances))
         {
             var y = terrain.Height(t.X, t.Z / Atlas3K.Core.Campaign.Trees.TreesStep.CampaignZScale);
             n++;
             if (BitConverter.SingleToInt32Bits(y) == BitConverter.SingleToInt32Bits(t.Y)) exact++;
+            else if (misses.Count < 60) misses.Add(FormattableString.Invariant($"{t.X:R},{t.Z:R},{t.Y:R},{y:R}"));
             if (Math.Abs(y - t.Y) <= 1e-5f) close++;
         }
-        // 2026-10-04: 61.46% bit-exact, 99.90% within 1e-5 (lf alone: 60.8% / 98.9%)
-        Assert.True(exact >= 0.60 * n, $"bit-exact {exact} of {n}");
-        Assert.True(close >= 0.998 * n, $"within 1e-5 {close} of {n}");
+        // 2026-10-04: 205,765 of 205,767 bit-exact against CA's shipped list (was 61.46%): lf scaled with
+        // TERRAIN_RENDER_SETUP's 1100 / 240 and (1/25.6)*T, height 0 outside the bounds and where no tile answers.
+        // Left: one tree 1 ulp off on an hf tile, one where BOB rejects the sub-tile.
+        Assert.True(exact >= n - 2, $"bit-exact {exact} of {n}, within 1e-5 {close}; first misses: " + string.Join(" ; ", misses));
+        Assert.True(close >= n - 1, $"within 1e-5 {close} of {n}");
     }
 }
