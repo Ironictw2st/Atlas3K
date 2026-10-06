@@ -378,7 +378,9 @@ public static class BobRiver
 
     // ---------------------------------------------------------------- file (FUN_180146460, cleaner, writer)
 
-    public static RigidModelV2 ToModel(RawMesh mesh)
+    /// <param name="unitScale">The tile database's render_params.unit_scale: FUN_180146460 divides x and z by it after
+    /// the bounds are taken (campaign 1; battle tiles 2).</param>
+    public static RigidModelV2 ToModel(RawMesh mesh, float unitScale = 1f)
     {
         var order = new List<int>();
         var remap = new Dictionary<int, int>();
@@ -401,7 +403,8 @@ public static class BobRiver
         {
             var o = vertices.AsSpan(v * 48, 48);
             var r = mesh.Vertices.AsSpan(order[v] * 32, 32);
-            for (var k = 0; k < 3; k++) BinaryPrimitives.WriteSingleLittleEndian(o[(k * 4)..], pos[v, k] - pivot[k]);
+            for (var k = 0; k < 3; k++)
+                BinaryPrimitives.WriteSingleLittleEndian(o[(k * 4)..], (k == 1 || unitScale == 1f ? pos[v, k] : pos[v, k] / unitScale) - pivot[k]);
             BinaryPrimitives.WriteSingleLittleEndian(o[12..], 1f);
             for (var k = 0; k < 4; k++)
                 BinaryPrimitives.WriteSingleLittleEndian(o[(16 + k * 4)..], HalfToFloat(BinaryPrimitives.ReadUInt16LittleEndian(r[(8 + k * 2)..])));
