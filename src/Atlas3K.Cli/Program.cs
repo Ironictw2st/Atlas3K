@@ -98,6 +98,8 @@ switch (command)
         return AiPathfindingCommands.Run(paths, c, args.Skip(1).ToArray());
     case var c when BattleBuildCommands.Names.Contains(c):
         return BattleBuildCommands.Run(paths, c, args.Skip(1).ToArray());
+    case var c when BattleParityCommand.Names.Contains(c):
+        return BattleParityCommand.Run(paths, c, args.Skip(1).ToArray());
     default:
         Console.WriteLine("Commands: info | trees-roundtrip | find-textures | render [mapX mapY scale width height]");
         Console.WriteLine("          props-to-layers [targetDir|ak] [shiftX shiftZ]");
