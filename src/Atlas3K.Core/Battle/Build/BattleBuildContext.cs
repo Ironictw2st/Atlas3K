@@ -75,6 +75,11 @@ public sealed class BattleBuildContext
     public string TerryTileDbDir { get => _TerryTileDbDir ?? Path.Combine(WorkingData, "terrain", "tiles", "battle", "_tile_database", "TILES"); init => _TerryTileDbDir = value; }
     private readonly string? _TerryTileDbDir;
 
+    /// <summary>More folders of loose tile database entries that sat in the kit's _tile_database/TILES when BOB ran
+    /// (other assembly-kit tiles installed at the same time: a parity corpus's <c>kit_tile_db</c>). Every assembly-kit
+    /// tile is a tile-matching candidate, so they change tile_list.bin.</summary>
+    public IReadOnlyList<string> ExtraTileDbDirs { get; init; } = [];
+
     /// <summary>The game's data folder (vanilla packs), for the files BOB reads from its VFS (tile database settings,
     /// tiles listed in explicit_tiles.txt, ...).</summary>
     public string GameDataDir { get; init; } = Defaults.GameData;

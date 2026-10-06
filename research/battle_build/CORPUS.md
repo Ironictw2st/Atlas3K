@@ -32,6 +32,11 @@ Round 2 (procedural trees, cold, siege, several climates, several rivers) and wh
 are in the corpus README ("Round 2"); the native-vs-BOB results per file are in `docs/native_battle_build.md`
 ("Round 2 corpus").
 
+Every assembly-kit tile in the kit's tile database is a tile-matching candidate, so other kit maps installed during a
+run change `tile_list.bin`. Round 2's cold and multi-climate runs had the sibling round-2 projects installed: their
+tile database entries are recorded in `<corpus>/<id>/kit_tile_db/`, which `build-battle --corpus` and the tests read as
+extra loose entries (`BattleBuildContext.ExtraTileDbDirs`). Install one project at a time for new runs.
+
 Typical sequence for a new project:
 1. Take the BOB lock: `mkdir Z:/Claude/Headless/bob_lock` plus an owner file.
 2. `snapshot.py … src`, then `snapshot.py … existing`.

@@ -51,12 +51,23 @@ public sealed class BattleBlendStep : IBattleBuildStep
         var used = BattleTileDbStep.UsedBlendChannels(ctx.SourceTileDir);
         var order = Enumerable.Range(0, 8).Where(c => used[c]).ToList();
         AmdCompress.Load(ctx.KitRoot);
+        // QTU::TerrainMap::data_composited: w · (1/255) per channel, then channel 0 takes up the float sum's error,
+        // f0 −= (Σ f − 1) (an empty pixel gets f0 = 1); TOOLDATABUILDER FUN_18015e8c0: byte = (int)(f · 255)
+        var bytes = new byte[b.W * b.H * 8];
+        Span<float> wf = stackalloc float[8];
+        for (var i = 0; i < b.W * b.H; i++)
+        {
+            var sum = 0f;
+            for (var c = 0; c < 8; c++) { wf[c] = b.Data[i * 8 + c] * (1f / 255f); sum += wf[c]; }
+            wf[0] -= sum - 1f;
+            for (var c = 0; c < 8; c++) bytes[i * 8 + c] = unchecked((byte)(int)(wf[c] * 255f));
+        }
         for (var tex = 0; tex < 2; tex++)
         {
             var bgra = new byte[b.W * b.H * 4];
             for (var i = 0; i < b.W * b.H; i++)
             {
-                byte Ch(int k) => tex * 4 + k < order.Count ? b.Data[i * 8 + order[tex * 4 + k]] : (byte)0;
+                byte Ch(int k) => tex * 4 + k < order.Count ? bytes[i * 8 + order[tex * 4 + k]] : (byte)0;
                 bgra[i * 4] = Ch(2); bgra[i * 4 + 1] = Ch(1); bgra[i * 4 + 2] = Ch(0); bgra[i * 4 + 3] = Ch(3);
             }
             File.WriteAllBytes(Path.Combine(ctx.OutTileDir, $"blend{tex}.dds"), AmdCompress.WriteDds(bgra, b.W, b.H, AmdCompress.FormatDxt5, minMipShift: 1));

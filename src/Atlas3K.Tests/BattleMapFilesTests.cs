@@ -29,6 +29,7 @@ public class BattleMapFilesTests
             {
                 SourceTileDir = Path.Combine(project, "src", "tile"), SourceMapDir = Path.Combine(project, "src", "map"),
                 TerryTileDbDir = Path.Combine(project, "existing", "tile_db"),
+                ExtraTileDbDirs = Directory.Exists(Path.Combine(project, "kit_tile_db")) ? [Path.Combine(project, "kit_tile_db")] : [],
             };
             var steps = new List<string> { "tile_db", "map_info", "icon", "blend", "tile_normal", "ground_types", "debug_protection" };
             if (hasMap) steps.AddRange(["lf", "lf_normal", "climate", "tile_list"]);

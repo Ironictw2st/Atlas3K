@@ -27,18 +27,18 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | File | Step | Status |
 |---|---|---|
 | `map/climate_map.cm` | climate | identical 2/2 |
-| `map/lf_height_map.compressed_map` / `.dds` | lf | identical 2/2 |
+| `map/lf_height_map.compressed_map` / `.dds` | lf | identical 2/2 (round 2: 3/3) |
 | `map/lf_sea_height_map.compressed_map` / `.dds` | lf | identical 2/2 |
-| `map/lf_normal.dds` | lf_normal | identical 2/2 |
+| `map/lf_normal.dds` | lf_normal | identical 2/2 (round 2: 3/3) |
 | `map/map_info.xml` | map_info | identical 5/5 |
 | `map/icon.tga` | icon | identical 5/5 |
-| `map/tile_list.bin` | tile_list | identical 2/2 |
+| `map/tile_list.bin` | tile_list | identical 2/2 (round 2: 3/3, with the corpus's `kit_tile_db`) |
 | `tile_db/_assembly_kit_<id>.bin` / `.xml` | tile_db | identical 5/5 |
 | `tile/hf_height_map.compressed_map` | hf_height | identical 5/5 |
 | `tile/hf_water_map.compressed_map` | hf_water | identical 2/2 (the river projects), correctly absent on the other 3 |
-| `tile/blend0.dds`, `blend1.dds` | blend | identical 2/2 (dfe064a6, df46bdbc), correctly absent on the 3 unpainted projects |
+| `tile/blend0.dds`, `blend1.dds` | blend | identical 2/2 (dfe064a6, df46bdbc), correctly absent on the 3 unpainted projects (round 2: 3/3, partial weights) |
 | `tile/normal.dds` | tile_normal | identical 2/2, correctly absent on the other 3 |
-| `tile/ground_types.dds` | ground_types | identical 5/5 |
+| `tile/ground_types.dds` | ground_types | identical 5/5 (round 2: 3/3) |
 | `tile/debug_protection_map.png` | debug_protection | identical 5/5 (all corpus maps are empty; building protection not ported) |
 | Terry-save inputs → `<out>/terry_save/` | terry_save | raw map folder (tile_map.png, lf tifs, climate_map.png, explicit_tiles.txt) identical on 224ad6d5 (the only Terry-made map folder; df46bdbc's was scripted); rules.bob identical; Terry's tile database entry identical on 0a26b6e0, dfe064a6 differs only in the uninitialised `scalable` byte |
 | `tile/shadow_mesh.rigid_model_v2` | tile_meshes | identical 5/5 |
@@ -67,12 +67,12 @@ the next porting round's to-do list:
 | File | r2_tmp_forest | r2_cld_siege | r2_multi_climate | Note |
 |---|---|---|---|---|
 | `map/climate_map.cm`, `icon.tga`, `map_info.xml`, `lf_*.dds`, `lf_sea_height_map.*` | identical | identical | identical | |
-| `map/lf_height_map.compressed_map` | identical | identical | **differs** (8 bytes from 0x1E) | subtropical_1 vista |
-| `map/lf_normal.dds` | identical | **differs** (19 bytes) | identical | cold_1 vista |
-| `map/tile_list.bin` | identical | **differs** (23,075 vs 23,200 bytes) | **differs** (31,922 vs 31,656) | other vistas; BOB logs a Flow failure on a river_mouth tile for subtropical_1 |
+| `map/lf_height_map.compressed_map` | identical | identical | identical (was 8 bytes) | a constant source keeps lo = hi in the header |
+| `map/lf_normal.dds` | identical | identical (was 19 bytes) | identical | BOB's convolution term order (steep cold map) |
+| `map/tile_list.bin` | identical | identical | identical | the corpus runs had the sibling round-2 tiles installed: `kit_tile_db` (below) |
 | `tile_db/*` | identical | identical | identical | |
-| `tile/blend0.dds` | **differs** (13,468 bytes) | **differs** | **differs** | partial blend weights (round 1 had only 0/255 pixels); blend1 identical |
-| `tile/ground_types.dds` | **differs** (7,101 px) | **differs** (9,291) | **differs** (11,382) | same cause suspected: ties / partial weights |
+| `tile/blend0.dds` | identical | identical | identical | channel 0 absorbs the float sum's error (rules) |
+| `tile/ground_types.dds` | identical | identical | identical | first channel over 0.55, not the highest weight (rules) |
 | `tile/hf_*`, `normal.dds`, `shadow_mesh`, `debug_protection_map.png`, `bmd_nogo_data.*` | identical | identical | identical | |
 | `tile/mesh`, `outfield_mesh` | masked-identical | masked-identical | masked-identical | |
 | `tile/*river_mesh.wsmodel` | identical | identical | identical | |
@@ -85,7 +85,7 @@ the next porting round's to-do list:
 
 | File | Rule |
 |---|---|
-| lf maps | Float32 throughout: h = s · (1/65535); lo/hi = min/max of h; v = trunc((h − lo) · (1/(hi − lo)) · 65535). Header f[1] = lo, f[4] = hi. Both reciprocal multiplications matter: dividing is off by one on a few pixels (`lf_round2.py`). The sea map is the same rule; a constant source gives zeros. |
+| lf maps | Float32 throughout: h = s · (1/65535); lo/hi = min/max of h; v = trunc((h − lo) · (1/(hi − lo)) · 65535). Header f[1] = lo, f[4] = hi. Both reciprocal multiplications matter: dividing is off by one on a few pixels (`lf_round2.py`). The sea map is the same rule. A constant source gives all zeros with lo = hi = its value (round-2 subtropical map, lf 1966 everywhere; an all-zero sea map gives 0, 0). |
 | climate_map.cm | climate_map.png pixel → exact RGB match against the battle tile database climates (`_settings.bin`, in order: default, arid, arid_fertile, cold, …); 0 if no match. Same size as the png, 16-pixel tiles, header f[4] = 65535. |
 | map_info.xml | bob_tile `ACTION_TERRY_TILE::save_user_created_map_data`: a QDomDocument saved with indent 4 and LF line ends, built from `<user_created_map>` and the vista `env`. An empty display name becomes the .terry base name. Text escaping is QDom's: only `&`, `<` and `>`. |
 | icon.tga | The same function: an `icon.tga` already in the map's output folder is kept, else VFS `Terry/icon.tga` (kit `working_data/Terry/icon.tga`) is copied. |
@@ -93,14 +93,14 @@ the next porting round's to-do list:
 | tile_list.bin: groups | `raw_data/terrain/battles/tile_placement_groups.xml` groups are merged **after** the database's own (`TILE_PLACEMENT_GROUPS::load_and_merge`; the first colour match wins). A group's `link_as_set` counts in `contains_link_as`, and `add_tile_to_link_map` marks cells with the **group's** link_as when it has one (Frida, `research/bob_re/frida_battle_links.js`). |
 | tile_list.bin: explicit tiles | `explicit_tiles.txt` tiles are placed first (`add_explicit_tiles`: y' = H − 1 − y, anchor (x, y' − h + 1), climate at (x, y'), place + also-place, no link map, no draw). |
 | tile_list.bin: battle switches | `is_campaign` is false, so the campaign-only 2×2 junction-pass rule is off. |
-| tile_list.bin: database order | BOB's VFS lists the packs' tile files (lower-case ordinal), then the kit's loose `working_data` ones (the `_assembly_kit_<id>` entry) last. That input order matters for the unstable MSVC sort (Frida, `research/bob_re/frida_battle_tiles.js`). |
+| tile_list.bin: database order | BOB's VFS lists the packs' tile files (lower-case ordinal), then the kit's loose `working_data` ones (every `_assembly_kit_<id>` entry in `_tile_database/TILES`, lower-case ordinal) last. That input order matters for the unstable MSVC sort (Frida, `research/bob_re/frida_battle_tiles.js`). Every assembly-kit tile in the kit is a matching candidate, so other kit maps' entries change the result: the round-2 corpus runs had the sibling round-2 projects installed, recorded in `<corpus>/<id>/kit_tile_db/` and read as `BattleBuildContext.ExtraTileDbDirs` (BOB on the project alone gives the native output without them, checked with a Frida run of the full export). |
 | tile_list.bin: output | Records and heights as the campaign writer. Header floats (0.5, 0.5, 1, 1, 500, 1.333); marker 0. |
 | tile database entry | TILE v7 / VARIATION v10 / texture_set v2. BOB's TerryTile rewrite = Terry's saved entry with the texture channels re-derived from the .terry `texture_channel_N`, keeping only the channels the blend TIF uses (channel 0 always), compacted in order, the rest empty. That is why re-running BOB is a fixed point. The `scalable` byte is uninitialised memory from Terry's save (0x00, 0x58 and 0x8B seen) and is carried over; without a saved entry it is 0. The `.xml` has CRLF line ends, tabs and single quotes, with floats as `%f`. |
-| lf_normal.dds | bob_terrain FUN_18000e4d0/FUN_18003ba70: 3×3 Sobel of h = s·(1/65535) (clamped edges) × 500, normal = normalise(gx, gy, z), z = 1/((lf px per tile-map cell) / (unit_scale 2 · tile size 128)) = 32; pixel B,G,R,A = 0, (ny+1)·127.5, 255, (nx+1)·127.5 truncated. DDS via `AmdCompress`: the kit's AMDCompress_MT_DLL.dll (AMD_TC_ConvertTexture, options zero but dwSize 2000), mips = 2×2 box average with rounding down to 2×2 (campaign: 8×8), standard DXT5 header (Frida: `research/bob_re/frida_amd_compress.js`). |
+| lf_normal.dds | bob_terrain FUN_18000e4d0/FUN_18003ba70: 3×3 Sobel of h = s·(1/65535) (clamped edges), accumulated as BOB does: from 0, term by term in row-major order, ((4000 · h) · k) with k = (1, 0, −1, 2, 0, −2, 1, 0, −1) (the y gradient reads the kernel transposed), then ÷ (3·3 − 1) (FUN_180026620 / FUN_180026910); n = 1/sqrt(gy² + gx² + z²) in that addition order, nx = n·gx, ny = n·gy; z = 1/((lf px per tile-map cell) / (unit_scale 2 · tile size 128)) = 32; pixel B,G,R,A = 0, (ny+1)·127.5, 255, (nx+1)·127.5 truncated. Gentle maps also match the plain Sobel × 500; the steep round-2 cold map needs the term order (8 pixels). DDS via `AmdCompress`: the kit's AMDCompress_MT_DLL.dll (AMD_TC_ConvertTexture, options zero but dwSize 2000), mips = 2×2 box average with rounding down to 2×2 (campaign: 8×8), standard DXT5 header (Frida: `research/bob_re/frida_amd_compress.js`). |
 | Terry save | Vista (`raw_data/terrain/vistas/<vista>`) tile_map.png + lf tifs copied byte for byte; climate_map.png re-encoded like Qt/libpng: RGB8, pHYs 3780, zlib level 0 (68 05, one stored block per 16 KiB), libpng adaptive filter (min sum of \|signed byte\|, first min), 8192-byte IDATs. explicit_tiles.txt = the tile centred on the tile map + CRLF. rules.bob (map and tile working folders) = `[Pack]` template with `<.terry stem>_<id>.pack`, CRLF, no final newline. Tile entry = `TileDbEntry.FromTerry` (all 8 channels). |
-| blend0/1.dds | The blend channels in use (channel 0 always, channel order, as in the rewritten tile entry) packed R,G,B,A = used 0..3 → blend0, 4..7 → blend1, full 1280², DXT5 via `AmdCompress`. Written only when the blend TIF has a non-zero weight. |
+| blend0/1.dds | The blend channels in use (channel 0 always, channel order, as in the rewritten tile entry) packed R,G,B,A = used 0..3 → blend0, 4..7 → blend1, full 1280², DXT5 via `AmdCompress`. Written only when the blend TIF has a non-zero weight. The bytes are not the TIF's: `QTU::TerrainMap::data_composited` gives f = w · (1/255) per channel and channel 0 then takes up the float sum's error, f0 −= (Σ₀..₇ f − 1) (summed in channel order; an empty pixel gets f0 = 1), and `TOOLDATABUILDER` FUN_18015e8c0 writes (int)(f · 255). So channel 0 often comes out one lower than the TIF (234 → 233 next to 21): every pixel of the round-2 dump matches (Frida: `convert_blend_map`'s float vector, `Z:/Claude/BattleMaps/research/bob_re/blend_gt`). |
 | tile normal.dds | 3×3 Sobel of the full float Height TIF, normalise(gx/8, gy/8, 1/normal_strength), pixel as lf_normal, DXT5 via `AmdCompress`; written with the blend textures. |
-| ground_types.dds | Per pixel the EMPIREUTILITY::GROUND_TYPE (forest 0, grass 1, mud 2, sand 3, scrub 4, rock 5, deep_water 6, shallow_water 7, road 8, wooden_floor 9, snow 10, …; empireutility name table) of the highest-weight blend channel (first on ties), texture group → type from db `ground_type_to_texture_groups` (binary column order: ground_type, texture_group); blend TIF cropped by density on each side (1280 → 1024); uncompressed L8 with a bare header (flags 0, pf LUMINANCE 8-bit). |
+| ground_types.dds | Per pixel the EMPIREUTILITY::GROUND_TYPE (forest 0, grass 1, mud 2, sand 3, scrub 4, rock 5, deep_water 6, shallow_water 7, road 8, wooden_floor 9, snow 10, …; empireutility name table) of the first blend channel whose weight is over 0.55 (≥ 141 of 255), else channel 0's: not the highest weight (a 127/128 or 115/140 split keeps channel 0; fitted on the round-2 painted maps, 0 pixels off on all 8 projects), texture group → type from db `ground_type_to_texture_groups` (binary column order: ground_type, texture_group); blend TIF cropped by density on each side (1280 → 1024); uncompressed L8 with a bare header (flags 0, pf LUMINANCE 8-bit). |
 | hf_height_map | tooldatabuilder FUN_1800edbf0 mode 0: the **decimated terrain mesh** (the float mesh behind mesh.rigid_model_v2) rasterised back onto the 1025² vertex grid by FUN_1800dc250 (field initialised to 1.0), then normalised to its own min..max with the lf rule. Steep areas therefore differ from the raw TIF wherever the triangle merger dropped vertices. |
 | Mesh rasteriser (FUN_1800dc250) | Per triangle A,B,C: integer bbox of x and z (truncated) from min − 1 to max; barycentric weights from dot products of (B−A), (C−A), (P−A) in (z, x), accepted in [−0.0001, 1.0001]; cell (trunc(s·z), trunc(s·x)) with s = density / 128 **overwritten** (last triangle wins) by w_C·C.y + w_B·B.y + w_A·A.y. |
 | hf_water_map | A −1000 field, the river model (+ pivot) rasterised in by FUN_1800dc250, then water planes (FUN_1800ed480; not in the corpus). |

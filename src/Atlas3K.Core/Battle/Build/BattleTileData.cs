@@ -37,13 +37,18 @@ public static class BattleTileData
             var name = key[(key.LastIndexOf('\\') + 1)..];
             if (!files.ContainsKey(name) && ctx.Packs.TryRead(key) is { } bytes) files[name] = bytes;
         }
-        foreach (var dir in new[] { Path.Combine(ctx.WorkingData, "terrain", "tiles", "battle", "_tile_database", "TILES"), ctx.OutTileDbDir })
+        // the loose entries as one TILES folder lists them (lower-case ordinal); a later folder's copy of an entry wins
+        var loose = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dir in new[] { Path.Combine(ctx.WorkingData, "terrain", "tiles", "battle", "_tile_database", "TILES") }
+                     .Concat(ctx.ExtraTileDbDirs).Append(ctx.OutTileDbDir))
             if (Directory.Exists(dir))
                 foreach (var f in Directory.EnumerateFiles(dir, "*.bin"))
-                {
-                    files[Path.GetFileName(f)] = File.ReadAllBytes(f);
-                    looseFiles.Add(Path.GetFileName(f));
-                }
+                    loose[Path.GetFileName(f)] = f;
+        foreach (var (name, f) in loose.OrderBy(kv => kv.Key.ToLowerInvariant(), StringComparer.Ordinal))
+        {
+            files[name] = File.ReadAllBytes(f);
+            looseFiles.Add(name);
+        }
         return CampaignTileDatabase.Load(settings, files.Select(kv => (kv.Key, kv.Value)));
     }
 

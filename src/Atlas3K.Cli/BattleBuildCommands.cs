@@ -55,6 +55,7 @@ static class BattleBuildCommands
                 SourceMapDir = Path.Combine(c, "src", "map"), SourceTileDir = Path.Combine(c, "src", "tile"),
                 BobMapDir = Path.Combine(c, run, "map"), BobTileDir = Path.Combine(c, run, "tile"), BobTileDbDir = Path.Combine(c, run, "tile_db"),
                 TerryTileDbDir = Path.Combine(c, "existing", "tile_db"),
+                ExtraTileDbDirs = Directory.Exists(Path.Combine(c, "kit_tile_db")) ? [Path.Combine(c, "kit_tile_db")] : [],
             };
         }
         var only = Option(a, "--only")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
