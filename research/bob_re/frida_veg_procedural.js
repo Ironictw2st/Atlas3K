@@ -23,8 +23,25 @@ function bytes(p, n) { return n > 0 ? p.readByteArray(n) : new ArrayBuffer(0); }
 let call = 0;
 function attach() {
     const m = Process.findModuleByName('qttoolutility.modder.x64.dll');
-    if (!m || !Process.findModuleByName('calibs.modder.x64.dll')) { setTimeout(attach, 20); return; }
+    if (!m || !Process.findModuleByName('calibs.modder.x64.dll') || !Process.findModuleByName('bob_vegetation.modder.x64.dll')) { setTimeout(attach, 20); return; }
     send({ kind: 'module', base: m.base.toString() });
+    const bv = Process.findModuleByName('bob_vegetation.modder.x64.dll');
+    if (bv) Interceptor.attach(bv.base.add(0x7630), {   // FUN_180007630: Vegetation / Procedural Generation action
+        onEnter(args) {
+            const a = args[0];
+            for (const [name, off] of [['action_map_a0', 0xa0], ['action_map_a8', 0xa8]]) {
+                const p1 = a.add(off).readPointer();
+                if (p1.isNull()) { send({ kind: name, null: true }); continue; }
+                const mp = p1.readPointer();
+                if (mp.isNull()) { send({ kind: name, null: true }); continue; }
+                const hdr = Array.from(new Uint32Array(mp.readByteArray(0x48)));
+                const w = mp.add(8).readU32(), h = mp.add(0xc).readU32(), n = mp.add(0x40).readU32();
+                const d = mp.add(0x38).readPointer();
+                send({ kind: name, w, h, n, hdr }, d.isNull() ? new ArrayBuffer(0) : d.readByteArray(n * 4));
+            }
+        }
+    });
+
     Interceptor.attach(m.base.add(RVA_GROUP_COMPILE), {
         onEnter(args) {
             this.out = args[1];
