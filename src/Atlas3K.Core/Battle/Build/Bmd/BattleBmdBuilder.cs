@@ -62,8 +62,10 @@ public sealed class BattleBmdBuilder(BmdMetaCatalog catalog)
 
     /// <param name="grassLists">Grass list files written for this tile (climate, pack path), in climate order.</param>
     /// <param name="treeLists">Tree list files written for this tile (climate, pack path).</param>
+    /// <param name="forestHints">AIH_AMBUSH_FOREST polylines (<see cref="ForestHints"/>), appended after the layers' hints.</param>
     public BmdNode BuildData(TileScene scene, IReadOnlyList<(string Climate, string Path)> grassLists,
-                             IReadOnlyList<(string Climate, string Path)> treeLists)
+                             IReadOnlyList<(string Climate, string Path)> treeLists,
+                             IReadOnlyList<List<(float X, float Y)>>? forestHints = null)
     {
         var root = Empty(catalog);
         var exported = scene.Exported.ToList();
@@ -99,6 +101,8 @@ public sealed class BattleBmdBuilder(BmdMetaCatalog catalog)
             if (e.C("ECAIHint") is { } hint && e.C("ECPolyline") is { } hl)
                 List(root, "AI_HINTS", "polylines").Child("HINT_POLYLINES").Children.Add(Node("HINT_POLYLINE", "", 2,
                     Str(hint, "type") ?? "", Polyline(e, hl).Select(p => Node("point", "points", p.X, p.Z)).ToList(), Tags(e)));
+            if (e.C("ECSiegeAINode") is { } sn && SiegeNode(e, sn) is { } node)
+                List(root, "AI_HINTS", "polylines_list").Child("HINT_POLYLINES").Children.Add(node);
             if (e.C("ECLightProbe") is { } probe)
             {
                 var (x, y, z) = Pos(e);
@@ -134,6 +138,10 @@ public sealed class BattleBmdBuilder(BmdMetaCatalog catalog)
                 root.Child("NON_TERRAIN_OUTLINES").Children.Add(Node("EMPIRE_OUTLINE", "", Polyline(e, ng).Select(p => Node("position", "OUTLINE", p.X, p.Z)).ToList()));
         }
 
+        foreach (var fh in forestHints ?? [])
+            List(root, "AI_HINTS", "polylines").Child("HINT_POLYLINES").Children.Add(Node("HINT_POLYLINE", "", 2, "AIH_AMBUSH_FOREST",
+                fh.Select(p => Node("point", "points", p.X, p.Y)).ToList(), MetaTags()));
+
         CaptureLocations(root, exported, prefabs, prefabIndex);
         Deployment(root, scene, exported);
 
@@ -155,13 +163,19 @@ public sealed class BattleBmdBuilder(BmdMetaCatalog catalog)
     {
         var (m, x, y, z) = World(e);
         var rs = e.C("ECMeshRenderSettings");
-        return Node("BUILDING", "", 14, "", Tags(e), Parent(), Str(b, "key") ?? "", "BBPT_LF_RELATIVE", Transform12("BUILDING", m, x, y, z),
-            BuildingProperties("properties", "BUILDING", "", b, rs), HeightMode(e), Colour("tint", rs, "tint_colour"),
+        // building_id: the entity's prefab override id (an inlined prefab building keeps the id prefab instances override)
+        var po = e.C("ECPrefabOverride");
+        var id = Str(po, "enabled") == "true" ? Str(po, "id") ?? "" : "";
+        return Node("BUILDING", "", 14, id, Tags(e), Parent(), Str(b, "key") ?? "", "BBPT_LF_RELATIVE", Transform12("BUILDING", m, x, y, z),
+            BuildingProperties("properties", "BUILDING", "", b, rs, e.C("ECWall")), HeightMode(e), Colour("tint", rs, "tint_colour"),
             Colour("faction_colour", rs, "faction_colour"), Alpha(rs), false);
     }
 
-    private static BmdNode BuildingProperties(string tag, string parent, string buildingId, XElement? b, XElement? rs) =>
-        Node(tag, parent, 7, buildingId, F(b, "damage", 0), false, false, false, true, Str(b, "indestructible") == "true", true,
+    /// <summary>A building's properties; weak_point / ai_breachable / dockable from its ECWall (weak_wall, ai_breachable,
+    /// dockable), else false / true / true.</summary>
+    private static BmdNode BuildingProperties(string tag, string parent, string buildingId, XElement? b, XElement? rs, XElement? wall = null) =>
+        Node(tag, parent, 7, buildingId, F(b, "damage", 0), false, false, Str(wall, "weak_wall") == "true", Str(wall, "ai_breachable") != "false",
+            Str(b, "indestructible") == "true", Str(wall, "dockable") != "false",
             Str(b, "toggleable") == "true", false, false, Str(rs, "cast_shadow") != "false", false, false, false);
 
     private BmdNode Prefab(SceneEntity e, XElement pf)
@@ -240,6 +254,44 @@ public sealed class BattleBmdBuilder(BmdMetaCatalog catalog)
             false, HeightMode(e), 0u, 1, Tags(e));
     }
 
+    // ---- siege AI ----
+
+    /// <summary>
+    /// A siege AI node as BOB exports it: AI_HINTS > polylines_list, type AIH_SIEGE_&lt;node type&gt;_NODE, polygons = the
+    /// node's rectangle (corners from (-w/2, -h/2) through (-w/2, +h/2), (+w/2, +h/2), (+w/2, -h/2)), then the polyline of
+    /// each ECSiegeAIBoundary child (Logical association) in entity id order. Node types without a hint type (FIRING_AREA,
+    /// EXIT, SPAWN) are not exported here.
+    /// </summary>
+    private BmdNode? SiegeNode(SceneEntity e, XElement sn)
+    {
+        var type = (Str(sn, "siege_ai_node_type") ?? "SANT_AREA") switch
+        {
+            "SANT_AREA" => "AIH_SIEGE_AREA_NODE",
+            "SANT_ENTRY" => "AIH_SIEGE_ENTRY_NODE",
+            "SANT_INTERSECTION" => "AIH_SIEGE_INTERSECTION_NODE",
+            "SANT_WALL_AREA" => "AIH_SIEGE_WALL_AREA_NODE",
+            var t => Skip(t),
+        };
+        if (type is null) return null;
+        var polygons = new List<BmdNode>();
+        if (e.C("ECRectangle") is { } rect)
+        {
+            float hw = F(rect, "width", 0) * 0.5f, hh = F(rect, "height", 0) * 0.5f;
+            polygons.Add(Polygon(Local(e, [(-hw, -hh), (-hw, hh), (hw, hh), (hw, -hh)])));
+        }
+        foreach (var b in e.Children.Where(c => c.Has("ECSiegeAIBoundary") && c.C("ECPolyline") is not null).OrderBy(c => c.Id))
+            polygons.Add(Polygon(Polyline(b, b.C("ECPolyline")!)));
+        return Node("HINT_POLYLINE", "polylines_list", 2, type, polygons, Tags(e));
+
+        string? Skip(string t)
+        {
+            Notes.Add($"siege AI node {e.Id:x} type {t}: no AIH hint type, not exported");
+            return null;
+        }
+        static BmdNode Polygon(List<(float X, float Z)> pts) =>
+            Node("polygon", "polygons", pts.Select(p => Node("point", "points", p.X, p.Z)).ToList());
+    }
+
     // ---- capture locations ----
 
     private void CaptureLocations(BmdNode root, List<SceneEntity> exported, BmdNode prefabs, Dictionary<ulong, int> prefabIndex)
@@ -254,8 +306,9 @@ public sealed class BattleBmdBuilder(BmdMetaCatalog catalog)
                         if (!links.TryGetValue(cl, out var l)) links[cl] = l = [];
                         l.Add((pi, (string?)o.Attribute("name") ?? ""));
                     }
-        // one CAPTURE_LOCATION_LIST per tag set. BOB's order varies between runs (run1 = run2 != run3 on df46bdbc): a
-        // pointer-keyed map; descending first entity id reproduces run1.
+        // one CAPTURE_LOCATION_LIST per tag set. BOB's list order is random (a pointer-keyed map): three lists gave
+        // 231, 231, 321 on df46bdbc and 312, 213, 132 on 5a2e0002 (by cp level), so no order matches every run.
+        // Descending first entity id matches 2 of those 6 runs (ascending 1); compare bmd_data modulo this order.
         var groups = exported.Where(e => e.Has("ECCaptureLocation")).GroupBy(e => e.Tags).OrderByDescending(g => g.Min(e => e.Id));
         var set = List(root, "CAPTURE_LOCATION_SET", "CAPTURE_LOCATION_SET");
         foreach (var g in groups)
@@ -362,16 +415,14 @@ public sealed class BattleBmdBuilder(BmdMetaCatalog catalog)
     }
 
     /// <summary>An ECPolyline's points in world x/z: the entity's matrix applied to (x, 0, y), plus its position (float).</summary>
-    private static List<(float X, float Z)> Polyline(SceneEntity e, XElement poly)
+    private static List<(float X, float Z)> Polyline(SceneEntity e, XElement poly) =>
+        Local(e, (poly.Element("polyline")?.Elements("point") ?? []).Select(pt => (F(pt, "x", 0), F(pt, "y", 0))));
+
+    /// <summary>Local 2D points (x, y = local z) to world x/z through the entity's transform.</summary>
+    private static List<(float X, float Z)> Local(SceneEntity e, IEnumerable<(float X, float Y)> points)
     {
         var (m, px, _, pz) = World(e);
-        var result = new List<(float, float)>();
-        foreach (var pt in poly.Element("polyline")?.Elements("point") ?? [])
-        {
-            float x = F(pt, "x", 0), y = F(pt, "y", 0);
-            result.Add((px + ((float)m[0] * x + (float)m[2] * y), pz + ((float)m[6] * x + (float)m[8] * y)));
-        }
-        return result;
+        return points.Select(p => (px + ((float)m[0] * p.X + (float)m[2] * p.Y), pz + ((float)m[6] * p.X + (float)m[8] * p.Y))).ToList();
     }
 
     private static BmdNode Colour(string tag, XElement? rs, string attr)

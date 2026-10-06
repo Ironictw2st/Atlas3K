@@ -10,7 +10,8 @@ public class BattleBmdTests
 
     public static IEnumerable<string> CorpusBmds() =>
         Directory.Exists(Corpus)
-            ? Directory.EnumerateDirectories(Corpus).SelectMany(d => Directory.EnumerateFiles(Path.Combine(d, "bob_run1", "tile"), "*bmd*.bin"))
+            ? Directory.EnumerateDirectories(Corpus).Where(d => Directory.Exists(Path.Combine(d, "bob_run1", "tile")))
+                .SelectMany(d => Directory.EnumerateFiles(Path.Combine(d, "bob_run1", "tile"), "*bmd*.bin"))
             : [];
 
     [Fact]
@@ -46,7 +47,7 @@ public class BattleNogoTests
     public void NogoOutlinesMatchBob()
     {
         if (!Directory.Exists(BattleBmdTests.Corpus)) return;   // data not available
-        foreach (var dir in Directory.EnumerateDirectories(BattleBmdTests.Corpus))
+        foreach (var dir in Directory.EnumerateDirectories(BattleBmdTests.Corpus).Where(d => Directory.Exists(Path.Combine(d, "src", "tile"))))
         {
             var terry = Directory.EnumerateFiles(Path.Combine(dir, "src", "tile"), "*.terry").SingleOrDefault();
             var bob = Path.Combine(dir, "bob_run1", "tile", "bmd_nogo_data.bin");

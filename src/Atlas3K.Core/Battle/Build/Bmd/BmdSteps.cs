@@ -25,7 +25,8 @@ public static class TileProject
 }
 
 /// <summary>bmd_data.bin/.xml (BOB TerryTile "Process Terry tile (excluding heightmap)"): the layers' exported
-/// entities, plus references to the grass and tree lists the vegetation steps wrote.</summary>
+/// entities, the forest ambush hints (<see cref="ForestHints"/>), plus references to the grass and tree lists the
+/// vegetation steps wrote.</summary>
 [BattleStepOrder(340)]
 public sealed class BattleBmdDataStep : IBattleBuildStep
 {
@@ -40,7 +41,8 @@ public sealed class BattleBmdDataStep : IBattleBuildStep
         List<(string, string)> Lists(string ext) => climates.Where(c => File.Exists(Path.Combine(ctx.OutTileDir, $"{c}.{ext}")))
             .Select(c => (c, $"{folder}{c}.{ext}")).ToList();
         var builder = new BattleBmdBuilder(catalog);
-        var root = builder.BuildData(scene, Lists("grass_list.bin"), Lists("tree_list.bin"));
+        var forest = ForestHints.Compute(ctx);
+        var root = builder.BuildData(scene, Lists("grass_list.bin"), Lists("tree_list.bin"), forest);
         TileProject.WriteBmd(Path.Combine(ctx.OutTileDir, "bmd_data.bin"), root);
         foreach (var n in builder.Notes) log($"bmd_data: {n}");
     }

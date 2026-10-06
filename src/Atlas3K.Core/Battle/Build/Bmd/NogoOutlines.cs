@@ -33,6 +33,20 @@ public static class NogoOutlines
         return outlines;
     }
 
+    /// <summary>Outlines of a bool field (BOOL_FIELD_OUTLINE_DATA_PROVIDER, as ai_hint_outlines_from_forest_blendmap):
+    /// steps 3–5 above on the field as is (no slope test or blur).</summary>
+    public static List<List<(float X, float Y)>> FromField(bool[] cells, int w, int h, float cell, float offsetX, float offsetY)
+    {
+        var data = new int[w * h];
+        for (var i = 0; i < data.Length; i++) data[i] = cells[i] ? 1 : 0;
+        var raw = new Calculator(data, w, h).Compute(6);
+        var outlines = raw.Select(e => e.Take(e.Count - 1).Select(p => ((float)p.X * cell + offsetX, (float)p.Y * cell + offsetY)).ToList()).ToList();
+        Simplify(outlines, 3, 0.99f, 10, true, true);
+        Simplify(outlines, 1, 3.0f, 4, true, false);
+        Simplify(outlines, 1, 1.0f, 4, true, true);
+        return outlines;
+    }
+
     public static bool[] NogoCells(float[] H, int w, int h, float cell, float slopeDegrees)
     {
         var thr = (float)Math.Sin((90f - slopeDegrees) * 0.0174532924f);

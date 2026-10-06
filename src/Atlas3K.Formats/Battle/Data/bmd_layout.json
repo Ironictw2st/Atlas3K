@@ -465,7 +465,36 @@
   [
    "l",
    "HINT_POLYLINES",
-   "HINT_POLYLINE"
+   "HINT_POLYLINE",
+   "polylines_list"
+  ]
+ ],
+ "polylines_list>HINT_POLYLINE": [
+  [
+   "a",
+   "serialise_version",
+   "ver"
+  ],
+  [
+   "a",
+   "type",
+   "str"
+  ],
+  [
+   "l",
+   "polygons",
+   "polygon"
+  ],
+  [
+   "e",
+   "meta_tags"
+  ]
+ ],
+ "polygons>polygon": [
+  [
+   "l",
+   "points",
+   "point"
   ]
  ],
  "LIGHT_PROBE_LIST": [

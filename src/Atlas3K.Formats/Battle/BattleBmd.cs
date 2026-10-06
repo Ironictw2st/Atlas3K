@@ -46,7 +46,7 @@ public sealed record BmdAttr(string Name, string Type, object Value);
 /// Layout-driven codec for battle BMD files. The layout table (Battle/Data/bmd_layout.json, shared with
 /// research/battle_build/bmd_codec.py) lists each element's binary fields in file order:
 /// ["a", name, type] attribute, ["e", tag] child element, ["l", container, item] container element holding a u32 count
-/// and its items, ["L", item] u32 count and items directly under the element, ["t", type] text. Types: u8, bool, u16,
+/// and its items (optional 4th entry: the parent name its items are looked up under), ["L", item] u32 count and items directly under the element, ["t", type] text. Types: u8, bool, u16,
 /// i16, u32, i32, u64, i64, f32, f64, str (u16 length + UTF-8), ver (u16 serialise_version). A layout is looked up as
 /// "parent&gt;tag", then "tag". Bin -> tree -> bin and bin -> tree -> xml are identical to BOB's files on the corpus
 /// (all bmd files of the four kit battle maps, 2026-10-06).
@@ -75,6 +75,10 @@ public static class BattleBmd
         throw new KeyError($"no bmd layout for {parent}>{tag}");
     }
 
+    /// <summary>The parent name an "l" op's items are looked up under: the op's optional 4th entry (a context such as
+    /// "polylines_list", whose HINT_POLYLINE items differ from those of "polylines"), else the container tag.</summary>
+    private static string ItemParent(string[] op) => op.Length > 3 ? op[3] : op[1];
+
     public sealed class KeyError(string message) : Exception(message);
 
     // ---- read ----
@@ -101,7 +105,7 @@ public static class BattleBmd
                 {
                     var c = new BmdNode(op[1]);
                     var count = (uint)ReadScalar(d, ref pos, "u32");
-                    for (var i = 0; i < count; i++) c.Children.Add(ReadNode(d, ref pos, op[2], op[1]));
+                    for (var i = 0; i < count; i++) c.Children.Add(ReadNode(d, ref pos, op[2], ItemParent(op)));
                     n.Children.Add(c);
                     break;
                 }
@@ -182,7 +186,7 @@ public static class BattleBmd
                     var c = n.Children[ci++];
                     if (c.Tag != op[1]) throw new InvalidDataException($"{n.Tag}: child {c.Tag} where list {op[1]} is expected");
                     w.Write((uint)c.Children.Count);
-                    foreach (var item in c.Children) WriteNode(w, item, op[1]);
+                    foreach (var item in c.Children) WriteNode(w, item, ItemParent(op));
                     break;
                 }
                 case "L":

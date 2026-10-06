@@ -79,10 +79,10 @@ def decode(r, tag, parent, ops=None):
                     ops = LAYOUT[key_tag]; i = [j for j, o in enumerate(ops) if o[0] == "a" and o[1] == "serialise_version"][0]
         elif kind == "e":                    # ["e", tag]
             n.children.append(decode(r, op[1], tag))
-        elif kind == "l":                    # ["l", container_tag, item_tag]  -> <container> with u32 count items
+        elif kind == "l":                    # ["l", container_tag, item_tag(, item lookup parent)] -> <container> with u32 count items
             c = Node(op[1]); cnt = r.scalar("u32")
             for _ in range(cnt):
-                c.children.append(decode(r, op[2], op[1]))
+                c.children.append(decode(r, op[2], op[3] if len(op) > 3 else op[1]))
             n.children.append(c)
         elif kind == "L":                    # ["L", item_tag] count + items directly under this element
             cnt = r.scalar("u32")
@@ -165,7 +165,7 @@ def encode(n, parent, out, ops=None):
         elif kind == "l":
             c = n.children[ci]; ci += 1
             out += struct.pack("<I", len(c.children))
-            for x in c.children: encode(x, op[1], out)
+            for x in c.children: encode(x, op[3] if len(op) > 3 else op[1], out)
         elif kind == "L":
             items = [c for c in n.children[ci:] if c.tag == op[1]]
             out += struct.pack("<I", len(items))
