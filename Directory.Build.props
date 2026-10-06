@@ -12,8 +12,14 @@
   </PropertyGroup>
 
   <Target Name="Atlas3KSourceRevision" BeforeTargets="GetAssemblyVersion;AddSourceRevisionToInformationalVersion" Condition="'$(SourceRevisionId)' == ''">
-    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" WorkingDirectory="$(MSBuildThisFileDirectory)">
-      <Output TaskParameter="ConsoleOutput" PropertyName="SourceRevisionId" />
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true"
+          StandardOutputImportance="low" StandardErrorImportance="low" WorkingDirectory="$(MSBuildThisFileDirectory)">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_Atlas3KRevision" />
+      <Output TaskParameter="ExitCode" PropertyName="_Atlas3KGitExit" />
     </Exec>
+    <!-- only a real commit id: without git on PATH the output is an error message -->
+    <PropertyGroup Condition="'$(_Atlas3KGitExit)' == '0'">
+      <SourceRevisionId>$(_Atlas3KRevision)</SourceRevisionId>
+    </PropertyGroup>
   </Target>
 </Project>

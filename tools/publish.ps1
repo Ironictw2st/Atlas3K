@@ -4,6 +4,10 @@
 param([switch]$NoZip)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
+# the version carries the commit (Directory.Build.props runs git); Git for Windows is often not on PowerShell's PATH
+if (-not (Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path "$env:ProgramFiles\Git\cmd\git.exe")) {
+    $env:PATH = "$env:ProgramFiles\Git\cmd;$env:PATH"
+}
 [xml]$props = Get-Content (Join-Path $root "Directory.Build.props")
 $group = $props.Project.PropertyGroup | Select-Object -First 1
 $version = "$($group.VersionPrefix)-$($group.VersionSuffix)"
