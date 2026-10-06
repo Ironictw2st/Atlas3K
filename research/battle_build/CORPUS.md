@@ -26,6 +26,11 @@ Exit code 0 means everything matched: identical, masked-identical, or identical 
 | `restore.py <kit> <id> [snapshot]` | Puts the kit's working_data outputs back to a snapshot (default `existing`) |
 | `make_masks.py` | Diffs every `bob_run*` of each project. Uninitialised words go to `masks.json`; files whose record order varies between runs go to `_order_variants` |
 | `make_rich_project.py <corpus project> <kit> <guid> [--remove]` | Builds the "rich" project as a COPY under a new GUID: a vista map folder plus capture-point and deployment prefabs, both as references and inlined |
+| `make_round2_project.py <spec> <kit> install\|remove [--atlas exe]` | Round-2 projects (specs `r2_tmp_forest`, `r2_cld_siege`, `r2_multi_climate` in the script): COPIES of corpus sources with a painted blend map (procedural trees), another vista / climate_mask, hand-placed ECVegetation, extra rivers, wall / gate / siege-AI prefabs. The Terry-written inputs come from `build-battle --only terry_save` |
+
+Round 2 (procedural trees, cold, siege, several climates, several rivers) and why round 1 placed no procedural objects
+are in the corpus README ("Round 2"); the native-vs-BOB results per file are in `docs/native_battle_build.md`
+("Round 2 corpus").
 
 Typical sequence for a new project:
 1. Take the BOB lock: `mkdir Z:/Claude/Headless/bob_lock` plus an owner file.

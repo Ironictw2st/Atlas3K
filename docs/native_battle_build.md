@@ -15,7 +15,8 @@ Steps are `IBattleBuildStep` classes found by reflection and ordered by `[Battle
 | 200–299 | meshes (`Build/Meshes`) |
 | 300–399 | bmd and vegetation (`Build/Bmd`) |
 
-Ground truth is the parity corpus (5 kit battle projects, 3–5 BOB runs each; `bob_run1` is the reference). See
+Ground truth is the parity corpus (8 kit battle projects, 3–5 BOB runs each; `bob_run1` is the reference; the
+status table below covers the 5 round-1 projects, "Round 2 corpus" the other 3). See
 `Z:\Claude\BattleMaps\out\battle_parity\README.md`. Research scripts are in `research/battle_map_files/`
 (map family) and `research/battle_build/` (corpus, meshes, bmd).
 
@@ -49,6 +50,36 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | `tile/bmd_nogo_data.bin` / `.xml` | bmd_nogo | identical 5/5 (4 terrain outlines on dfe064a6/df46bdbc, none on the flat tiles) |
 | `tile/<climate>.grass_list.bin` | – | **not started** (QTU::generate_grass decompiled: xoroshiro128+ jittered grid per terrain texel; see bmd notes) |
 | `tile/<climate>.tree_list.bin` / `.xml` | – | **not started**; no corpus tile places trees |
+
+## Round 2 corpus
+
+Three more projects (2026-10-06, corpus README "Round 2"), made to exercise what round 1 left empty:
+- `5a2e…0001` r2_tmp_forest: temperate, painted forest, 13,392 procedural objects, 2 rivers.
+- `5a2e…0002` r2_cld_siege: cold vista, walls / gate / siege AI, capture points, deployment zones.
+- `5a2e…0003` r2_multi_climate: subtropical vista, climate_mask subtropical,temperate,arid,tropical, 3 rivers.
+
+Round 1 had no procedural objects because its blend maps paint no texture that has `*_tree_parameters.xml` groups
+for its climate, not because of headless mode.
+
+Native = `build-battle --corpus … --run bob_run1` at f8ac7b5, compared with `battle-parity` (masks applied). These are
+the next porting round's to-do list:
+
+| File | r2_tmp_forest | r2_cld_siege | r2_multi_climate | Note |
+|---|---|---|---|---|
+| `map/climate_map.cm`, `icon.tga`, `map_info.xml`, `lf_*.dds`, `lf_sea_height_map.*` | identical | identical | identical | |
+| `map/lf_height_map.compressed_map` | identical | identical | **differs** (8 bytes from 0x1E) | subtropical_1 vista |
+| `map/lf_normal.dds` | identical | **differs** (19 bytes) | identical | cold_1 vista |
+| `map/tile_list.bin` | identical | **differs** (23,075 vs 23,200 bytes) | **differs** (31,922 vs 31,656) | other vistas; BOB logs a Flow failure on a river_mouth tile for subtropical_1 |
+| `tile_db/*` | identical | identical | identical | |
+| `tile/blend0.dds` | **differs** (13,468 bytes) | **differs** | **differs** | partial blend weights (round 1 had only 0/255 pixels); blend1 identical |
+| `tile/ground_types.dds` | **differs** (7,101 px) | **differs** (9,291) | **differs** (11,382) | same cause suspected: ties / partial weights |
+| `tile/hf_*`, `normal.dds`, `shadow_mesh`, `debug_protection_map.png`, `bmd_nogo_data.*` | identical | identical | identical | |
+| `tile/mesh`, `outfield_mesh` | masked-identical | masked-identical | masked-identical | |
+| `tile/*river_mesh.wsmodel` | identical | identical | identical | |
+| `tile/*river_mesh.wsmodel.rigid_model_v2` | **differs** from 0xC1 | masked-identical | **differs** from 0xC1 | several rivers per tile (2 and 3); one river matches |
+| `tile/bmd_data.*` | **differs** (4,369 vs 4,051) | **differs** (8,118 vs 6,815; capture order varies in BOB too) | **differs** (5,812 vs 4,237) | missing grass/tree list references (no native grass/tree step) plus siege/wall/AI content to check |
+| `tile/<climate>_procedural_bmd_data.*` | **differs** (44,670 vs 308) | **differs** | **differs** ×4 climates | native writes the empty bmd; procedural placement not ported |
+| `tile/<climate>.grass_list.bin`, `.tree_list.bin/.xml` | missing | missing | missing ×4 | not ported |
 
 ## Map family: the rules
 
