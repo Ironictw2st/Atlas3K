@@ -17,6 +17,7 @@ public sealed class BattleLfStep : IBattleBuildStep
 
     public void Run(BattleBuildContext ctx, Action<string> log)
     {
+        if (!ctx.HasSourceMap) { log($"{Name}: no raw map folder (tile-only project), skipped as BOB does"); return; }
         foreach (var (src, name) in new[] { ("lf_heights.tif", "lf_height_map"), ("lf_sea_heights.tif", "lf_sea_height_map") })
         {
             var source = TiffMap.ReadGray16(Path.Combine(ctx.SourceMapDir, src));
@@ -70,6 +71,7 @@ public sealed class BattleClimateStep : IBattleBuildStep
 
     public void Run(BattleBuildContext ctx, Action<string> log)
     {
+        if (!ctx.HasSourceMap) { log($"{Name}: no raw map folder (tile-only project), skipped as BOB does"); return; }
         var settings = ctx.ReadVfs(SettingsPath) ?? throw new FileNotFoundException($"{SettingsPath} not in the kit or the packs");
         var climates = BattleTileDatabase.ReadClimates(settings);
         var rgba = PngMap.Read(Path.Combine(ctx.SourceMapDir, "climate_map.png"));
@@ -155,6 +157,7 @@ public sealed class BattleLfNormalStep : IBattleBuildStep
 
     public void Run(BattleBuildContext ctx, Action<string> log)
     {
+        if (!ctx.HasSourceMap) { log($"{Name}: no raw map folder (tile-only project), skipped as BOB does"); return; }
         var src = TiffMap.ReadGray16(Path.Combine(ctx.SourceMapDir, "lf_heights.tif"));
         var tileMap = PngMap.Read(Path.Combine(ctx.SourceMapDir, "tile_map.png"));
         int w = src.Width, h = src.Height;

@@ -29,6 +29,9 @@ public sealed class BattleBuildContext
 
     string Tile => TileId.Length > 0 ? TileId : MapId;
 
+    /// <summary>The raw map folder exists: BOB's Terrain actions (Tilemap, Low frequency data) only run for maps that have one.</summary>
+    public bool HasSourceMap => Directory.Exists(SourceMapDir);
+
     /// <summary>The tile project's folder name / database name: <see cref="TileId"/>, else the map id.</summary>
     public string TileFolder => Tile;
 

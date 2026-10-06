@@ -19,6 +19,7 @@ public sealed class BattleTileListStep : IBattleBuildStep
 
     public void Run(BattleBuildContext ctx, Action<string> log)
     {
+        if (!ctx.HasSourceMap) { log($"{Name}: no raw map folder (tile-only project), skipped as BOB does"); return; }
         var db = BattleTileData.LoadDatabase(ctx, out var loose);
         var groupsPath = Path.Combine(Path.GetDirectoryName(ctx.SourceMapDir)!, "tile_placement_groups.xml");
         if (!File.Exists(groupsPath)) groupsPath = Path.Combine(ctx.RawData, "terrain", "battles", "tile_placement_groups.xml");
