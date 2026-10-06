@@ -19,6 +19,8 @@
     <EmbeddedResource Include="Terry\Data\component_schema.json" LogicalName="Atlas3K.component_schema.json" />
     <!-- Copy of assembly_kit/working_data/Terry/entity_configuration.xml (Terry's entity schema). -->
     <EmbeddedResource Include="Terry\Data\entity_configuration.xml" LogicalName="Atlas3K.entity_configuration.xml" />
+    <!-- Battle bmd field layout (BattleBmd; shared with research/battle_build/bmd_codec.py). -->
+    <EmbeddedResource Include="Battle\Data\bmd_layout.json" LogicalName="Atlas3K.bmd_layout.json" />
   </ItemGroup>
 
 </Project>
