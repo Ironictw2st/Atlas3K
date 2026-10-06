@@ -138,3 +138,48 @@ public sealed class BattleIconStep : IBattleBuildStep
         File.WriteAllBytes(path, icon);
     }
 }
+
+/// <summary>
+/// lf_normal.dds (bob_terrain FUN_18000e4d0 + FUN_18003ba70): the 3×3 Sobel gradient of the lf height field
+/// (h = s · (1/65535), edges clamped) scaled by the lf height scale (500), normal = normalise(gx, gy, z) with
+/// z = (tile size · unit_scale) / (lf pixels per tile-map cell) = 32 for a battle map; pixel (B, G, R, A) =
+/// (0, (ny + 1)·127.5, 255, (nx + 1)·127.5) truncated; DXT5 with BOB's mip chain down to 2×2 through the kit's AMD
+/// compressor (<see cref="AmdCompress"/>).
+/// </summary>
+[BattleStepOrder(125)]
+public sealed class BattleLfNormalStep : IBattleBuildStep
+{
+    public string Name => "lf_normal";
+    public const float LfHeightScale = 500f;
+    public const float UnitScale = 2f, TerrainTileSize = 128f;
+
+    public void Run(BattleBuildContext ctx, Action<string> log)
+    {
+        var src = TiffMap.ReadGray16(Path.Combine(ctx.SourceMapDir, "lf_heights.tif"));
+        var tileMap = PngMap.Read(Path.Combine(ctx.SourceMapDir, "tile_map.png"));
+        int w = src.Width, h = src.Height;
+        const float k = 1f / 65535f;
+        var f = new float[w * h];
+        for (var i = 0; i < f.Length; i++) f[i] = src.Data[i] * k;
+        var param4 = (float)(w / tileMap.Width) / (UnitScale * TerrainTileSize);
+        var z = 1f / param4;
+        float H(int x, int y) => f[Math.Clamp(y, 0, h - 1) * w + Math.Clamp(x, 0, w - 1)];
+        var bgra = new byte[w * h * 4];
+        for (var y = 0; y < h; y++)
+            for (var x = 0; x < w; x++)
+            {
+                var gx = H(x - 1, y - 1) - H(x + 1, y - 1) + 2f * (H(x - 1, y) - H(x + 1, y)) + (H(x - 1, y + 1) - H(x + 1, y + 1));
+                var gy = H(x - 1, y - 1) - H(x - 1, y + 1) + 2f * (H(x, y - 1) - H(x, y + 1)) + (H(x + 1, y - 1) - H(x + 1, y + 1));
+                gx *= LfHeightScale; gy *= LfHeightScale;
+                var inv = 1f / MathF.Sqrt(gx * gx + gy * gy + z * z);
+                float nx = gx * inv, ny = gy * inv;
+                var o = (y * w + x) * 4;
+                bgra[o] = 0;
+                bgra[o + 1] = (byte)(int)((ny + 1f) * 127.5f);
+                bgra[o + 2] = 255;
+                bgra[o + 3] = (byte)(int)((nx + 1f) * 127.5f);
+            }
+        AmdCompress.Load(ctx.KitRoot);
+        File.WriteAllBytes(Path.Combine(ctx.OutMapDir, "lf_normal.dds"), AmdCompress.WriteDds(bgra, w, h, AmdCompress.FormatDxt5, minMipShift: 1));
+    }
+}

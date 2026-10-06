@@ -31,6 +31,9 @@ done = {"exit": False}
 def on_msg(msg, data):
     if msg["type"] == "send":
         p = msg["payload"]; counts[p["kind"]] = counts.get(p["kind"], 0) + 1
+        if data is not None:                       # binary payloads -> <out>_bin/<n>_<kind>.bin
+            d = OUT + "_bin"; os.makedirs(d, exist_ok=True)
+            f = os.path.join(d, f"{sum(counts.values()):05d}_{p['kind']}.bin"); open(f, "wb").write(data); p = {**p, "file": f}
         log.write(json.dumps(p) + "\n")
     else:
         print("frida:", msg, flush=True)
