@@ -30,7 +30,7 @@ public class BattleMapFilesTests
                 SourceTileDir = Path.Combine(project, "src", "tile"), SourceMapDir = Path.Combine(project, "src", "map"),
                 TerryTileDbDir = Path.Combine(project, "existing", "tile_db"),
             };
-            var steps = new List<string> { "tile_db", "map_info", "icon", "blend", "tile_normal", "ground_types" };
+            var steps = new List<string> { "tile_db", "map_info", "icon", "blend", "tile_normal", "ground_types", "debug_protection" };
             if (hasMap) steps.AddRange(["lf", "lf_normal", "climate", "tile_list"]);
             steps.AddRange(["hf_height", "tile_meshes", "river_meshes", "hf_water"]);
             var failed = BattleMapBuild.Run(ctx, _ => { }, steps);
@@ -48,6 +48,7 @@ public class BattleMapFilesTests
                                           "lf_sea_height_map.dds", "lf_normal.dds", "climate_map.cm", "tile_list.bin" })
                     pairs.Add((Path.Combine(ctx.OutMapDir, f), Path.Combine(bob, "map", f)));
             pairs.Add((Path.Combine(ctx.OutTileDir, "ground_types.dds"), Path.Combine(bob, "tile", "ground_types.dds")));
+            pairs.Add((Path.Combine(ctx.OutTileDir, "debug_protection_map.png"), Path.Combine(bob, "tile", "debug_protection_map.png")));
             foreach (var f in new[] { "blend0.dds", "blend1.dds", "normal.dds" })
                 Assert.Equal(File.Exists(Path.Combine(bob, "tile", f)), File.Exists(Path.Combine(ctx.OutTileDir, f)));
             foreach (var f in new[] { "blend0.dds", "blend1.dds", "normal.dds" })

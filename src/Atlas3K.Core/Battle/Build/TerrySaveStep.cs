@@ -64,7 +64,11 @@ public sealed class TerrySaveStep : IBattleBuildStep
 /// </summary>
 public static class QtPng
 {
-    public static byte[] EncodeRgb(Raster<uint> rgba)
+    public static byte[] EncodeRgb(Raster<uint> rgba) => EncodeRgb(rgba, stored: true);
+
+    /// <param name="stored">true: zlib level 0 (Terry's saved maps); false: zlib level 6, default strategy (classic zlib,
+    /// <see cref="ZlibDeflate"/>), as BOB's debug PNGs.</param>
+    public static byte[] EncodeRgb(Raster<uint> rgba, bool stored)
     {
         int w = rgba.Width, h = rgba.Height, stride = w * 3;
         var raw = new List<byte>(h * (stride + 1));
@@ -89,10 +93,12 @@ public static class QtPng
             raw.AddRange(bestRow!);
             (prev, cur) = (cur, prev);
         }
-        var z = new List<byte> { 0x68, 0x05 };
         var all = raw.ToArray();
+        var z = new List<byte>();
+        if (!stored) z.AddRange(ZlibDeflate.Compress(all, level: 6));
+        else z.AddRange([0x68, 0x05]);
         const int block = 16384;
-        for (var o = 0; o < all.Length || o == 0; o += block)
+        for (var o = 0; stored && (o < all.Length || o == 0); o += block)
         {
             var n = Math.Min(block, all.Length - o);
             var final = o + n >= all.Length;
@@ -101,10 +107,13 @@ public static class QtPng
             z.AddRange(all.AsSpan(o, n).ToArray());
             if (final) break;
         }
-        uint a = 1, b2 = 0;
-        foreach (var c in all) { a = (a + c) % 65521; b2 = (b2 + a) % 65521; }
-        var adler = b2 << 16 | a;
-        z.Add((byte)(adler >> 24)); z.Add((byte)(adler >> 16)); z.Add((byte)(adler >> 8)); z.Add((byte)adler);
+        if (stored)
+        {
+            uint a = 1, b2 = 0;
+            foreach (var c in all) { a = (a + c) % 65521; b2 = (b2 + a) % 65521; }
+            var adler = b2 << 16 | a;
+            z.Add((byte)(adler >> 24)); z.Add((byte)(adler >> 16)); z.Add((byte)(adler >> 8)); z.Add((byte)adler);
+        }
 
         using var ms = new MemoryStream();
         ms.Write([0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A]);

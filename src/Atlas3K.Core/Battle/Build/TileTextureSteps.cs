@@ -173,3 +173,24 @@ public sealed class BattleGroundTypesStep : IBattleBuildStep
     }
 
 }
+
+/// <summary>
+/// debug_protection_map.png (TerryTile "excluding heightmap"): the tile's protection map (the mask buildings put on the
+/// mesh's vertex lattice) as an RGB PNG of tiles × density pixels (1024² for 8×8), written by Qt/libpng with zlib level
+/// 6 (<see cref="QtPng"/>). Only the empty map is reproduced: building protection is not ported (every corpus
+/// project's map is empty, the same 3,150-byte file).
+/// </summary>
+[BattleStepOrder(185)]
+public sealed class BattleDebugProtectionStep : IBattleBuildStep
+{
+    public string Name => "debug_protection";
+
+    public void Run(BattleBuildContext ctx, Action<string> log)
+    {
+        var project = TerryTileProject.Load(ctx.TerryFile);
+        int w = project.TilesWide * project.TriangleDensity, h = project.TilesHigh * project.TriangleDensity;
+        var black = new Atlas3K.Formats.Maps.Raster<uint>(w, h);
+        Array.Fill(black.Data, 0xFF000000u);
+        File.WriteAllBytes(Path.Combine(ctx.OutTileDir, "debug_protection_map.png"), QtPng.EncodeRgb(black, stored: false));
+    }
+}

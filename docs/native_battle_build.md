@@ -38,7 +38,7 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | `tile/blend0.dds`, `blend1.dds` | blend | identical 2/2 (dfe064a6, df46bdbc), correctly absent on the 3 unpainted projects |
 | `tile/normal.dds` | tile_normal | identical 2/2, correctly absent on the other 3 |
 | `tile/ground_types.dds` | ground_types | identical 5/5 |
-| `tile/debug_protection_map.png` | – | **not started** |
+| `tile/debug_protection_map.png` | debug_protection | identical 5/5 (all corpus maps are empty; building protection not ported) |
 | Terry-save inputs → `<out>/terry_save/` | terry_save | raw map folder (tile_map.png, lf tifs, climate_map.png, explicit_tiles.txt) identical on 224ad6d5 (the only Terry-made map folder; df46bdbc's was scripted); rules.bob identical; Terry's tile database entry identical on 0a26b6e0, dfe064a6 differs only in the uninitialised `scalable` byte |
 | `tile/shadow_mesh.rigid_model_v2` | tile_meshes | identical 5/5 |
 | `tile/mesh.rigid_model_v2`, `outfield_mesh.rigid_model_v2` | tile_meshes | identical or masked-identical (LOD u32 0xA4..0xA7) 5/5 |
@@ -77,7 +77,7 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 ### Open in the map family
 
 - **Water planes** (WATER_PLANE_MESH) in hf_water_map, and `hf_height_map_mesh_delta.compressed_map` (written with HEIGHT_OBJECTs): no corpus project has them.
-- **debug_protection_map.png:** not started.
+- **Protection map from buildings** (debug_protection_map.png content, and the mesh's protection flags): every corpus map is empty, so only the empty map is reproduced (Qt PNG, classic zlib level 6).
 
 ## Meshes (worker B, 2026-10-06)
 
