@@ -9,13 +9,35 @@ using Atlas3K.Core.Battle.Build;
 /// </summary>
 static class BattleBuildCommands
 {
-    public static readonly HashSet<string> Names = ["build-battle", "battle-steps"];
+    public static readonly HashSet<string> Names = ["build-battle", "battle-steps", "battle-db"];
 
     public static int Run(ProjectPaths paths, string command, string[] a)
     {
         if (command == "battle-steps")
         {
             foreach (var s in BattleMapBuild.Steps()) Console.WriteLine(s.Name);
+            return 0;
+        }
+        if (command == "battle-db")
+        {
+            // battle-db <kit root> [map id]: the battle tile database and placement groups as the build sees them
+            var c = new BattleBuildContext(a[0], a.Length > 1 ? a[1] : "_", Path.Combine("output", "battle_native", "_db"));
+            var db = BattleTileData.LoadDatabase(c);
+            Console.WriteLine($"{db.Tiles.Count} tiles, {db.TileSets.Count} sets, {db.Climates.Count} climates, {db.Errors.Count} parse errors");
+            foreach (var e in db.Errors.Take(10)) Console.WriteLine("  error " + e);
+            var multi = db.Tiles.Where(t => t.Variations.Count > 1).ToList();
+            Console.WriteLine($"{multi.Count} tiles with >1 variation");
+            foreach (var t in multi.Take(15)) Console.WriteLine($"  {t.File}: " + string.Join(" | ", t.Variations.Select(v => $"{v.Location} [{v.Climate}] {v.Rgb:x6}")));
+            var groups = BattleTileData.LoadPlacementGroups(Path.Combine(c.RawData, "terrain", "battles", "tile_placement_groups.xml"));
+            var locations = db.Tiles.SelectMany(t => t.Variations.Select((v, i) => (v.Location, i))).ToLookup(x => x.Location.TrimEnd('\\'), StringComparer.OrdinalIgnoreCase);
+            Console.WriteLine($"{groups.Count} placement groups");
+            foreach (var g in groups)
+            {
+                var missingSets = g.TileSets.Count(s => db.TileSet(s) is null);
+                var missingVars = g.Variations.Count(v => !locations.Contains(v.TrimEnd('\\')));
+                var nonZero = g.Variations.Count(v => locations[v.TrimEnd('\\')].Any(x => x.i != 0));
+                Console.WriteLine($"  {g.Name} {g.Rgb:x6} link_as='{g.LinkAsSet}' sets {g.TileSets.Count} (missing {missingSets}) variations {g.Variations.Count} (missing {missingVars}, not variation 0: {nonZero})");
+            }
             return 0;
         }
         var pos = a.Where((v, i) => !v.StartsWith("--") && (i == 0 || a[i - 1] is not ("--out" or "--only" or "--tile" or "--corpus" or "--run"))).ToList();

@@ -1,4 +1,3 @@
-using System.Security;
 using System.Xml.Linq;
 using Atlas3K.Core.Exporters;
 using Atlas3K.Formats.Battle;
@@ -89,8 +88,11 @@ public sealed class BattleClimateStep : IBattleBuildStep
     }
 }
 
-/// <summary>map_info.xml from the tile project's &lt;user_created_map&gt; and its environment (QTU::ProjectTileWithVista
-/// data env=...), in BOB's layout (LF line ends, 4-space indent).</summary>
+/// <summary>
+/// map_info.xml, as ACTION_TERRY_TILE::save_user_created_map_data (bob_tile 0x180009b20) writes it: a QDomDocument
+/// saved with indent 4 (LF line ends), from the tile project's &lt;user_created_map&gt; and environment. An empty
+/// display name falls back to the .terry file's base name. Text is escaped as QDom does (&amp; &lt; &gt; only).
+/// </summary>
 [BattleStepOrder(130)]
 public sealed class BattleMapInfoStep : IBattleBuildStep
 {
@@ -101,9 +103,11 @@ public sealed class BattleMapInfoStep : IBattleBuildStep
         var doc = XDocument.Load(ctx.TerryFile);
         var data = doc.Descendants("pc").First(e => (string?)e.Attribute("type") == "QTU::ProjectTileWithVista").Element("data")!;
         var user = data.Element("user_created_map") ?? throw new InvalidDataException("the tile project has no <user_created_map> (not a battle map project)");
-        string A(XElement e, string n) => SecurityElement.Escape((string?)e.Attribute(n) ?? "");
+        string A(XElement e, string n) => Escape((string?)e.Attribute(n) ?? "");
+        var name = A(user, "display_name");
+        if (name.Length == 0) name = Escape(Path.GetFileNameWithoutExtension(ctx.TerryFile).Split('.')[0]);
         var text = "<map_info>\n" +
-                   $"    <display_name>{A(user, "display_name")}</display_name>\n" +
+                   $"    <display_name>{name}</display_name>\n" +
                    $"    <description>{A(user, "description")}</description>\n" +
                    $"    <author>{A(user, "author")}</author>\n" +
                    $"    <team_size_1>{A(user, "max_players_1")}</team_size_1>\n" +
@@ -112,5 +116,24 @@ public sealed class BattleMapInfoStep : IBattleBuildStep
                    $"    <battle_type>{A(user, "battle_type")}</battle_type>\n" +
                    "</map_info>\n";
         File.WriteAllBytes(Path.Combine(ctx.OutMapDir, "map_info.xml"), System.Text.Encoding.UTF8.GetBytes(text));
+    }
+
+    /// <summary>QDom text-node escaping: &amp;, &lt;, &gt; (quotes are only escaped in attributes).</summary>
+    public static string Escape(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+}
+
+/// <summary>icon.tga: BOB keeps an icon already in the map's output folder, else copies the VFS file Terry/icon.tga
+/// (the kit's working_data/Terry/icon.tga, the same 468x150 image for every map) — save_user_created_map_data.</summary>
+[BattleStepOrder(140)]
+public sealed class BattleIconStep : IBattleBuildStep
+{
+    public string Name => "icon";
+
+    public void Run(BattleBuildContext ctx, Action<string> log)
+    {
+        var path = Path.Combine(ctx.OutMapDir, "icon.tga");
+        if (File.Exists(path)) { log("icon: kept the existing icon.tga"); return; }
+        var icon = ctx.ReadVfs("Terry/icon.tga") ?? throw new FileNotFoundException("Terry/icon.tga not in the kit's working_data or the packs");
+        File.WriteAllBytes(path, icon);
     }
 }

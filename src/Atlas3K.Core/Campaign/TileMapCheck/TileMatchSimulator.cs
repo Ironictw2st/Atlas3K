@@ -81,7 +81,22 @@ public sealed class TileMatchSimulator
         public int[] Sets = [];           // tile-set list
         public int[] Tiles = [];          // tiles of the variation list (one entry per variation)
         public string[] VariationKeys = [];
+        public string LinkAs = "";        // PLACEMENT_GROUP link_as_set (xml groups only)
     }
+
+    /// <summary>A placement group loaded from a tile_placement_groups.xml (TILE_PLACEMENT_GROUPS::load_and_merge appends
+    /// these after the database's own groups): colour 0xRRGGBB, link_as_set, tile-set names, variation locations.</summary>
+    public sealed record ExtraGroup(uint Rgb, string LinkAs, IReadOnlyList<string> TileSets, IReadOnlyList<string> Variations);
+
+    /// <summary>An explicit_tiles.txt tile (EDITOR_TILE_MAP::add_explicit_tiles, placed before the passes): variation
+    /// location, top-left of the footprint in image space, rotation code 0x10/0x20/0x40/0x80.</summary>
+    public sealed record ExplicitTile(string Location, int ImageX, int ImageY, int Rotation);
+
+    /// <summary>explicit_tiles.txt tiles (battle maps); none on the campaign path.</summary>
+    public IReadOnlyList<ExplicitTile> ExplicitTiles { get; init; } = [];
+
+    private readonly IReadOnlyList<ExtraGroup> _extraGroups = [];
+    private readonly Func<string, int>? _listingRank;
 
     private readonly CampaignTileDatabase _db;
     private readonly Tile[] _tiles;
@@ -100,9 +115,13 @@ public sealed class TileMatchSimulator
     public CancellationToken Cancel { get; init; }
     private readonly List<string> _messages = [];
 
-    public TileMatchSimulator(CampaignTileDatabase db)
+    /// <param name="listingRank">VFS listing group of a tile file (lower first): BOB lists the packs' tiles, then the
+    /// kit's loose working_data ones (battle _assembly_kit entries). Null = all files in one group.</param>
+    public TileMatchSimulator(CampaignTileDatabase db, IReadOnlyList<ExtraGroup>? extraGroups = null, Func<string, int>? listingRank = null)
     {
         _db = db;
+        _extraGroups = extraGroups ?? [];
+        _listingRank = listingRank;
         _setCount = db.TileSets.Count;
         _setByName = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < _setCount; i++) _setByName.TryAdd(db.TileSets[i].Name, i);
@@ -111,7 +130,8 @@ public sealed class TileMatchSimulator
 
         // TILE_DATABASE: tiles in VFS listing order (lower-case file name, ordinal: '_' before letters), then
         // TILE_DATABASE::sort
-        var tiles = db.Tiles.OrderBy(t => t.File.ToLowerInvariant(), StringComparer.Ordinal).Select(Build).ToArray();
+        var tiles = db.Tiles.OrderBy(t => _listingRank?.Invoke(t.File) ?? 0)
+            .ThenBy(t => t.File.ToLowerInvariant(), StringComparer.Ordinal).Select(Build).ToArray();
         MsvcSort.Sort(tiles, DatabaseLess);
         for (var i = 0; i < tiles.Length; i++) tiles[i].Index = i;
         _tiles = tiles;
@@ -199,8 +219,38 @@ public sealed class TileMatchSimulator
             for (var v = 0; v < t.VariationCount; v++)
                 if (t.Source.Variations[v].Rgb != 0)
                     groups.Add(new Group { Rgb = t.Source.Variations[v].Rgb, Tiles = [t.Index], VariationKeys = [VariationKey(t.Source, v)] });
+        // tile_placement_groups.xml groups, merged after the database's (get_tiles: the listed variations, unique)
+        foreach (var x in _extraGroups)
+        {
+            var tiles = new List<int>();
+            var keys = new List<string>();
+            foreach (var location in x.Variations)
+            {
+                var hit = FindVariation(location);
+                if (hit is not { } h || keys.Contains(VariationKey(_tiles[h.Tile].Source, h.Variation))) continue;
+                tiles.Add(h.Tile);
+                keys.Add(VariationKey(_tiles[h.Tile].Source, h.Variation));
+            }
+            groups.Add(new Group
+            {
+                Rgb = x.Rgb, LinkAs = x.LinkAs,
+                Sets = x.TileSets.Select(SetIndex).Where(s => s >= 0).ToArray(),
+                Tiles = [.. tiles], VariationKeys = [.. keys],
+            });
+        }
         for (var g = 0; g < groups.Count; g++) _groupByRgb.TryAdd(groups[g].Rgb, g);
         return [.. groups];
+    }
+
+    /// <summary>TILE_DATABASE::tile_variation_from_location (case-insensitive, slashes either way, trailing one optional).</summary>
+    private (int Tile, int Variation)? FindVariation(string location)
+    {
+        static string Norm(string s) => s.Replace('/', '\\').TrimEnd('\\').ToLowerInvariant();
+        var want = Norm(location);
+        foreach (var t in _tiles)
+            for (var v = 0; v < t.Source.Variations.Count; v++)
+                if (Norm(t.Source.Variations[v].Location) == want) return (t.Index, v);
+        return null;
     }
 
     /// <summary>The tile sets a group stands for (add_tile_sets_from_group).</summary>
@@ -210,6 +260,7 @@ public sealed class TileMatchSimulator
     private bool MatchesLinkAs(int g, int set)
     {
         var name = _setLinkAs[set];
+        if (_groups[g].LinkAs.Length > 0 && _groups[g].LinkAs == name) return true;
         foreach (var t in _groups[g].Tiles) if (_setLinkAs[_tiles[t].Set] == name) return true;
         foreach (var s in _groups[g].Sets) if (_setLinkAs[s] == name) return true;
         return false;
@@ -328,6 +379,7 @@ public sealed class TileMatchSimulator
         _placed.Clear();
         _rng = Xoroshiro.Seed(0x12344332, 0x12344332);
         ScanTileAreas();
+        AddExplicitTiles();
 
         var perPass = new Dictionary<string, int>();
         var failed = 0;
@@ -347,6 +399,26 @@ public sealed class TileMatchSimulator
             }
         var summary = new TileMatchSummary(perPass.Values.Sum(), failed, perPass, noTile.Count);
         return new TileMatchResult(summary, noTile, [.. _placed]);
+    }
+
+    /// <summary>EDITOR_TILE_MAP::add_explicit_tiles: y' = H − 1 − image y (load_explicit_tiles), the climate at (x, y'),
+    /// then place_tile (TILE_MAP::place_tile + place_also_place_tiles) at (x, y' − h + 1), h = the tile's height
+    /// (width at 0x20/0x80). No link map entry, no draw.</summary>
+    private void AddExplicitTiles()
+    {
+        foreach (var e in ExplicitTiles)
+        {
+            var hit = FindVariation(e.Location);
+            if (hit is not { } h) { _messages.Add($"explicit tile {e.Location}: not in the tile database"); continue; }
+            var t = _tiles[h.Tile];
+            int x = e.ImageX, y = _h - 1 - e.ImageY;
+            if (x < 0 || y < 0 || x > _w || y > _h) { _messages.Add($"explicit tile error: tile {e.Location} ({x}, {y}) is outside the tilemap bounds."); continue; }
+            var climate = x < _w && y < _h ? _climate[P(x, y)] : (byte)0;
+            var rot = e.Rotation switch { 0x20 => 1, 0x40 => 2, 0x80 => 3, _ => 0 };
+            var height = rot is 1 or 3 ? t.W : t.H;
+            if (PlaceTile(t, x, y - height + 1, rot, climate, 1)) PlaceAlsoPlace(t, x, y - height + 1, rot, climate);
+            else _messages.Add($"explicit tile error: tile {e.Location} ({x}, {y}) overlaps another tile.");
+        }
     }
 
     /// <summary>scan_tile_areas: per tile set, the bounds (±128 points) of the points whose group stands for it.</summary>
