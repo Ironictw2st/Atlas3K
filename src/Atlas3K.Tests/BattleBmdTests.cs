@@ -38,3 +38,26 @@ public class BattleBmdTests
         Assert.Equal("-0.000000", BattleBmd.Format("f32", -0f));
     }
 }
+
+/// <summary>Native bmd_nogo_data terrain outlines against BOB's (corpus tiles with steep terrain and flat ones).</summary>
+public class BattleNogoTests
+{
+    [Fact]
+    public void NogoOutlinesMatchBob()
+    {
+        if (!Directory.Exists(BattleBmdTests.Corpus)) return;   // data not available
+        foreach (var dir in Directory.EnumerateDirectories(BattleBmdTests.Corpus))
+        {
+            var terry = Directory.EnumerateFiles(Path.Combine(dir, "src", "tile"), "*.terry").SingleOrDefault();
+            var bob = Path.Combine(dir, "bob_run1", "tile", "bmd_nogo_data.bin");
+            if (terry is null || !File.Exists(bob)) continue;
+            var project = Atlas3K.Core.Battle.Build.Meshes.TerryTileProject.Load(terry);
+            var field = project.HeightField(out var w, out var h);
+            var ours = Atlas3K.Core.Battle.Build.Bmd.NogoOutlines.Compute(field, w, h, project.TilesWide * 256f / (w - 1));
+            var theirs = BattleBmd.Read(File.ReadAllBytes(bob)).Child("TERRAIN_OUTLINES").Children
+                .Select(o => o.Child("OUTLINE").Children.Select(p => ((float)p.Get("x"), (float)p.Get("y"))).ToList()).ToList();
+            Assert.Equal(theirs.Count, ours.Count);
+            for (var k = 0; k < ours.Count; k++) Assert.Equal(theirs[k], ours[k]);
+        }
+    }
+}

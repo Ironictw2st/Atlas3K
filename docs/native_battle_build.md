@@ -41,7 +41,11 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | `tile/mesh.rigid_model_v2`, `outfield_mesh.rigid_model_v2` | tile_meshes | identical or masked-identical (LOD u32 0xA4..0xA7) 5/5 |
 | `tile/river_mesh.wsmodel`, `outfield_river_mesh.wsmodel` | river_meshes | identical 5/5 |
 | `tile/*river_mesh.wsmodel.rigid_model_v2` | river_meshes | identical without a river; masked-identical with one (+ material u32 0x318..0x31B) |
-| `tile/bmd_data.bin` / `.xml` | bmd (worker C) | see the bmd notes (commit 54faea7) |
+| `tile/bmd_data.bin` / `.xml` | bmd_data | identical 4/4 (224ad6d5 has none) when the grass list is present; the df46bdbc capture-location order varies between BOB runs, ours = run1 |
+| `tile/<climate>_procedural_bmd_data.bin` / `.xml` | procedural_bmd | identical 5/5 (BOB headless places 0 procedural positions: empty bmd per climate) |
+| `tile/bmd_nogo_data.bin` / `.xml` | bmd_nogo | identical 5/5 (4 terrain outlines on dfe064a6/df46bdbc, none on the flat tiles) |
+| `tile/<climate>.grass_list.bin` | – | **not started** (QTU::generate_grass decompiled: xoroshiro128+ jittered grid per terrain texel; see bmd notes) |
+| `tile/<climate>.tree_list.bin` / `.xml` | – | **not started**; no corpus tile places trees |
 
 ## Map family: the rules
 
@@ -125,3 +129,13 @@ Battle tile database (`terrain/tiles/battle/_tile_database/_settings.bin`, fast.
 - Masked tiles (`cells/mask`): the per-cell skirt branch of `FUN_1800dcf00` is not ported.
 - Protection map (buildings): passed as none, because every corpus map is empty.
 - Tiles at any density or size other than 128 / 8×8: the code follows the decompile, but the corpus only has 128 / 8×8.
+
+## Bmd family: the rules (worker C)
+
+| File | Rule |
+|---|---|
+| bmd codec | `Atlas3K.Formats.Battle.BattleBmd`: FASTBIN0 v35 BATTLE_MAP_DEFINITION_DATA through the field table `Battle/Data/bmd_layout.json` (shared with `research/battle_build/bmd_codec.py`); bin → tree → bin and → BOB's .xml identical on every corpus bmd. Xml: tabs, single quotes, CRLF, floats as MSVC `%f` (exact value, ties away from zero) cut to 31 characters; non-zero meta_tags get `<!-- flags = type.value; -->` / `<!-- mask = type; -->` comments. |
+| META_TAG_KEYS | bmd_data only (procedural and nogo bmds have none): every `bmd_export_types` value of a battle `bmd_layer_groups` group, DB record order; types in first-use order; checksum = the campaign mix over the values in record order (124565231). A tag's bit is its index over all values. |
+| bmd_data records | Ascending entity id per section; props keyed by sorted model path, then id. Exported = not under an `ECLayerExport export="false"` layer (the Reference layer); tags from tag layers (`ECLayerExportTags`). Transforms through QtuTransform; position copied (no clamping); `ECTerrainClamp active` only sets `BHM_TERRAIN`. Spot-light angles = deg · π · (1/180) in float. Capture location: location = position + flag_position, flag_facing = (cos a, −sin a) with the degree value used as radians, building links from prefab overrides (prefab index, override name); one CAPTURE_LOCATION_LIST per tag set, in an order that varies between BOB runs (ours: descending first id = run1). Deployment: one area per category (DZC_ → DAC_), zones by alliance, orientation = facing + 90, boundaries = world polyline. Playable area = ECRectangle around the position, has_been_set true, valid_* false. Grass/tree list references with the climate's meta tag. META_DATA_KEYS = season codes in first use (ECCampaignProperties; none = all five, catalog ha au wi sp su). |
+| procedural bmd | Empty bmd (no META_TAG_KEYS, default playable area 64..1920) per climate of `climate_mask`. |
+| bmd_nogo_data | `NogoOutlines`: no_go_outlines_from_heights on the Height TIF crop (Frida: the field is exactly `TerryTileProject.HeightField`, cell 2). Slope limit 30° (runtime global, Frida), normal y < sin 60°; 3-tap blur > 0.1; OUTLINE_CALCULATOR marching boundary (skips starts inside earlier outlines, drops boxes ≤ 6 cells); · cell size; three greedy simplification passes with shortcut-crossing checks. Decompiles in `Z:/Claude/BattleMaps/research/bob_re/bmd_nogo`, prototype `research/battle_build/nogo_outlines.py`. |

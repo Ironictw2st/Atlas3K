@@ -45,3 +45,42 @@ public sealed class BattleBmdDataStep : IBattleBuildStep
         foreach (var n in builder.Notes) log($"bmd_data: {n}");
     }
 }
+
+/// <summary>&lt;climate&gt;_procedural_bmd_data.bin/.xml (BOB Vegetation "Procedural Generation"): the procedural
+/// vegetation's scene objects. The procedural ground-type layer is not saved with the project (serializable="0"), so
+/// BOB's headless run places 0 positions and writes the empty bmd for every climate of the mask; that is all the
+/// corpus has. Placed procedural objects (VFX and trees from Terry's live session) are not reproduced.</summary>
+[BattleStepOrder(320)]
+public sealed class BattleProceduralBmdStep : IBattleBuildStep
+{
+    public string Name => "procedural_bmd";
+
+    public void Run(BattleBuildContext ctx, Action<string> log)
+    {
+        foreach (var climate in TileProject.Climates(ctx))
+            TileProject.WriteBmd(Path.Combine(ctx.OutTileDir, $"{climate}_procedural_bmd_data.bin"), BattleBmdBuilder.Empty(null));
+    }
+}
+
+/// <summary>bmd_nogo_data.bin/.xml (BOB TerryTile "Process Terry tile (heightmap)"): an empty bmd whose
+/// TERRAIN_OUTLINES are the no-go outlines of the tile's height field (<see cref="NogoOutlines"/>): the Height TIF
+/// cropped to the vertex grid (<see cref="Meshes.TerryTileProject.HeightField"/>), one cell = tile size / (width − 1)
+/// (2 world units for an 8x8 tile).</summary>
+[BattleStepOrder(330)]
+public sealed class BattleNogoStep : IBattleBuildStep
+{
+    public string Name => "bmd_nogo";
+
+    public void Run(BattleBuildContext ctx, Action<string> log)
+    {
+        var project = Meshes.TerryTileProject.Load(ctx.TerryFile);
+        var field = project.HeightField(out var w, out var h);
+        var cell = project.TilesWide * 256f / (w - 1);
+        var root = BattleBmdBuilder.Empty(null);
+        var outlines = root.Child("TERRAIN_OUTLINES");
+        foreach (var o in NogoOutlines.Compute(field, w, h, cell))
+            outlines.Children.Add(BmdMake.Node("EMPIRE_OUTLINE", "", o.Select(p => BmdMake.Node("position", "OUTLINE", p.X, p.Y)).ToList()));
+        TileProject.WriteBmd(Path.Combine(ctx.OutTileDir, "bmd_nogo_data.bin"), root);
+        log($"bmd_nogo: {outlines.Children.Count} terrain outlines");
+    }
+}
