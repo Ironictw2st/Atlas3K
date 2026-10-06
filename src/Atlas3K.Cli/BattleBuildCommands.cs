@@ -18,10 +18,22 @@ static class BattleBuildCommands
             foreach (var s in BattleMapBuild.Steps()) Console.WriteLine(s.Name);
             return 0;
         }
-        var pos = a.Where((v, i) => !v.StartsWith("--") && (i == 0 || a[i - 1] is not ("--out" or "--only" or "--tile"))).ToList();
+        var pos = a.Where((v, i) => !v.StartsWith("--") && (i == 0 || a[i - 1] is not ("--out" or "--only" or "--tile" or "--corpus" or "--run"))).ToList();
         if (pos.Count < 2) { Console.Error.WriteLine("usage: build-battle <kit root> <map id> [--out dir] [--only a,b] [--compare] [--tile id]"); return 2; }
         var outRoot = Option(a, "--out") ?? Path.Combine("output", "battle_native", pos[1]);
         var ctx = new BattleBuildContext(pos[0], pos[1], outRoot) { TileId = Option(a, "--tile") ?? "" };
+        if (Option(a, "--corpus") is { } corpus)
+        {
+            // a parity-corpus case (<corpus>/<id>/src/{map,tile}, <corpus>/<id>/<run>/{map,tile,tile_db}) instead of the kit
+            var run = Option(a, "--run") ?? "existing";
+            var c = Path.Combine(corpus, pos[1]);
+            ctx = new BattleBuildContext(pos[0], pos[1], outRoot)
+            {
+                TileId = ctx.TileId,
+                SourceMapDir = Path.Combine(c, "src", "map"), SourceTileDir = Path.Combine(c, "src", "tile"),
+                BobMapDir = Path.Combine(c, run, "map"), BobTileDir = Path.Combine(c, run, "tile"), BobTileDbDir = Path.Combine(c, run, "tile_db"),
+            };
+        }
         var only = Option(a, "--only")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var failed = BattleMapBuild.Run(ctx, Console.WriteLine, only);
         var mismatches = a.Contains("--compare") ? Compare(ctx) : 0;

@@ -33,19 +33,24 @@ public sealed class BattleBuildContext
     public string WorkingData => Path.Combine(KitRoot, "working_data");
 
     /// <summary>raw_data/terrain/battles/&lt;id&gt;: tile_map.png, climate_map.png, explicit_tiles.txt, lf_heights.tif, lf_sea_heights.tif.</summary>
-    public string SourceMapDir => Path.Combine(RawData, "terrain", "battles", MapId);
+    public string SourceMapDir { get => _SourceMapDir ?? Path.Combine(RawData, "terrain", "battles", MapId); init => _SourceMapDir = value; }
+    private readonly string? _SourceMapDir;
 
     /// <summary>raw_data/terrain/tiles/battle/_assembly_kit/&lt;tile&gt;: the Terry tile project (.terry, .layer, TIFs).</summary>
-    public string SourceTileDir => Path.Combine(RawData, "terrain", "tiles", "battle", "_assembly_kit", Tile);
+    public string SourceTileDir { get => _SourceTileDir ?? Path.Combine(RawData, "terrain", "tiles", "battle", "_assembly_kit", Tile); init => _SourceTileDir = value; }
+    private readonly string? _SourceTileDir;
 
     /// <summary>BOB's output map folder (reference for parity; may be stale).</summary>
-    public string BobMapDir => Path.Combine(WorkingData, "terrain", "battles", MapId);
+    public string BobMapDir { get => _BobMapDir ?? Path.Combine(WorkingData, "terrain", "battles", MapId); init => _BobMapDir = value; }
+    private readonly string? _BobMapDir;
 
     /// <summary>BOB's output tile folder (reference for parity; may be stale).</summary>
-    public string BobTileDir => Path.Combine(WorkingData, "terrain", "tiles", "battle", "_assembly_kit", Tile);
+    public string BobTileDir { get => _BobTileDir ?? Path.Combine(WorkingData, "terrain", "tiles", "battle", "_assembly_kit", Tile); init => _BobTileDir = value; }
+    private readonly string? _BobTileDir;
 
     /// <summary>BOB's tile database folder (TILES/_assembly_kit_&lt;tile&gt;.bin/.xml).</summary>
-    public string BobTileDbDir => Path.Combine(WorkingData, "terrain", "tiles", "battle", "_tile_database", "TILES");
+    public string BobTileDbDir { get => _BobTileDbDir ?? Path.Combine(WorkingData, "terrain", "tiles", "battle", "_tile_database", "TILES"); init => _BobTileDbDir = value; }
+    private readonly string? _BobTileDbDir;
 
     public string OutMapDir => Path.Combine(OutRoot, "terrain", "battles", MapId);
     public string OutTileDir => Path.Combine(OutRoot, "terrain", "tiles", "battle", "_assembly_kit", Tile);
@@ -58,6 +63,23 @@ public sealed class BattleBuildContext
     public string TerryFile =>
         Directory.EnumerateFiles(SourceTileDir, "*.terry").SingleOrDefault()
         ?? throw new FileNotFoundException($"no .terry in {SourceTileDir}");
+
+    /// <summary>The game's data folder (vanilla packs), for the files BOB reads from its VFS (tile database settings,
+    /// tiles listed in explicit_tiles.txt, ...).</summary>
+    public string GameDataDir { get; init; } = Defaults.GameData;
+
+    private Atlas3K.Formats.Packs.PackSet? _packs;
+
+    /// <summary>The vanilla packs (opened on first use).</summary>
+    public Atlas3K.Formats.Packs.PackSet Packs => _packs ??= Atlas3K.Formats.Packs.PackSet.OpenVanilla(GameDataDir);
+
+    /// <summary>A game file as BOB sees it: the kit's working_data copy if there is one, else the vanilla packs; null when
+    /// neither has it. <paramref name="path"/> is a pack path (forward or back slashes).</summary>
+    public byte[]? ReadVfs(string path)
+    {
+        var loose = Path.Combine(WorkingData, path.Replace('\\', '/'));
+        return File.Exists(loose) ? File.ReadAllBytes(loose) : Packs.TryRead(path.Replace('\\', '/'));
+    }
 
     /// <summary>Shared values steps hand to later steps (e.g. decoded heights), keyed by name.</summary>
     public Dictionary<string, object> Shared { get; } = [];

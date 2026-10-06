@@ -100,7 +100,7 @@ public sealed class BattleTileDatabase
 
     private static byte ColourByte(float v) => (byte)Math.Clamp((int)v, 0, 255);
 
-    internal static List<BattleClimate> ReadClimates(byte[] settings)
+    public static List<BattleClimate> ReadClimates(byte[] settings)
     {
         var result = new List<BattleClimate>();
         var b = settings.AsSpan();
