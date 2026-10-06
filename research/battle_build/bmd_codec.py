@@ -4,7 +4,8 @@ debug .xml (same tags, attribute names and order), using the layout table in bmd
   bin -> tree -> bin   byte-identical
   bin -> tree -> xml   identical to BOB's .xml
 usage: bmdcodec.py <file.bin> [more.bin ...]   (looks for <file>.xml next to each)"""
-import json, struct, sys
+import json, math, struct, sys
+from decimal import Context, Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 LAYOUT = json.loads((Path(__file__).resolve().parents[2] / "src/Atlas3K.Formats/Battle/Data/bmd_layout.json").read_text())
@@ -48,7 +49,11 @@ def fmt(t, v, enum=None):
     if enum is not None:
         return enum[v] if 0 <= v < len(enum) else str(v)
     if t == "bool": return "true" if v else "false"
-    if t in ("f32", "f64"): return ("%f" % v)[:31]   # BOB formats into a 32-byte buffer
+    if t in ("f32", "f64"):   # MSVC "%f": exact value rounded half away from zero, into a 32-byte buffer
+        q = Decimal(v).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP, context=Context(prec=400))
+        s = f"{q:f}"
+        if s.startswith("-") is False and (v < 0 or (v == 0 and math.copysign(1, v) < 0)): s = "-" + s
+        return s[:31]
     return str(v)
 
 

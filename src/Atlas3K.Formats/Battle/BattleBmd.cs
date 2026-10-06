@@ -284,10 +284,33 @@ public static class BattleBmd
     public static string Format(string type, object v) => type switch
     {
         "bool" => (bool)v ? "true" : "false",
-        "f32" => Truncate(((double)(float)v).ToString("F6", CultureInfo.InvariantCulture)),
-        "f64" => Truncate(((double)v).ToString("F6", CultureInfo.InvariantCulture)),
+        "f32" => Truncate(Fixed6((float)v)),
+        "f64" => Truncate(Fixed6((double)v)),
         _ => Convert.ToString(v, CultureInfo.InvariantCulture) ?? "",
     };
+
+    /// <summary>MSVC "%f": the exact binary value rounded to 6 decimals, ties away from zero; a negative value (or -0)
+    /// that rounds to zero keeps its sign.</summary>
+    public static string Fixed6(double v)
+    {
+        if (double.IsNaN(v)) return "nan";
+        if (double.IsInfinity(v)) return v > 0 ? "inf" : "-inf";
+        var neg = v < 0 || (v == 0 && double.IsNegative(v));
+        var bits = BitConverter.DoubleToInt64Bits(Math.Abs(v));
+        var exp = (int)((bits >> 52) & 0x7ff);
+        var man = bits & 0xfffffffffffffL;
+        if (exp == 0) exp = 1; else man |= 1L << 52;
+        exp -= 1075;
+        // value = man * 2^exp; q = round_half_up(value * 10^6)
+        System.Numerics.BigInteger num = man, den = 1;
+        if (exp > 0) num <<= exp; else den <<= -exp;
+        num *= 1_000_000;
+        var q = System.Numerics.BigInteger.DivRem(num, den, out var rem);
+        if (rem * 2 >= den) q += 1;
+        var digits = q.ToString(CultureInfo.InvariantCulture).PadLeft(7, '0');
+        var s = digits[..^6] + "." + digits[^6..];
+        return neg ? "-" + s : s;
+    }
 
     // BOB prints floats with "%f" into a 32-byte buffer
     private static string Truncate(string s) => s.Length > 31 ? s[..31] : s;

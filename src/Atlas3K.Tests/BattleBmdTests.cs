@@ -34,5 +34,7 @@ public class BattleBmdTests
         Assert.Equal("-966818018806904626816175490648", BattleBmd.Format("f32", -9.668180188069046e+35f));
         Assert.Equal("-0.000000", BattleBmd.Format("f32", -5.9e-17f));
         Assert.Equal("0.174533", BattleBmd.Format("f32", 0.17453292f));
+        Assert.Equal("1428.039063", BattleBmd.Format("f32", 1428.0390625f));   // exact tie: away from zero (MSVC)
+        Assert.Equal("-0.000000", BattleBmd.Format("f32", -0f));
     }
 }
