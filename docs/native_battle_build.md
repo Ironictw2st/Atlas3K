@@ -35,7 +35,10 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | `tile_db/_assembly_kit_<id>.bin` / `.xml` | tile_db | identical 5/5 |
 | `tile/hf_height_map.compressed_map` | hf_height | identical 3/5. dfe064a6 and df46bdbc: 260 of 1,050,625 pixels differ under the palace-foundation prefab's buildings |
 | `tile/hf_water_map.compressed_map` | hf_water | 2 projects with a river: 418 of 422 water pixels (edge rule open); correctly absent on the other 3 |
-| `tile/normal.dds`, `ground_types.dds`, `blend0.dds`, `blend1.dds`, `debug_protection_map.png` | – | **not started** |
+| `tile/blend0.dds`, `blend1.dds` | blend | identical 2/2 (dfe064a6, df46bdbc), correctly absent on the 3 unpainted projects |
+| `tile/normal.dds` | tile_normal | identical 2/2, correctly absent on the other 3 |
+| `tile/ground_types.dds` | ground_types | identical 5/5 |
+| `tile/debug_protection_map.png` | – | **not started** |
 | Terry-save inputs → `<out>/terry_save/` | terry_save | raw map folder (tile_map.png, lf tifs, climate_map.png, explicit_tiles.txt) identical on 224ad6d5 (the only Terry-made map folder; df46bdbc's was scripted); rules.bob identical; Terry's tile database entry identical on 0a26b6e0, dfe064a6 differs only in the uninitialised `scalable` byte |
 | `tile/shadow_mesh.rigid_model_v2` | tile_meshes | identical 5/5 |
 | `tile/mesh.rigid_model_v2`, `outfield_mesh.rigid_model_v2` | tile_meshes | identical or masked-identical (LOD u32 0xA4..0xA7) 5/5 |
@@ -64,6 +67,9 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | tile database entry | TILE v7 / VARIATION v10 / texture_set v2. BOB's TerryTile rewrite = Terry's saved entry with the texture channels re-derived from the .terry `texture_channel_N`, keeping only the channels the blend TIF uses (channel 0 always), compacted in order, the rest empty. That is why re-running BOB is a fixed point. The `scalable` byte is uninitialised memory from Terry's save (0x00, 0x58 and 0x8B seen) and is carried over; without a saved entry it is 0. The `.xml` has CRLF line ends, tabs and single quotes, with floats as `%f`. |
 | lf_normal.dds | bob_terrain FUN_18000e4d0/FUN_18003ba70: 3×3 Sobel of h = s·(1/65535) (clamped edges) × 500, normal = normalise(gx, gy, z), z = 1/((lf px per tile-map cell) / (unit_scale 2 · tile size 128)) = 32; pixel B,G,R,A = 0, (ny+1)·127.5, 255, (nx+1)·127.5 truncated. DDS via `AmdCompress`: the kit's AMDCompress_MT_DLL.dll (AMD_TC_ConvertTexture, options zero but dwSize 2000), mips = 2×2 box average with rounding down to 2×2 (campaign: 8×8), standard DXT5 header (Frida: `research/bob_re/frida_amd_compress.js`). |
 | Terry save | Vista (`raw_data/terrain/vistas/<vista>`) tile_map.png + lf tifs copied byte for byte; climate_map.png re-encoded like Qt/libpng: RGB8, pHYs 3780, zlib level 0 (68 05, one stored block per 16 KiB), libpng adaptive filter (min sum of \|signed byte\|, first min), 8192-byte IDATs. explicit_tiles.txt = the tile centred on the tile map + CRLF. rules.bob (map and tile working folders) = `[Pack]` template with `<.terry stem>_<id>.pack`, CRLF, no final newline. Tile entry = `TileDbEntry.FromTerry` (all 8 channels). |
+| blend0/1.dds | The blend channels in use (channel 0 always, channel order, as in the rewritten tile entry) packed R,G,B,A = used 0..3 → blend0, 4..7 → blend1, full 1280², DXT5 via `AmdCompress`. Written only when the blend TIF has a non-zero weight. |
+| tile normal.dds | 3×3 Sobel of the full float Height TIF, normalise(gx/8, gy/8, 1/normal_strength), pixel as lf_normal, DXT5 via `AmdCompress`; written with the blend textures. |
+| ground_types.dds | Per pixel the EMPIREUTILITY::GROUND_TYPE (forest 0, grass 1, mud 2, sand 3, scrub 4, rock 5, deep_water 6, shallow_water 7, road 8, wooden_floor 9, snow 10, …; empireutility name table) of the highest-weight blend channel (first on ties), texture group → type from db `ground_type_to_texture_groups` (binary column order: ground_type, texture_group); blend TIF cropped by density on each side (1280 → 1024); uncompressed L8 with a bare header (flags 0, pf LUMINANCE 8-bit). |
 | hf_height_map | The Height TIF cropped to the vertex grid (triangle_density + 1 pixels in from each side: 1280 → 1025, the same window as the meshes), normalised to the full TIF's min..max with the lf rule. |
 | hf_water_map | The river model rasterised onto the hf grid: 1 pixel per model unit (the model is already in half units), row 0 = z 0, the height-patch crossing test, highest surface kept. −1000 where there is no water. Written only when the tile has a river. |
 
@@ -74,7 +80,7 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
   `TERRAIN_RENDER_SETUP::apply_height_map_meshes`, qttoolutility `ECPropHeightPatch`). The meshes don't show the edit,
   so it is applied after the mesh step.
 - **hf_water_map:** 4 pixels on triangle edges.
-- **normal.dds, ground_types, blend0/1, debug_protection_map:** not started (the DDS ones can reuse `AmdCompress`).
+- **debug_protection_map.png:** not started.
 
 ## Meshes (worker B, 2026-10-06)
 

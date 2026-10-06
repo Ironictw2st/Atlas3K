@@ -4,7 +4,7 @@ using Xunit;
 namespace Atlas3K.Tests;
 
 /// <summary>The native battle map-family files (tile database entry, lf / sea maps, lf_normal, climate, map_info, icon,
-/// tile_list, hf_height) against BOB's own files in the battle-parity corpus (bob_run1), byte for byte. hf_height is
+/// tile_list, hf_height, blend0/1, normal, ground_types) against BOB's own files in the battle-parity corpus (bob_run1), byte for byte. hf_height is
 /// checked only on projects without buildings (the building height edits are not ported yet).</summary>
 public class BattleMapFilesTests
 {
@@ -32,7 +32,7 @@ public class BattleMapFilesTests
                 SourceTileDir = Path.Combine(project, "src", "tile"), SourceMapDir = Path.Combine(project, "src", "map"),
                 TerryTileDbDir = Path.Combine(project, "existing", "tile_db"),
             };
-            var steps = new List<string> { "tile_db", "map_info", "icon" };
+            var steps = new List<string> { "tile_db", "map_info", "icon", "blend", "tile_normal", "ground_types" };
             if (hasMap) steps.AddRange(["lf", "lf_normal", "climate", "tile_list"]);
             if (!WithBuildings.Contains(id)) steps.Add("hf_height");
             var failed = BattleMapBuild.Run(ctx, _ => { }, steps);
@@ -49,6 +49,11 @@ public class BattleMapFilesTests
                 foreach (var f in new[] { "lf_height_map.compressed_map", "lf_height_map.dds", "lf_sea_height_map.compressed_map",
                                           "lf_sea_height_map.dds", "lf_normal.dds", "climate_map.cm", "tile_list.bin" })
                     pairs.Add((Path.Combine(ctx.OutMapDir, f), Path.Combine(bob, "map", f)));
+            pairs.Add((Path.Combine(ctx.OutTileDir, "ground_types.dds"), Path.Combine(bob, "tile", "ground_types.dds")));
+            foreach (var f in new[] { "blend0.dds", "blend1.dds", "normal.dds" })
+                Assert.Equal(File.Exists(Path.Combine(bob, "tile", f)), File.Exists(Path.Combine(ctx.OutTileDir, f)));
+            foreach (var f in new[] { "blend0.dds", "blend1.dds", "normal.dds" })
+                if (File.Exists(Path.Combine(bob, "tile", f))) pairs.Add((Path.Combine(ctx.OutTileDir, f), Path.Combine(bob, "tile", f)));
             if (!WithBuildings.Contains(id))
                 pairs.Add((Path.Combine(ctx.OutTileDir, "hf_height_map.compressed_map"), Path.Combine(bob, "tile", "hf_height_map.compressed_map")));
             foreach (var (mine, theirs) in pairs)
