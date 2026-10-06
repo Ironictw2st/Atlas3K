@@ -4,12 +4,12 @@ using Atlas3K.Formats.Maps;
 namespace Atlas3K.Core.Battle.Build;
 
 /// <summary>
-/// hf_height_map.compressed_map of the battle tile ("Process Terry tile (heightmap)"): the project's float Height
-/// map cropped to the tile's vertex grid (triangle_density + 1 pixels in from each side: 1280 → 1025 for an 8×8 tile
-/// at density 128, the same window the meshes use) and normalised to the full TIF's min..max:
-/// v = trunc((h − lo) · (1/(hi − lo)) · 65535) in float32, header f[1] = lo, f[4] = hi (all 0 for a flat tile).
-/// Not reproduced yet: BOB's local edits under buildings (dfe064a6: 260 of 1,050,625 pixels near a palace
-/// foundation prefab differ).
+/// hf_height_map.compressed_map of the battle tile (tooldatabuilder FUN_1800edbf0, mode 0): the decimated terrain mesh
+/// (<see cref="BattleTileMeshBuilder"/>, the one mesh.rigid_model_v2 is written from, in float before half
+/// quantisation) rasterised back onto the 1025 × 1025 vertex grid with BOB's rasteriser (<see cref="MeshRaster"/>), the
+/// field initialised to 1.0, then normalised to its min..max: v = trunc((h − lo) · (1/(hi − lo)) · 65535) in
+/// float32, header f[1] = lo, f[4] = hi (all 0 for a flat tile). Steep areas differ from the raw TIF where the
+/// triangle merger dropped vertices.
 /// </summary>
 [BattleStepOrder(160)]
 public sealed class BattleHfHeightStep : IBattleBuildStep
@@ -21,9 +21,15 @@ public sealed class BattleHfHeightStep : IBattleBuildStep
         var project = TerryTileProject.Load(ctx.TerryFile);
         if (project.HeightTif is null) throw new FileNotFoundException($"no Height map TIF next to {ctx.TerryFile}");
         var (w, h, v) = TerryTileProject.ReadFloatTif(project.HeightTif);
-        var field = project.HeightField(out var fw, out var fh);
+        var source = project.HeightField(out var fw, out var fh);
+        // FUN_1800edbf0 (mode 0): the decimated terrain mesh rasterised back into a field initialised to 1.0
+        var mesh = BattleTileMeshBuilder.Build(source, fw, fh, project.TriangleDensity, project.TilesWide, project.TilesHigh,
+            project.NormalStrength, BattleTileMeshBuilder.Mode.Mesh, BattleTileMeshStep.BattleAngleFactor0);
+        var field = new float[fw * fh];
+        Array.Fill(field, 1f);
+        MeshRaster.Rasterise(field, fw, fh, mesh.Positions, mesh.Indices, 1f / (128f / project.TriangleDensity));
         float lo = float.MaxValue, hi = float.MinValue;
-        foreach (var x in v) { if (x < lo) lo = x; if (x > hi) hi = x; }
+        foreach (var x in field) { if (x < lo) lo = x; if (x > hi) hi = x; }
         var raster = new Raster<ushort>(fw, fh);
         if (hi > lo)
         {
@@ -40,11 +46,9 @@ public sealed class BattleHfHeightStep : IBattleBuildStep
 }
 
 /// <summary>
-/// hf_water_map.compressed_map: the tile's river model (river_mesh.wsmodel.rigid_model_v2, written by the river step)
-/// rasterised onto the hf grid (the same 1025 × 1025 window, <see cref="Scale"/> world units per pixel, row 0 = z 0)
-/// with the height-patch crossing test (<see cref="Campaign.Rivers.BobRiver"/>), keeping the highest surface per pixel;
-/// pixels without water are −1000. Written only when the tile has a river. 418 of BOB's 422 water pixels on
-/// dfe064a6/df46bdbc (the rule for triangle-edge pixels is not settled yet).
+/// hf_water_map.compressed_map (FUN_1800edbf0): a field of −1000 with the tile's river model (river_mesh.wsmodel
+/// .rigid_model_v2 + pivot, model units = pixels) rasterised in by <see cref="MeshRaster"/>. Written only when the
+/// tile has a river. Not covered by the corpus: water planes (FUN_1800ed480, WATER_PLANE_MESH entities).
 /// </summary>
 [BattleStepOrder(290)]
 public sealed class BattleHfWaterStep : IBattleBuildStep
@@ -93,40 +97,10 @@ public sealed class BattleHfWaterStep : IBattleBuildStep
                      Z: BitConverter.ToSingle(model.MaterialBlock, 0x22C));
         var n = model.VertexCount;
         var stride = model.Vertices.Length / Math.Max(1, n);
-        var vy = new float[n]; var px = new float[n]; var py = new float[n];
+        var v = new List<(float X, float Y, float Z)>(n);
         for (var i = 0; i < n; i++)
-        {
-            var x = BitConverter.ToSingle(model.Vertices, i * stride) + pivot.X;
-            vy[i] = BitConverter.ToSingle(model.Vertices, i * stride + 4) + pivot.Y;
-            var z = BitConverter.ToSingle(model.Vertices, i * stride + 8) + pivot.Z;
-            px[i] = x / Scale + Offset;
-            py[i] = z / Scale + Offset;
-        }
-        var idx = model.Indices;
-        for (var q = 0; q + 2 < idx.Length; q += 3)
-        {
-            int ia = idx[q], ib = idx[q + 1], ic = idx[q + 2];
-            float axp = px[ia], ayp = py[ia], bxp = px[ib], byp = py[ib], cxp = px[ic], cyp = py[ic];
-            var x0 = Math.Min((int)axp, Math.Min((int)bxp, (int)cxp)) - 1;
-            var x1 = Math.Max((int)axp, Math.Max((int)bxp, (int)cxp)) + 1;
-            var y0 = Math.Min((int)ayp, Math.Min((int)byp, (int)cyp)) - 1;
-            var y1 = Math.Max((int)ayp, Math.Max((int)byp, (int)cyp)) + 1;
-            if (x1 < 0 || width < x0 || y1 < 0 || height < y0) continue;
-            x0 = Math.Max(x0, 0); y0 = Math.Max(y0, 0); x1 = Math.Min(x1, width); y1 = Math.Min(y1, height);
-            var area = MathF.Abs((cxp - axp) * (byp - ayp) - (cyp - ayp) * (bxp - axp));
-            for (var y = y0; y < y1; y++)
-                for (var x = x0; x < x1; x++)
-                {
-                    float fx = x, fy = y;
-                    if (!Campaign.Rivers.BobRiver.InsideTriangle(fx, fy, axp, ayp, bxp, byp, cxp, cyp)) continue;
-                    var inv = 2f / area;
-                    var wc = MathF.Abs((fy - ayp) * (bxp - axp) - (fx - axp) * (byp - ayp)) * 0.5f * inv;
-                    var wb = MathF.Abs((fy - ayp) * (cxp - axp) - (fx - axp) * (cyp - ayp)) * 0.5f * inv;
-                    var wa = 1f - wb - wc;
-                    var hgt = vy[ib] * wb + vy[ia] * wa + vy[ic] * wc;
-                    ref var cell = ref field[y * width + x];
-                    if (!(hgt <= cell)) cell = hgt;
-                }
-        }
+            v.Add((BitConverter.ToSingle(model.Vertices, i * stride) + pivot.X, BitConverter.ToSingle(model.Vertices, i * stride + 4) + pivot.Y,
+                   BitConverter.ToSingle(model.Vertices, i * stride + 8) + pivot.Z));
+        MeshRaster.Rasterise(field, width, height, v, model.Indices.Select(i => (int)i).ToList(), Scale);
     }
 }

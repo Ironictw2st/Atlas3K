@@ -33,8 +33,8 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | `map/icon.tga` | icon | identical 5/5 |
 | `map/tile_list.bin` | tile_list | identical 2/2 |
 | `tile_db/_assembly_kit_<id>.bin` / `.xml` | tile_db | identical 5/5 |
-| `tile/hf_height_map.compressed_map` | hf_height | identical 3/5. dfe064a6 and df46bdbc: 260 of 1,050,625 pixels differ under the palace-foundation prefab's buildings |
-| `tile/hf_water_map.compressed_map` | hf_water | 2 projects with a river: 418 of 422 water pixels (edge rule open); correctly absent on the other 3 |
+| `tile/hf_height_map.compressed_map` | hf_height | identical 5/5 |
+| `tile/hf_water_map.compressed_map` | hf_water | identical 2/2 (the river projects), correctly absent on the other 3 |
 | `tile/blend0.dds`, `blend1.dds` | blend | identical 2/2 (dfe064a6, df46bdbc), correctly absent on the 3 unpainted projects |
 | `tile/normal.dds` | tile_normal | identical 2/2, correctly absent on the other 3 |
 | `tile/ground_types.dds` | ground_types | identical 5/5 |
@@ -70,16 +70,13 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | blend0/1.dds | The blend channels in use (channel 0 always, channel order, as in the rewritten tile entry) packed R,G,B,A = used 0..3 → blend0, 4..7 → blend1, full 1280², DXT5 via `AmdCompress`. Written only when the blend TIF has a non-zero weight. |
 | tile normal.dds | 3×3 Sobel of the full float Height TIF, normalise(gx/8, gy/8, 1/normal_strength), pixel as lf_normal, DXT5 via `AmdCompress`; written with the blend textures. |
 | ground_types.dds | Per pixel the EMPIREUTILITY::GROUND_TYPE (forest 0, grass 1, mud 2, sand 3, scrub 4, rock 5, deep_water 6, shallow_water 7, road 8, wooden_floor 9, snow 10, …; empireutility name table) of the highest-weight blend channel (first on ties), texture group → type from db `ground_type_to_texture_groups` (binary column order: ground_type, texture_group); blend TIF cropped by density on each side (1280 → 1024); uncompressed L8 with a bare header (flags 0, pf LUMINANCE 8-bit). |
-| hf_height_map | The Height TIF cropped to the vertex grid (triangle_density + 1 pixels in from each side: 1280 → 1025, the same window as the meshes), normalised to the full TIF's min..max with the lf rule. |
-| hf_water_map | The river model rasterised onto the hf grid: 1 pixel per model unit (the model is already in half units), row 0 = z 0, the height-patch crossing test, highest surface kept. −1000 where there is no water. Written only when the tile has a river. |
+| hf_height_map | tooldatabuilder FUN_1800edbf0 mode 0: the **decimated terrain mesh** (the float mesh behind mesh.rigid_model_v2) rasterised back onto the 1025² vertex grid by FUN_1800dc250 (field initialised to 1.0), then normalised to its own min..max with the lf rule. Steep areas therefore differ from the raw TIF wherever the triangle merger dropped vertices. |
+| Mesh rasteriser (FUN_1800dc250) | Per triangle A,B,C: integer bbox of x and z (truncated) from min − 1 to max; barycentric weights from dot products of (B−A), (C−A), (P−A) in (z, x), accepted in [−0.0001, 1.0001]; cell (trunc(s·z), trunc(s·x)) with s = density / 128 **overwritten** (last triangle wins) by w_C·C.y + w_B·B.y + w_A·A.y. |
+| hf_water_map | A −1000 field, the river model (+ pivot) rasterised in by FUN_1800dc250, then water planes (FUN_1800ed480; not in the corpus). |
 
 ### Open in the map family
 
-- **hf_height_map under buildings.** BOB changes heights near the 4 ECBuildings of the `ea_setpalace_foundation_2`
-  prefab (up to ~0.7 units). Likely candidates: building height patches (warscape
-  `TERRAIN_RENDER_SETUP::apply_height_map_meshes`, qttoolutility `ECPropHeightPatch`). The meshes don't show the edit,
-  so it is applied after the mesh step.
-- **hf_water_map:** 4 pixels on triangle edges.
+- **Water planes** (WATER_PLANE_MESH) in hf_water_map, and `hf_height_map_mesh_delta.compressed_map` (written with HEIGHT_OBJECTs): no corpus project has them.
 - **debug_protection_map.png:** not started.
 
 ## Meshes (worker B, 2026-10-06)

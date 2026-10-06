@@ -4,8 +4,8 @@ using Xunit;
 namespace Atlas3K.Tests;
 
 /// <summary>The native battle map-family files (tile database entry, lf / sea maps, lf_normal, climate, map_info, icon,
-/// tile_list, hf_height, blend0/1, normal, ground_types) against BOB's own files in the battle-parity corpus (bob_run1), byte for byte. hf_height is
-/// checked only on projects without buildings (the building height edits are not ported yet).</summary>
+/// tile_list, hf_height, hf_water, blend0/1, normal, ground_types) against BOB's own files in the battle-parity corpus
+/// (bob_run1), byte for byte.</summary>
 public class BattleMapFilesTests
 {
     public static IEnumerable<object[]> Projects() =>
@@ -14,8 +14,6 @@ public class BattleMapFilesTests
                 .Where(d => Directory.Exists(Path.Combine(d, "src", "tile")) && Directory.Exists(Path.Combine(d, "bob_run1")))
                 .Select(d => new object[] { Path.GetFileName(d) })
             : [new object[] { "" }];
-
-    private static readonly HashSet<string> WithBuildings = ["dfe064a6_ea23_4253_af6f_8e4494c116bb", "df46bdbc_51c3_4e1d_ad45_0b859048fa83"];
 
     [Theory]
     [MemberData(nameof(Projects))]
@@ -34,7 +32,7 @@ public class BattleMapFilesTests
             };
             var steps = new List<string> { "tile_db", "map_info", "icon", "blend", "tile_normal", "ground_types" };
             if (hasMap) steps.AddRange(["lf", "lf_normal", "climate", "tile_list"]);
-            if (!WithBuildings.Contains(id)) steps.Add("hf_height");
+            steps.AddRange(["hf_height", "tile_meshes", "river_meshes", "hf_water"]);
             var failed = BattleMapBuild.Run(ctx, _ => { }, steps);
             Assert.Empty(failed);
             var bob = Path.Combine(project, "bob_run1");
@@ -54,8 +52,10 @@ public class BattleMapFilesTests
                 Assert.Equal(File.Exists(Path.Combine(bob, "tile", f)), File.Exists(Path.Combine(ctx.OutTileDir, f)));
             foreach (var f in new[] { "blend0.dds", "blend1.dds", "normal.dds" })
                 if (File.Exists(Path.Combine(bob, "tile", f))) pairs.Add((Path.Combine(ctx.OutTileDir, f), Path.Combine(bob, "tile", f)));
-            if (!WithBuildings.Contains(id))
-                pairs.Add((Path.Combine(ctx.OutTileDir, "hf_height_map.compressed_map"), Path.Combine(bob, "tile", "hf_height_map.compressed_map")));
+            pairs.Add((Path.Combine(ctx.OutTileDir, "hf_height_map.compressed_map"), Path.Combine(bob, "tile", "hf_height_map.compressed_map")));
+            Assert.Equal(File.Exists(Path.Combine(bob, "tile", "hf_water_map.compressed_map")), File.Exists(Path.Combine(ctx.OutTileDir, "hf_water_map.compressed_map")));
+            if (File.Exists(Path.Combine(bob, "tile", "hf_water_map.compressed_map")))
+                pairs.Add((Path.Combine(ctx.OutTileDir, "hf_water_map.compressed_map"), Path.Combine(bob, "tile", "hf_water_map.compressed_map")));
             foreach (var (mine, theirs) in pairs)
                 Assert.True(File.ReadAllBytes(mine).AsSpan().SequenceEqual(File.ReadAllBytes(theirs)), $"{id}: {Path.GetFileName(mine)} differs");
         }
