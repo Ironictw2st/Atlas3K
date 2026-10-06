@@ -155,10 +155,9 @@ public static class CatchmentOps
     public static int UncoveredLand(BattleLocations map, string listKey)
     {
         var mask = CoverageMask(map, listKey);
-        var land = map.LandIndex;
         var n = 0;
         for (var i = 0; i < mask.Length; i++)
-            if (map.Cells[i] == land && !mask[i]) n++;
+            if (map.IsLandCell(map.Cells[i]) && !mask[i]) n++;
         return n;
     }
 

@@ -61,31 +61,36 @@ public sealed class BattleLocations
     public List<CatchmentList> Lists { get; set; } = [];
     public int Width { get; set; }
     public int Height { get; set; }
-    /// <summary>Meta item index per cell, row-major, row 0 = north.</summary>
+    /// <summary>Meta flags per cell, row-major, row 0 = north: a bitmask over <see cref="MetaItems"/> (bit i = item i,
+    /// so land = 1, sea = 2, both = 3; empireutility get_location reads it that way).</summary>
     public int[] Cells { get; set; } = [];
 
     public CatchmentList? List(string key) => Lists.FirstOrDefault(l => l.Key == key);
 
     public int AreaCount => Lists.Sum(l => l.Areas.Count);
 
-    /// <summary>The meta index of the battle-bearing landmass. The "land"/"sea" item names are CA-internal labels, not
-    /// geography, so it is calibrated as the most common index under the areas' centres (as the blm tool does).</summary>
+    /// <summary>The meta bit of the battle-bearing landmass, calibrated as the bit set most often under the areas'
+    /// centres (the item names are CA-internal labels, so they are not trusted).</summary>
     public int LandIndex { get; private set; }
 
     /// <summary>Recomputes <see cref="LandIndex"/> from the areas' centres.</summary>
     public void CalibrateLand()
     {
-        var counts = new Dictionary<int, int>();
+        var counts = new int[32];
         foreach (var a in Lists.SelectMany(l => l.Areas))
             if (a.Centre.X >= 0 && a.Centre.Y >= 0 && a.Centre.X < Width && a.Centre.Y < Height)
             {
                 var v = Cells[a.Centre.Y * Width + a.Centre.X];
-                counts[v] = counts.GetValueOrDefault(v) + 1;
+                for (var b = 0; b < 32; b++) if ((v & (1 << b)) != 0) counts[b]++;
             }
-        LandIndex = counts.Count == 0 ? 0 : counts.MaxBy(kv => kv.Value).Key;
+        var best = Array.IndexOf(counts, counts.Max());
+        LandIndex = counts[best] == 0 ? 0 : 1 << best;
     }
 
-    public bool IsLand(int x, int y) => x >= 0 && y >= 0 && x < Width && y < Height && Cells[y * Width + x] == LandIndex;
+    /// <summary>Whether a cell's flags include the land bit.</summary>
+    public bool IsLandCell(int cell) => (cell & LandIndex) != 0;
+
+    public bool IsLand(int x, int y) => x >= 0 && y >= 0 && x < Width && y < Height && IsLandCell(Cells[y * Width + x]);
 
     /// <summary>Deep copy of the catchment lists (for undo snapshots).</summary>
     public List<CatchmentList> CloneLists() => Lists.Select(l => l.Clone()).ToList();

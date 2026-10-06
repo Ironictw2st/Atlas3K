@@ -91,10 +91,9 @@ public sealed class CampaignBattleView : FrameworkElement
         var (w, h) = (_map.Width, _map.Height);
         var px = new uint[w * h];
         var gaps = ShowGaps ? CatchmentOps.CoverageMask(_map, ActiveList) : null;
-        var land = _map.LandIndex;
         for (var i = 0; i < px.Length; i++)
         {
-            var isLand = _map.Cells[i] == land;
+            var isLand = _map.IsLandCell(_map.Cells[i]);
             px[i] = !isLand ? 0xFF1C2430u : gaps is not null && !gaps[i] ? 0xFF3A6EA8u : 0xFF55604Au;
         }
         _base = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);

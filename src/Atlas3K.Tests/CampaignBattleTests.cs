@@ -27,7 +27,7 @@ public class CampaignBattleTests
         Assert.Equal([BattleLocations.Ambush, BattleLocations.Standard, BattleLocations.Encampments, BattleLocations.Unfortified, BattleLocations.Gate],
                      map.Lists.Select(l => l.Key));
         Assert.True(map.Write().AsSpan().SequenceEqual(bytes));
-        // the battle landmass is the "sea" meta item (CA-internal labels), found from the area centres
+        // cells are a bitmask over the meta items; the battle landmass is bit 0 ("land"), found from the area centres
         Assert.Equal(1, map.LandIndex);
     }
 
@@ -58,7 +58,7 @@ public class CampaignBattleTests
     public void Coverage_counts_uncovered_battle_land_only()
     {
         var map = SmallMap();
-        var land = map.Cells.Count(c => c == map.LandIndex);
+        var land = map.Cells.Count(map.IsLandCell);
         Assert.Equal(land, CatchmentOps.UncoveredLand(map, BattleLocations.Ambush));
         CatchmentOps.Add(map, BattleLocations.Ambush, new CellBox(0, 0, 9, 9), "a");
         Assert.Equal(land - 100, CatchmentOps.UncoveredLand(map, BattleLocations.Ambush));
