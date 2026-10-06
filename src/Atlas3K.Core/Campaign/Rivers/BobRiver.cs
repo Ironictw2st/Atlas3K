@@ -526,6 +526,10 @@ public static class BobRiver
     }
 
     /// <summary>warscape FUN_180476ea0: pixel (x, y) inside triangle (crossing test).</summary>
+    public static bool InsideTriangle(float x, float y, float ax, float ay, float bx, float by, float cx, float cy) =>
+        Inside(x, y, ax, ay, bx, by, cx, cy);
+
+    /// <summary>warscape FUN_180476ea0: pixel (x, y) inside triangle (crossing test).</summary>
     internal static bool Inside(float X, float Y, float ax, float ay, float bx, float by, float cx, float cy)
     {
         var r = false;
