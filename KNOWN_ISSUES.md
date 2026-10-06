@@ -1,7 +1,8 @@
-# Known issues (0.1.0-alpha.1)
+# Known issues (0.1.0-alpha.2)
 
-- **Campaign maps only.** The battle-map editor is experimental: it still builds through BOB and needs the battle
-  tile database, which first-run setup does not extract yet.
+- **Battle maps:** the Campaign battles window (catchment areas and redirects) is phase 1. The battle terrain editor
+  is experimental: it still builds through BOB and needs the battle tile database, which first-run setup does not
+  extract yet.
 - **Start positions are not built.** `startpos.esf` still comes from the game (RPFM's start-position build, for
   example). Add it as a custom step after Pack if you need it.
 - **Tile list:**
