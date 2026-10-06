@@ -43,17 +43,35 @@ public class BattleTileMeshTests
                 var bob = File.ReadAllBytes(Path.Combine(project, "bob_run1", "tile", f));
                 var native = File.ReadAllBytes(Path.Combine(ctx.OutTileDir, f));
                 Assert.Equal(bob.Length, native.Length);
+                var masked = f.EndsWith(".rigid_model_v2") ? UninitialisedBytes(bob, f.Contains("river")) : [];
                 for (var i = 0; i < bob.Length; i++)
-                {
-                    var masked = f.EndsWith(".rigid_model_v2") && (i is >= 0xA4 and <= 0xA7 || f.Contains("river") && i is >= 0x318 and <= 0x31B);
-                    if (!masked && bob[i] != native[i]) Assert.Fail($"{id} {f}: first difference at 0x{i:X}");
-                }
+                    if (!masked.Contains(i) && bob[i] != native[i]) Assert.Fail($"{id} {f}: first difference at 0x{i:X}");
             }
         }
         finally
         {
             if (Directory.Exists(outRoot)) Directory.Delete(outRoot, true);
         }
+    }
+
+    /// <summary>Bytes BOB fills from stale memory (as research/battle_build/make_masks.py): the LOD header u32 at 0xA4 and,
+    /// in river models, the u32 at +624 of every mesh part (one per river).</summary>
+    private static HashSet<int> UninitialisedBytes(byte[] rmv2, bool river)
+    {
+        var words = new HashSet<int> { 0xA4, 0xA5, 0xA6, 0xA7 };
+        if (!river) return words;
+        var lods = BitConverter.ToInt32(rmv2, 8);
+        for (var l = 0; l < lods; l++)
+        {
+            var meshes = BitConverter.ToInt32(rmv2, 140 + l * 28);
+            var off = BitConverter.ToInt32(rmv2, 140 + l * 28 + 12);
+            for (var m = 0; m < meshes; m++)
+            {
+                for (var k = 0; k < 4; k++) words.Add(off + 624 + k);
+                off += BitConverter.ToInt32(rmv2, off + 4);
+            }
+        }
+        return words;
     }
 
     [Fact]

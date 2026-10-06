@@ -6,7 +6,25 @@ between runs (same size in every run). Masked ranges are widened to whole 4-byte
 uninitialised u32s / floats). Files whose size differs between runs are listed under "_unstable_size".
 Also prints a per-project summary.
 """
-import glob, json, os, sys
+import glob, json, os, struct, sys
+
+
+def structural(rel, data):
+    """Uninitialised words known from the format, masked even when every run happened to leave the same garbage:
+    the u32 at 0xA4 of every rigid_model_v2 and, in river models, the u32 at +624 of every mesh part (BOB writes it
+    from stale memory; a multi-river tile has one per river)."""
+    if not rel.endswith(".rigid_model_v2") or data[:4] != b"RMV2":
+        return set()
+    words = {0xA4}
+    if rel.endswith("river_mesh.wsmodel.rigid_model_v2"):
+        nlod, = struct.unpack_from("<I", data, 8)
+        for l in range(nlod):
+            nmesh, _, _, off = struct.unpack_from("<IIII", data, 140 + l * 28)
+            for _ in range(nmesh):
+                words.add(off + 624)
+                off += struct.unpack_from("<I", data, off + 4)[0]
+    return {w for w in words if w + 4 <= len(data)}
+
 
 CORPUS = sys.argv[1] if len(sys.argv) > 1 else r"Z:/Claude/BattleMaps/out/battle_parity"
 MAX_MASK_WORDS = 16   # more varying words than this = a record-order variant, not uninitialised bytes
@@ -27,12 +45,15 @@ for proj in sorted(glob.glob(os.path.join(CORPUS, "*", ""))):
         for b in datas[1:]:
             if a != b:
                 diff.update(i for i in range(len(a)) if a[i] != b[i])
-        if not diff:
+        known = structural(rel, a)
+        if not diff and not known:
             continue
-        varying += 1
-        words = sorted({i & ~3 for i in diff})
+        if diff:
+            varying += 1
+        words = {i & ~3 for i in diff}
         if len(words) > MAX_MASK_WORDS:     # not stray memory but a different ORDER of records: keep as variants
             variants.append(rel); continue
+        words = sorted(words | known)
         ranges = []
         for w in words:
             if ranges and ranges[-1][1] == w:

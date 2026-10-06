@@ -38,12 +38,17 @@ public sealed class BattleRiverMeshStep : IBattleBuildStep
             if (rivers.Count == 0) model = BattleTileMeshStep.EmptyModel();
             else
             {
+                // every part gets the union bounds (and pivot) of all the tile's rivers
+                var raws = rivers.Select(river => BobRiver.BuildRaw(BobRiver.BuildSpline(river),
+                    BobRiver.RiverPointsInOrder(river).Select(p => (float)p.Width).ToList(), bounds)).ToList();
+                var each = raws.Select(BobRiver.RawBounds).ToList();
+                float[] lo = [.. Enumerable.Range(0, 3).Select(k => each.Min(b => b.Lo[k]))];
+                float[] hi = [.. Enumerable.Range(0, 3).Select(k => each.Max(b => b.Hi[k]))];
                 RigidModelV2? first = null;
-                foreach (var river in rivers)
+                for (var r = 0; r < rivers.Count; r++)
                 {
-                    var raw = BobRiver.BuildRaw(BobRiver.BuildSpline(river),
-                        BobRiver.RiverPointsInOrder(river).Select(p => (float)p.Width).ToList(), bounds);
-                    var part = BobRiver.ToModel(raw, UnitScale);
+                    var river = rivers[r];
+                    var part = BobRiver.ToModel(raws[r], UnitScale, (lo, hi));
                     if (first is null) first = part;
                     else first.MoreMeshes.Add(part);
                     materials.Add(river.Material.Length > 0 ? river.Material : riverMaterial);

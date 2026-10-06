@@ -380,7 +380,9 @@ public static class BobRiver
 
     /// <param name="unitScale">The tile database's render_params.unit_scale: FUN_180146460 divides x and z by it after
     /// the bounds are taken (campaign 1; battle tiles 2).</param>
-    public static RigidModelV2 ToModel(RawMesh mesh, float unitScale = 1f)
+    /// <param name="sharedBounds">Bounds (lo, hi) to use instead of the mesh's own: a battle tile with several rivers
+    /// gives every river part the union of all parts' bounds (and so the union's pivot).</param>
+    public static RigidModelV2 ToModel(RawMesh mesh, float unitScale = 1f, (float[] Lo, float[] Hi)? sharedBounds = null)
     {
         var order = new List<int>();
         var remap = new Dictionary<int, int>();
@@ -396,6 +398,7 @@ public static class BobRiver
                 pos[v, k] = f;
                 lo[k] = Math.Min(lo[k], f); hi[k] = Math.Max(hi[k], f);
             }
+        if (sharedBounds is { } sb) { lo = sb.Lo; hi = sb.Hi; }
         var pivot = new float[3];
         for (var k = 0; k < 3; k++) pivot[k] = (lo[k] + hi[k]) * 0.5f;
         var vertices = new byte[n * 48];
@@ -427,6 +430,19 @@ public static class BobRiver
         model.Indices = indices;
         model.Bounds = [lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]];
         return model;
+    }
+
+    /// <summary>The (lo, hi) bounds of the vertices a raw mesh's indices use, as <see cref="ToModel"/> takes them.</summary>
+    public static (float[] Lo, float[] Hi) RawBounds(RawMesh mesh)
+    {
+        float[] lo = [float.MaxValue, float.MaxValue, float.MaxValue], hi = [float.MinValue, float.MinValue, float.MinValue];
+        foreach (var i in mesh.Indices.Distinct())
+            for (var k = 0; k < 3; k++)
+            {
+                var f = HalfToFloat(BinaryPrimitives.ReadUInt16LittleEndian(mesh.Vertices.AsSpan(i * 32 + k * 2)));
+                lo[k] = Math.Min(lo[k], f); hi[k] = Math.Max(hi[k], f);
+            }
+        return (lo, hi);
     }
 
     /// <summary>FUN_180146460 decodes b/255·2−1, the writer re-encodes trunc((v+1)·127.5).</summary>
