@@ -1,0 +1,62 @@
+using Atlas3K.Core.Battle.Build;
+using Xunit;
+
+namespace Atlas3K.Tests;
+
+/// <summary>The native battle map-family files (tile database entry, lf / sea maps, lf_normal, climate, map_info, icon,
+/// tile_list, hf_height) against BOB's own files in the battle-parity corpus (bob_run1), byte for byte. hf_height is
+/// checked only on projects without buildings (the building height edits are not ported yet).</summary>
+public class BattleMapFilesTests
+{
+    public static IEnumerable<object[]> Projects() =>
+        Directory.Exists(BattleBmdTests.Corpus)
+            ? Directory.EnumerateDirectories(BattleBmdTests.Corpus)
+                .Where(d => Directory.Exists(Path.Combine(d, "src", "tile")) && Directory.Exists(Path.Combine(d, "bob_run1")))
+                .Select(d => new object[] { Path.GetFileName(d) })
+            : [new object[] { "" }];
+
+    private static readonly HashSet<string> WithBuildings = ["dfe064a6_ea23_4253_af6f_8e4494c116bb", "df46bdbc_51c3_4e1d_ad45_0b859048fa83"];
+
+    [Theory]
+    [MemberData(nameof(Projects))]
+    public void MatchesBob(string id)
+    {
+        if (id.Length == 0 || !Directory.Exists(TestKits.Vanilla)) return;   // corpus or kit not available
+        var project = Path.Combine(BattleBmdTests.Corpus, id);
+        var outRoot = Path.Combine(Path.GetTempPath(), "atlas3k_battle_map_" + id);
+        try
+        {
+            var hasMap = Directory.Exists(Path.Combine(project, "src", "map"));
+            var ctx = new BattleBuildContext(TestKits.Vanilla, id, outRoot)
+            {
+                SourceTileDir = Path.Combine(project, "src", "tile"), SourceMapDir = Path.Combine(project, "src", "map"),
+                TerryTileDbDir = Path.Combine(project, "existing", "tile_db"),
+            };
+            var steps = new List<string> { "tile_db", "map_info", "icon" };
+            if (hasMap) steps.AddRange(["lf", "lf_normal", "climate", "tile_list"]);
+            if (!WithBuildings.Contains(id)) steps.Add("hf_height");
+            var failed = BattleMapBuild.Run(ctx, _ => { }, steps);
+            Assert.Empty(failed);
+            var bob = Path.Combine(project, "bob_run1");
+            var pairs = new List<(string Mine, string Bob)>
+            {
+                (Path.Combine(ctx.OutTileDbDir, ctx.TileDbStem + ".bin"), Path.Combine(bob, "tile_db", ctx.TileDbStem + ".bin")),
+                (Path.Combine(ctx.OutTileDbDir, ctx.TileDbStem + ".xml"), Path.Combine(bob, "tile_db", ctx.TileDbStem + ".xml")),
+                (Path.Combine(ctx.OutMapDir, "map_info.xml"), Path.Combine(bob, "map", "map_info.xml")),
+                (Path.Combine(ctx.OutMapDir, "icon.tga"), Path.Combine(bob, "map", "icon.tga")),
+            };
+            if (hasMap)
+                foreach (var f in new[] { "lf_height_map.compressed_map", "lf_height_map.dds", "lf_sea_height_map.compressed_map",
+                                          "lf_sea_height_map.dds", "lf_normal.dds", "climate_map.cm", "tile_list.bin" })
+                    pairs.Add((Path.Combine(ctx.OutMapDir, f), Path.Combine(bob, "map", f)));
+            if (!WithBuildings.Contains(id))
+                pairs.Add((Path.Combine(ctx.OutTileDir, "hf_height_map.compressed_map"), Path.Combine(bob, "tile", "hf_height_map.compressed_map")));
+            foreach (var (mine, theirs) in pairs)
+                Assert.True(File.ReadAllBytes(mine).AsSpan().SequenceEqual(File.ReadAllBytes(theirs)), $"{id}: {Path.GetFileName(mine)} differs");
+        }
+        finally
+        {
+            if (Directory.Exists(outRoot)) Directory.Delete(outRoot, true);
+        }
+    }
+}

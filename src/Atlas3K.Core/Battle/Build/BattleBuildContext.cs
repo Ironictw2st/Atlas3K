@@ -29,6 +29,9 @@ public sealed class BattleBuildContext
 
     string Tile => TileId.Length > 0 ? TileId : MapId;
 
+    /// <summary>The tile project's folder name / database name: <see cref="TileId"/>, else the map id.</summary>
+    public string TileFolder => Tile;
+
     public string RawData => Path.Combine(KitRoot, "raw_data");
     public string WorkingData => Path.Combine(KitRoot, "working_data");
 

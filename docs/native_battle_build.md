@@ -36,7 +36,7 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | `tile/hf_height_map.compressed_map` | hf_height | identical 3/5. dfe064a6 and df46bdbc: 260 of 1,050,625 pixels differ under the palace-foundation prefab's buildings |
 | `tile/hf_water_map.compressed_map` | hf_water | 2 projects with a river: 418 of 422 water pixels (edge rule open); correctly absent on the other 3 |
 | `tile/normal.dds`, `ground_types.dds`, `blend0.dds`, `blend1.dds`, `debug_protection_map.png` | – | **not started** |
-| Terry-save inputs (raw map folder, `explicit_tiles.txt`, `rules.bob`, Terry's own tile database entry) | – | **not started** (BOB inputs Terry writes on save) |
+| Terry-save inputs → `<out>/terry_save/` | terry_save | raw map folder (tile_map.png, lf tifs, climate_map.png, explicit_tiles.txt) identical on 224ad6d5 (the only Terry-made map folder; df46bdbc's was scripted); rules.bob identical; Terry's tile database entry identical on 0a26b6e0, dfe064a6 differs only in the uninitialised `scalable` byte |
 | `tile/shadow_mesh.rigid_model_v2` | tile_meshes | identical 5/5 |
 | `tile/mesh.rigid_model_v2`, `outfield_mesh.rigid_model_v2` | tile_meshes | identical or masked-identical (LOD u32 0xA4..0xA7) 5/5 |
 | `tile/river_mesh.wsmodel`, `outfield_river_mesh.wsmodel` | river_meshes | identical 5/5 |
@@ -63,6 +63,7 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | tile_list.bin: output | Records and heights as the campaign writer. Header floats (0.5, 0.5, 1, 1, 500, 1.333); marker 0. |
 | tile database entry | TILE v7 / VARIATION v10 / texture_set v2. BOB's TerryTile rewrite = Terry's saved entry with the texture channels re-derived from the .terry `texture_channel_N`, keeping only the channels the blend TIF uses (channel 0 always), compacted in order, the rest empty. That is why re-running BOB is a fixed point. The `scalable` byte is uninitialised memory from Terry's save (0x00, 0x58 and 0x8B seen) and is carried over; without a saved entry it is 0. The `.xml` has CRLF line ends, tabs and single quotes, with floats as `%f`. |
 | lf_normal.dds | bob_terrain FUN_18000e4d0/FUN_18003ba70: 3×3 Sobel of h = s·(1/65535) (clamped edges) × 500, normal = normalise(gx, gy, z), z = 1/((lf px per tile-map cell) / (unit_scale 2 · tile size 128)) = 32; pixel B,G,R,A = 0, (ny+1)·127.5, 255, (nx+1)·127.5 truncated. DDS via `AmdCompress`: the kit's AMDCompress_MT_DLL.dll (AMD_TC_ConvertTexture, options zero but dwSize 2000), mips = 2×2 box average with rounding down to 2×2 (campaign: 8×8), standard DXT5 header (Frida: `research/bob_re/frida_amd_compress.js`). |
+| Terry save | Vista (`raw_data/terrain/vistas/<vista>`) tile_map.png + lf tifs copied byte for byte; climate_map.png re-encoded like Qt/libpng: RGB8, pHYs 3780, zlib level 0 (68 05, one stored block per 16 KiB), libpng adaptive filter (min sum of \|signed byte\|, first min), 8192-byte IDATs. explicit_tiles.txt = the tile centred on the tile map + CRLF. rules.bob (map and tile working folders) = `[Pack]` template with `<.terry stem>_<id>.pack`, CRLF, no final newline. Tile entry = `TileDbEntry.FromTerry` (all 8 channels). |
 | hf_height_map | The Height TIF cropped to the vertex grid (triangle_density + 1 pixels in from each side: 1280 → 1025, the same window as the meshes), normalised to the full TIF's min..max with the lf rule. |
 | hf_water_map | The river model rasterised onto the hf grid: 1 pixel per model unit (the model is already in half units), row 0 = z 0, the height-patch crossing test, highest surface kept. −1000 where there is no water. Written only when the tile has a river. |
 
@@ -74,7 +75,6 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
   so it is applied after the mesh step.
 - **hf_water_map:** 4 pixels on triangle edges.
 - **normal.dds, ground_types, blend0/1, debug_protection_map:** not started (the DDS ones can reuse `AmdCompress`).
-- **Terry-save prep step:** the raw map folder, `explicit_tiles.txt`, `rules.bob` and the saved tile database entry.
 
 ## Meshes (worker B, 2026-10-06)
 

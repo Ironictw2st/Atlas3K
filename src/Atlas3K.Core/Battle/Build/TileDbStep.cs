@@ -158,7 +158,7 @@ public sealed class BattleTileDbStep : IBattleBuildStep
 
     public void Run(BattleBuildContext ctx, Action<string> log)
     {
-        var tileId = Path.GetFileName(ctx.SourceTileDir.TrimEnd('\\', '/'));
+        var tileId = ctx.TileFolder;
         var saved = Path.Combine(ctx.TerryTileDbDir, ctx.TileDbStem + ".bin");
         TileDbEntry entry;
         if (File.Exists(saved)) entry = TileDbEntry.Read(File.ReadAllBytes(saved));
