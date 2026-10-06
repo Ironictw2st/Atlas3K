@@ -45,10 +45,10 @@ Map-folder files exist only for 224ad6d5 and df46bdbc; the other three projects 
 | `tile/mesh.rigid_model_v2`, `outfield_mesh.rigid_model_v2` | tile_meshes | identical or masked-identical (LOD u32 0xA4..0xA7) 5/5 |
 | `tile/river_mesh.wsmodel`, `outfield_river_mesh.wsmodel` | river_meshes | identical 5/5 |
 | `tile/*river_mesh.wsmodel.rigid_model_v2` | river_meshes | identical without a river; masked-identical with rivers (the stale u32 at +624 of each river part: 0x318..0x31B with one river) |
-| `tile/bmd_data.bin` / `.xml` | bmd_data | identical 4/4 (224ad6d5 has none) when the grass list is present; BOB's capture-location list order is random (ours: descending first id; compared modulo that order) |
+| `tile/bmd_data.bin` / `.xml` | bmd_data | identical 4/4 round-1 (224ad6d5 has none) with the native grass lists; BOB's capture-location list order is random (ours: descending first id; compared modulo that order) |
 | `tile/<climate>_procedural_bmd_data.bin` / `.xml` | procedural_bmd | identical 5/5 (BOB headless places 0 procedural positions: empty bmd per climate) |
 | `tile/bmd_nogo_data.bin` / `.xml` | bmd_nogo | identical 5/5 (4 terrain outlines on dfe064a6/df46bdbc, none on the flat tiles) |
-| `tile/<climate>.grass_list.bin` | – | **not started** (QTU::generate_grass decompiled: xoroshiro128+ jittered grid per terrain texel; see bmd notes) |
+| `tile/<climate>.grass_list.bin` | grass_list | **identical 10/10** (every climate of all 8 corpus projects that has one; 224ad6d5 arid: none, as BOB) |
 | `tile/<climate>.tree_list.bin` / `.xml` | – | **not started**; no corpus tile places trees |
 
 ## Round 2 corpus
@@ -79,7 +79,8 @@ the next porting round's to-do list:
 | `tile/*river_mesh.wsmodel.rigid_model_v2` | masked-identical | masked-identical | masked-identical | several rivers (2, 3): every part gets the union bounds and pivot; a stale u32 at +624 per part (masked) |
 | `tile/bmd_data.*` | identical (with BOB's tree list) | identical to run3 (with BOB's tree list; capture-list order is random in BOB) | identical (with BOB's tree lists) | siege AI nodes, inlined-wall building_id, ECWall flags and AIH_AMBUSH_FOREST hints ported; only the tree list references wait for a native tree_list step |
 | `tile/<climate>_procedural_bmd_data.*` | **differs** (44,670 vs 308) | **differs** | **differs** ×4 climates | native writes the empty bmd; procedural placement not ported |
-| `tile/<climate>.grass_list.bin`, `.tree_list.bin/.xml` | missing | missing | missing ×4 | not ported |
+| `tile/<climate>.grass_list.bin` | identical | identical | identical ×4 | |
+| `tile/<climate>.tree_list.bin/.xml` | missing | missing | missing ×4 | not ported |
 
 ## Map family: the rules
 
@@ -161,6 +162,25 @@ Battle tile database (`terrain/tiles/battle/_tile_database/_settings.bin`, fast.
 - Masked tiles (`cells/mask`): the per-cell skirt branch of `FUN_1800dcf00` is not ported.
 - Protection map (buildings): passed as none, because every corpus map is empty.
 - Tiles at any density or size other than 128 / 8×8: the code follows the decompile, but the corpus only has 128 / 8×8.
+
+## Grass: the rules
+
+`GrassListStep` (Build/Bmd/GrassListStep.cs, order 310) + `GrassGenerator` / `GrassSpec` (GrassGeneration.cs), RNG
+`Xoroshiro128Plus` (shared). Prototype `research/battle_build/grass_proto.py`; decompiles in
+`Z:/Claude/BattleMaps/research/bob_re/grass` (qtu, qtu2: qttoolutility; veg, veg2, veg3: bob_vegetation) with the
+Frida scripts `frida_grass.js` (texture index per texel, weights) and `frida_grass_weights.js` (the weight Array3).
+
+| Part | Rule |
+|---|---|
+| Inputs | bob_vegetation FUN_180003690, per climate of `climate_mask`; outfield tiles (infield_tile="false") get none. Seed = `.terry` `<procedural grass_seed>`, the same for every climate. Spec = game `terrain/vegetation/battle/grass/grass_generation_spec.xml`: textures by `val` (several blocks of the same texture merge their climates), `treshold`, per climate (or `*`) a model run and `<density>` (else default_density). |
+| Weights | Blend8 `data_composited` (Frida, every texel): channel c = v · (1/255); then channel 0 += 1 − Σ channels (float, channel order). An unpainted pixel is all channel 0, and a 50/50 split leaves channel 0 an ulp or two below the other. |
+| Texel loop | x outer, y inner over the 1280² terrain map. Cell = floor of the texel centre through terrain_map_to_world(true) (world = 2·map − 258) and the inverse cell_to_world (y flipped); cells outside the tile or masked are skipped (no draws). Texture = first channel, in descending weight (stable insertion sort FUN_1800bbae0: ties keep channel order), with weight > threshold; no climate spec → skipped. |
+| Grid | spacing s = 1/√density; aligned to the outer box (−256 .. (cells + 1)·256) with offset (W − floor(W/s)·s)·0.5; start = ceil((texel corner − offset − box min)/s)·s + box min + offset; walk x then z while below the texel's far corner (float32, decompile order). |
+| Jitter and model | Two draws (angle = top16 · 2π/65535, radius = top16 · 1/65535), BOB's sine (QtuTransform.SinCos); point = (cos, sin) · radius · s · 0.5 + grid. Model = rejection draw (top 32 bits, redraw while ≤ 0xffffffff % count) % count + first. No exclusion outlines occur in the corpus (the provider list is empty). |
+| Writer | Keep 0 ≤ x, z < cells · 256; height = Height TIF[(int)(z · 0.5 + 128), (int)(0.5 · x + 128)] (× the height-alpha map, 1 on the corpus). Records (x, y, z) as BOB's half (`BobRiver.HalfBits`). Models grouped by (path, alpha_mul, alpha_add, far_addition) in the CA hash map's order (FUN_1800340d0 hash: big-endian 4-byte string chunks and the three float bits, mixed with `(x << (b ^ 31)) | (x >> b)`; one list sorted by bucket = hash % (boundaries − 1), new keys at their bucket's end, start 1 bucket, load 1.0, grow to max(count, 2·boundaries − 1) + 1 boundaries re-inserting in list order). File: FASTBIN0, u16 2, u32 models, per model u16 1, u16 length, path, 3 floats, u32 count, 6-byte records. No file when empty. |
+
+Open (grass): exclusion outlines (the outline provider's source: no corpus tile has any), masked cells (logged, not
+excluded), other densities / tile sizes / cell sizes (the code follows the decompile; the corpus is 128 / 8×8 / 256).
 
 ## Bmd family: the rules (worker C)
 
