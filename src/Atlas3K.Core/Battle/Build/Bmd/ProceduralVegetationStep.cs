@@ -10,7 +10,7 @@ namespace Atlas3K.Core.Battle.Build.Bmd;
 /// (<see cref="ProceduralTables"/>), <see cref="ProceduralGenerator"/> on the composited Height and Blend8 maps with the
 /// project's vegetation_seed, then each instance inside the tile's inner box becomes
 ///  - tree (1): a &lt;climate&gt;.tree_list item, key BattleTerrain/vegetation/&lt;model&gt;.rigid_model_v2 (skipped when the model
-///    is not in the VFS), y 0, the instance scale, yaw byte
+///    is not in the VFS), y = height · <see cref="HfInfluenceMap"/> at the tree's pixel, the instance scale, yaw byte
 ///  - prop (2) / decal (4): a PROP of &lt;climate&gt;_procedural_bmd_data, key RigidModels/[Decals/]&lt;model&gt;.rigid_model_v2,
 ///    transform = base scale · instance scale, rotated about the terrain normal (or up, keep_upright) by the yaw
 ///  - vfx (8): a PARTICLE_EMITTER (key = instance name = model, emission rate 1, clamped to the surface)
@@ -24,7 +24,7 @@ public sealed class ProceduralVegetationStep : IBattleBuildStep
     public string Name => "procedural_vegetation";
 
     public const string SettingsPath = "terrain/tiles/battle/_tile_database/_settings.bin";
-    public const float UnitScale = 2f;
+    public const float UnitScale = 2f, TerrainTileSize = 128f;
 
     public void Run(BattleBuildContext ctx, Action<string> log)
     {
@@ -38,6 +38,18 @@ public sealed class ProceduralVegetationStep : IBattleBuildStep
         var parameters = ProceduralParameters.Load(ctx);
         foreach (var e in parameters.Errors) log($"{Name}: {e}");
         var handPlaced = HandPlacedTrees(ctx);
+        if (project.Masked) log($"{Name}: the tile has a cell mask: tree heights use the unmasked hf influence map (not ported)");
+        var influence = HfInfluenceMap.Build(project.TriangleDensity, project.TilesWide, project.TilesHigh, out var infW);
+        var toPixel = 1f / (TerrainTileSize / project.TriangleDensity * UnitScale);
+        float TreeHeight(float x, float z)
+        {
+            // FUN_180007630: (int)(density + coordinate / (tile size / density · unit scale)) into the height map and the
+            // hf influence map; the tree height is their product (0 where the field fades out, -0 below sea level)
+            var ix = (int)(project.TriangleDensity + toPixel * x);
+            var iz = (int)(project.TriangleDensity + z * toPixel);
+            var i = infW * iz + ix;
+            return i >= 0 && i < influence.Length && iz * hw + ix < height.Length ? height[ix + hw * iz] * influence[i] : 0f;
+        }
         foreach (var climate in climates)
         {
             if (!parameters.MaxTreesPerSquareMetre.ContainsKey(climate))
@@ -71,7 +83,7 @@ public sealed class ProceduralVegetationStep : IBattleBuildStep
                         case 1:
                             var key = "BattleTerrain/vegetation/" + model + ".rigid_model_v2";
                             if (!ModelExists(ctx, key)) { log($"{Name}: could not find model for '{key}'"); continue; }
-                            trees.Add(new BattleTreeItem(key, inst.X, 0f, inst.Z, inst.Scale, BattleTreeList.RotationByte(inst.Rotation), false));
+                            trees.Add(new BattleTreeItem(key, inst.X, TreeHeight(inst.X, inst.Z), inst.Z, inst.Scale, BattleTreeList.RotationByte(inst.Rotation), false));
                             break;
                         case 2:
                         case 4:

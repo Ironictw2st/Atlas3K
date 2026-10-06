@@ -6,7 +6,7 @@ old empty-bmd step `procedural_bmd` whose files it overwrites). Rows for docs/na
 | File | Status (bob_run1) |
 |---|---|
 | `<climate>_procedural_bmd_data.bin/.xml` | identical on all 8 corpus projects (10 climates; trees, 1,138 props, vfx; round 1 empty) |
-| `<climate>.tree_list.bin/.xml` | identical on 5a2e0001 (temperate), 5a2e0002 (cold), 5a2e0003 arid + subtropical; 5a2e0003 temperate / tropical differ in 4 / 3 tree heights (y) |
+| `<climate>.tree_list.bin/.xml` | identical on all corpus projects that place trees (5a2e0001 temperate, 5a2e0002 cold, 5a2e0003 arid / subtropical / temperate / tropical); none written on the round-1 projects, as in BOB |
 
 ## How BOB does it (bob_vegetation FUN_180007630 → qttoolutility QTU::ProceduralTerrainContent::generate)
 
@@ -28,10 +28,9 @@ old empty-bmd step `procedural_bmd` whose files it overwrites). Rows for docs/na
 
 ## Open
 
-- Tree y = height(pixel) · hf influence map (warscape WS_SCENE_NODE_TERRAIN_EDITOR_V3::build_hf_influence_map /
-  get_hf_influence_value: a 1281² edge fade, 1 inside, powf ramp over ~63 px at the tile border). Natively y = 0, so
-  trees on non-zero height inside the fade/interior differ (5a2e0003 river bed). Decompiles:
-  Z:/Claude/BattleMaps/research/bob_re/veg_hfi; a Frida dump of the map: frida_veg/veg_multi_3 (action_map_a8).
+- Tree y = height(pixel) · hf influence map (warscape build_hf_influence_map / get_hf_influence_value, ported in
+  HfInfluenceMap.cs and veg_hf_influence.py, bit-exact against the dumped map): ported for tiles without a cell mask
+  or link points only (the corpus); masked / linked tiles change the neighbour flags.
 - Props use that height map's normal (keep_upright off); corpus props sit on flat ground.
 - Not ported: prefab (0x10) / building (0x20) objects, exclusion polygons and the cell mask (empty in the corpus),
   BOB's hard procedural limit, per_climate_tree_conversions for hand-placed trees.

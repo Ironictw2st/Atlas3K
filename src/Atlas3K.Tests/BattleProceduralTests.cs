@@ -45,7 +45,6 @@ public class BattleProceduralTests
             foreach (var f in Directory.EnumerateFiles(ctx.OutTileDir).Where(f => f.Contains("procedural_bmd") || f.Contains("tree_list")))
             {
                 var bob = Path.Combine(dir, "bob_run1", "tile", Path.GetFileName(f));
-                if (id == "5a2e0003_7c1d_4e6b_9a10_000000000003" && f.Contains(".tree_list")) continue;   // tree heights: hf influence map not ported
                 Assert.True(File.Exists(bob), $"{id}: BOB has no {Path.GetFileName(f)}");
                 Assert.True(File.ReadAllBytes(f).AsSpan().SequenceEqual(File.ReadAllBytes(bob)), $"{id}: {Path.GetFileName(f)} differs");
                 checkedFiles++;
