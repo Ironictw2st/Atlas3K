@@ -15,7 +15,7 @@ foreach ($project in "src\Atlas3K.App\Atlas3K.App.csproj", "src\Atlas3K.Cli\Atla
     dotnet publish (Join-Path $root $project) -c Release -r win-x64 --self-contained true -o $out -p:DebugType=none -p:GenerateDocumentationFile=false -nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $project" }
 }
-foreach ($doc in "README.md", "CHANGELOG.md", "KNOWN_ISSUES.md", "THIRD_PARTY_NOTICES.md") {
+foreach ($doc in "LICENSE", "README.md", "CHANGELOG.md", "KNOWN_ISSUES.md", "THIRD_PARTY_NOTICES.md") {
     Copy-Item (Join-Path $root $doc) $out
 }
 # nothing machine-specific may ship

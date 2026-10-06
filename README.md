@@ -199,4 +199,9 @@ The source needs the .NET 9 SDK (pinned in `global.json`).
 
 See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) and [CHANGELOG.md](CHANGELOG.md).
 
+## Licence
+
+Atlas3K is released under the [MIT licence](LICENSE). The libraries it uses keep their own licences; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 Not affiliated with Creative Assembly or SEGA. Total War: THREE KINGDOMS and its Assembly Kit are their property.

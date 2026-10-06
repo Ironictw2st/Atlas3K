@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Atlas3K is now released under the MIT licence (`LICENSE`); the download includes it.
+
 ### Campaign battles (battle editor, phase 1)
 - **New window** (start page tile *Campaign battles*, or `Atlas3K.exe --campaign-battles`): the campaign-battle terrain's catchment areas (`battle_locations_map.bin`) on a map, a status per settlement, and fixes. Ported from the BattleMaps `blm` / `blm-ui` tool.
 - **Sources, read only:** the catchments come from the linked packs, then the game's packs (or a loose `.bin`). The campaign regions come from the map's `map_data.esf`. Names and suggested kinds come from an RPFM extract of the mod (*File › Mod data folder…*).

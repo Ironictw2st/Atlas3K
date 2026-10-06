@@ -149,6 +149,7 @@ public sealed class AboutWindow : Window
             Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = Theme.Brush("DimText"),
             Text = "Edits campaign maps from the Assembly Kit's sources and builds them natively, without BOB. " +
                    "Alpha software: back up your assembly kit and packs before building over them.\n\n" +
+                   "Free and open source under the MIT licence (see LICENSE).\n\n" +
                    "Not affiliated with Creative Assembly or SEGA. Total War: THREE KINGDOMS and its Assembly Kit are their property; " +
                    "Atlas3K reads them from your own installation and ships none of their data.",
         });

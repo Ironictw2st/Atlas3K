@@ -3,7 +3,8 @@
   <PropertyGroup>
     <Product>Atlas3K</Product>
     <Company>Atlas3K</Company>
-    <Copyright>Atlas3K contributors</Copyright>
+    <Copyright>Copyright (c) 2026 Atlas3K contributors</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <VersionPrefix>0.1.0</VersionPrefix>
     <VersionSuffix>alpha.2</VersionSuffix>
     <!-- appends +<commit> to InformationalVersion when built from git -->
