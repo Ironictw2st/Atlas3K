@@ -29,8 +29,18 @@ public sealed class BattleTileListStep : IBattleBuildStep
 
         var map = HexTileMap.Read(Path.Combine(ctx.SourceMapDir, "tile_map.png"));
         var climate = ClimateIndices(Path.Combine(ctx.SourceMapDir, "climate_map.png"), map, db);
-        var sim = new TileMatchSimulator(db, groups, f => loose.Contains(f) ? 1 : 0) { ExplicitTiles = explicitTiles, Log = log };
+        var sim = new TileMatchSimulator(db, groups, f => loose.Contains(f) ? 1 : 0) {
+            ExplicitTiles = explicitTiles, IsCampaign = false, Log = log,
+            StopAfterPlacements = int.TryParse(Environment.GetEnvironmentVariable("ATLAS3K_BATTLE_TILE_STOP"), out var stop) ? stop : -1,
+        };
         var result = sim.Run(map, climate);
+        if (sim.StopAfterPlacements >= 0)
+        {
+            // diagnostics: ATLAS3K_BATTLE_TILE_EXPLAIN="location;x;y" explains that test in the stopped state
+            if (Environment.GetEnvironmentVariable("ATLAS3K_BATTLE_TILE_EXPLAIN") is { } ex && ex.Split(';') is [var l, var ex1, var ey])
+                log(sim.Explain(l, int.Parse(ex1), int.Parse(ey)));
+            return;
+        }
         foreach (var m in sim.Messages.Take(20)) log("tile_list: " + m);
         if (Environment.GetEnvironmentVariable("ATLAS3K_BATTLE_TILE_TRACE") is { Length: > 0 } trace)
         {

@@ -92,6 +92,14 @@ public sealed class TileMatchSimulator
     /// location, top-left of the footprint in image space, rotation code 0x10/0x20/0x40/0x80.</summary>
     public sealed record ExplicitTile(string Location, int ImageX, int ImageY, int Rotation);
 
+    /// <summary>EDITOR_TILE_MAP::is_campaign: false for battle maps, which skip the campaign-only junction-pass 2×2 rule.</summary>
+    public bool IsCampaign { get; init; } = true;
+
+    /// <summary>Diagnostics: stop the run (Run returns the partial state) once this many tiles are placed; -1 = off.</summary>
+    public int StopAfterPlacements { get; init; } = -1;
+
+    private sealed class StopRun : Exception;
+
     /// <summary>explicit_tiles.txt tiles (battle maps); none on the campaign path.</summary>
     public IReadOnlyList<ExplicitTile> ExplicitTiles { get; init; } = [];
 
@@ -383,12 +391,16 @@ public sealed class TileMatchSimulator
 
         var perPass = new Dictionary<string, int>();
         var failed = 0;
-        foreach (var (pass, name) in new[] { (1, "large"), (2, "transition"), (3, "junction"), (4, "link_target"), (5, "linked"), (0, "all") }.Take(MaxPasses))
+        try
         {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            perPass[name] = Scan(pass, ref failed);
-            Log?.Invoke($"{name}: {perPass[name]:N0} tiles, {sw.Elapsed.TotalSeconds:F1} s");
+            foreach (var (pass, name) in new[] { (1, "large"), (2, "transition"), (3, "junction"), (4, "link_target"), (5, "linked"), (0, "all") }.Take(MaxPasses))
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                perPass[name] = Scan(pass, ref failed);
+                Log?.Invoke($"{name}: {perPass[name]:N0} tiles, {sw.Elapsed.TotalSeconds:F1} s");
+            }
         }
+        catch (StopRun) { Log?.Invoke($"stopped after {StopAfterPlacements} placements"); }
 
         var noTile = new List<(int, int)>();
         for (var y = 0; y < _h; y++)
@@ -419,6 +431,38 @@ public sealed class TileMatchSimulator
             if (PlaceTile(t, x, y - height + 1, rot, climate, 1)) PlaceAlsoPlace(t, x, y - height + 1, rot, climate);
             else _messages.Add($"explicit tile error: tile {e.Location} ({x}, {y}) overlaps another tile.");
         }
+    }
+
+    /// <summary>Diagnostics: why <paramref name="location"/> can or cannot go at (x, y) now (y from the south): occupied,
+    /// in-box, and per rotation the space and link checks (each link's point, group, placed tile, link state).</summary>
+    public string Explain(string location, int x, int y)
+    {
+        var hit = FindVariation(location);
+        if (hit is not { } h) return "not in the database";
+        var t = _tiles[h.Tile];
+        var p = P(x, y);
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{t.Source.File} {t.W}x{t.H} masked={t.Masked} links={t.Links.Length} targets={t.Targets.Length} occupied={Occupied(t, p)} inbox={InBox(t, x, y)} group={_group[p]}");
+        for (var r = 0; r < 4; r++)
+        {
+            int anchor = -1, g = Invalid;
+            var space = SpaceFree(t, x, y, r, ref anchor, ref g);
+            sb.AppendLine($"  rot {r}: space {space} links {LinksMatch(t, x, y, r)}");
+            foreach (var l in t.Links)
+            {
+                var (rx, ry) = Rotate(t.W, t.H, r, l.X, t.H - l.Y - 1);
+                int px = x + rx, py = y + ry;
+                if (px < 0 || py < 0 || px >= _w || py >= _h) { sb.AppendLine($"    link {_db.TileSets[l.Set].Name} eq={l.EqualsTest} at {px},{py}: off map"); continue; }
+                var q = P(px, py);
+                var s = l.Set >= 0 ? SetIndex(_setLinkAs[l.Set]) : Invalid;
+                _links.TryGetValue(q, out var st);
+                var placed = _layer1[q];
+                sb.AppendLine($"    link {(l.Set >= 0 ? _db.TileSets[l.Set].Name : "?")}->{(s >= 0 ? _setLinkAs[s] : "?")} eq={l.EqualsTest} at {px},{py}: group {_group[q]} " +
+                              $"matchesLinkAs={(s >= 0 && _group[q] != Invalid ? MatchesLinkAs(_group[q], s) : false)} placed={(placed > 0 ? _tiles[placed - 1].Source.File : "-")} " +
+                              $"state={(st == null ? "none" : st.Flags.ToString("x"))} has={(st != null && s >= 0 && st.Has(s))}");
+            }
+        }
+        return sb.ToString();
     }
 
     /// <summary>scan_tile_areas: per tile set, the bounds (±128 points) of the points whose group stands for it.</summary>
@@ -525,7 +569,7 @@ public sealed class TileMatchSimulator
                     if (!(pass == 3 || t.Masked || !Occupied(t, p))) continue;
                     if (!InBox(t, x, y)) continue;
                     if (!TestFinalPosition(t, x, y, out var rot, ref climate, out var group)) continue;
-                    if (pass == 3 && t.W == 2 && t.H == 2 && TwoHighStripBeside(x, y)) continue;
+                    if (IsCampaign && pass == 3 && t.W == 2 && t.H == 2 && TwoHighStripBeside(x, y)) continue;
                     PlaceChosen(t, x, y, rot, climate, group);
                     placed++;
                     if (pass == 5) break;
@@ -598,6 +642,7 @@ public sealed class TileMatchSimulator
                 {
                     anchor = p;
                     _placed.Add(new SimulatedTile(t.Variation0, x, y, RotationCode(rot), climate, layer, px, py));
+                    if (layer == 1 && StopAfterPlacements >= 0 && _placed.Count(q => q.Layer == 1) > StopAfterPlacements) throw new StopRun();
                 }
                 if (layer == 1) _layer1[p] = t.Index + 1;
                 else _layer2[p] = true;
@@ -749,7 +794,9 @@ public sealed class TileMatchSimulator
     {
         if (t.Targets.Length == 0)
         {
-            var name = t.Set >= 0 ? _setLinkAs[t.Set] : "";
+            // TILE_PLACEMENT_GROUPS::link_as_set(group) when the group has one (xml groups), else the set's link_as
+            var name = group >= 0 && group < _groups.Length && _groups[group].LinkAs.Length > 0 ? _groups[group].LinkAs
+                     : t.Set >= 0 ? _setLinkAs[t.Set] : "";
             var s = SetIndex(name);
             if (s < 0) { _messages.Add($"Failed to find tile set {name} to link to {t.Source.Name}"); return; }
             for (var row = 0; row < t.H; row++)

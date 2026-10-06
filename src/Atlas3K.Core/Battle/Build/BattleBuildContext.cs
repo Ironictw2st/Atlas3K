@@ -64,6 +64,11 @@ public sealed class BattleBuildContext
         Directory.EnumerateFiles(SourceTileDir, "*.terry").SingleOrDefault()
         ?? throw new FileNotFoundException($"no .terry in {SourceTileDir}");
 
+    /// <summary>Where Terry saved the tile's database entry (an input BOB reads and rewrites): the kit's
+    /// working_data/terrain/tiles/battle/_tile_database/TILES by default.</summary>
+    public string TerryTileDbDir { get => _TerryTileDbDir ?? Path.Combine(WorkingData, "terrain", "tiles", "battle", "_tile_database", "TILES"); init => _TerryTileDbDir = value; }
+    private readonly string? _TerryTileDbDir;
+
     /// <summary>The game's data folder (vanilla packs), for the files BOB reads from its VFS (tile database settings,
     /// tiles listed in explicit_tiles.txt, ...).</summary>
     public string GameDataDir { get; init; } = Defaults.GameData;

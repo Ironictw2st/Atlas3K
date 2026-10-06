@@ -27,16 +27,17 @@ public sealed class BattleLfStep : IBattleBuildStep
         }
     }
 
-    /// <summary>BOB's normalisation, float32 throughout: h = s / 65535, lo/hi = min/max of h,
-    /// v = trunc((h − lo) · (1 / (hi − lo)) · 65535). Multiplying by the reciprocal is what makes it exact (dividing by
-    /// hi − lo is off by one on ~0.01% of pixels). Header f[1] = lo, f[4] = hi.</summary>
+    /// <summary>BOB's normalisation, float32 throughout: h = s · (1/65535), lo/hi = min/max of h,
+    /// v = trunc((h − lo) · (1 / (hi − lo)) · 65535). Both reciprocal multiplications matter: dividing (by 65535 or by
+    /// hi − lo) is off by one on a few pixels (research/battle_map_files/lf_round2.py, all corpus maps). Header f[1] = lo, f[4] = hi.</summary>
     public static (Raster<ushort> Values, float[] Header) Normalise(Raster<ushort> source)
     {
         var h = new float[source.Data.Length];
         float lo = float.MaxValue, hi = float.MinValue;
+        const float k = 1f / 65535f;
         for (var i = 0; i < h.Length; i++)
         {
-            h[i] = source.Data[i] / 65535f;
+            h[i] = source.Data[i] * k;
             if (h[i] < lo) lo = h[i];
             if (h[i] > hi) hi = h[i];
         }
