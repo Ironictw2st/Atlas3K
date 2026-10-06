@@ -8,7 +8,8 @@ namespace Atlas3K.Core.Battle.Build;
 /// <summary>
 /// lf_height_map / lf_sea_height_map (.compressed_map + .dds) from raw_data/terrain/battles/&lt;id&gt;/lf_heights.tif and
 /// lf_sea_heights.tif. Same rule as the campaign export (<see cref="CompiledTerrainExporter.Normalise"/>): values
-/// stretched to the source's own min..max, header f[1] = lo/65535, f[4] = hi/65535; a constant source is all zeros.
+/// stretched to the source's own min..max, header f[1] = lo/65535, f[4] = hi/65535; a constant source is all zeros with
+/// lo = hi = its value.
 /// </summary>
 [BattleStepOrder(110)]
 public sealed class BattleLfStep : IBattleBuildStep
@@ -30,7 +31,8 @@ public sealed class BattleLfStep : IBattleBuildStep
 
     /// <summary>BOB's normalisation, float32 throughout: h = s · (1/65535), lo/hi = min/max of h,
     /// v = trunc((h − lo) · (1 / (hi − lo)) · 65535). Both reciprocal multiplications matter: dividing (by 65535 or by
-    /// hi − lo) is off by one on a few pixels (research/battle_map_files/lf_round2.py, all corpus maps). Header f[1] = lo, f[4] = hi.</summary>
+    /// hi − lo) is off by one on a few pixels (research/battle_map_files/lf_round2.py, all corpus maps). Header f[1] = lo, f[4] = hi;
+    /// a constant source keeps lo = hi = its value (data all zeros; round-2 subtropical map, lf 1966 everywhere).</summary>
     public static (Raster<ushort> Values, float[] Header) Normalise(Raster<ushort> source)
     {
         var h = new float[source.Data.Length];
@@ -52,7 +54,6 @@ public sealed class BattleLfStep : IBattleBuildStep
                 result.Data[i] = (ushort)(t * 65535f);
             }
         }
-        else lo = hi = 0;
         return (result, [0, lo, 0, 0, hi, 0]);
     }
 }
@@ -143,7 +144,8 @@ public sealed class BattleIconStep : IBattleBuildStep
 
 /// <summary>
 /// lf_normal.dds (bob_terrain FUN_18000e4d0 + FUN_18003ba70): the 3×3 Sobel gradient of the lf height field
-/// (h = s · (1/65535), edges clamped) scaled by the lf height scale (500), normal = normalise(gx, gy, z) with
+/// (h = s · (1/65535), edges clamped) scaled by the lf height scale (500), accumulated in BOB's term order (steep maps
+/// round differently otherwise: the round-2 cold map), normal = normalise(gx, gy, z) with
 /// z = (tile size · unit_scale) / (lf pixels per tile-map cell) = 32 for a battle map; pixel (B, G, R, A) =
 /// (0, (ny + 1)·127.5, 255, (nx + 1)·127.5) truncated; DXT5 with BOB's mip chain down to 2×2 through the kit's AMD
 /// compressor (<see cref="AmdCompress"/>).
@@ -153,6 +155,9 @@ public sealed class BattleLfNormalStep : IBattleBuildStep
 {
     public string Name => "lf_normal";
     public const float LfHeightScale = 500f;
+    /// <summary>The convolution's height scale (lf height scale 500 · 8; the result is divided by 8).</summary>
+    public const float GradientScale = 4000f;
+    static readonly float[] SobelKernel = [1f, 0f, -1f, 2f, 0f, -2f, 1f, 0f, -1f];
     public const float UnitScale = 2f, TerrainTileSize = 128f;
 
     public void Run(BattleBuildContext ctx, Action<string> log)
@@ -171,11 +176,19 @@ public sealed class BattleLfNormalStep : IBattleBuildStep
         for (var y = 0; y < h; y++)
             for (var x = 0; x < w; x++)
             {
-                var gx = H(x - 1, y - 1) - H(x + 1, y - 1) + 2f * (H(x - 1, y) - H(x + 1, y)) + (H(x - 1, y + 1) - H(x + 1, y + 1));
-                var gy = H(x - 1, y - 1) - H(x - 1, y + 1) + 2f * (H(x, y - 1) - H(x, y + 1)) + (H(x + 1, y - 1) - H(x + 1, y + 1));
-                gx *= LfHeightScale; gy *= LfHeightScale;
-                var inv = 1f / MathF.Sqrt(gx * gx + gy * gy + z * z);
-                float nx = gx * inv, ny = gy * inv;
+                // bob_terrain FUN_180026620 / FUN_180026910: a 3x3 convolution accumulated term by term from 0,
+                // ((scale * h) * k) in row-major order (the y kernel transposed), divided by 3·3 − 1
+                float gx = 0f, gy = 0f;
+                for (var r = 0; r < 3; r++)
+                    for (var c = 0; c < 3; c++)
+                        gx += GradientScale * H(x - 1 + c, y - 1 + r) * SobelKernel[r * 3 + c];
+                for (var r = 0; r < 3; r++)
+                    for (var c = 0; c < 3; c++)
+                        gy += GradientScale * H(x - 1 + c, y - 1 + r) * SobelKernel[c * 3 + r];
+                gx /= 8f; gy /= 8f;
+                // FUN_18003ba70: n = 1 / sqrt(gy² + gx² + z²) (that addition order)
+                var inv = 1f / MathF.Sqrt(gy * gy + gx * gx + z * z);
+                float nx = inv * gx, ny = inv * gy;
                 var o = (y * w + x) * 4;
                 bgra[o] = 0;
                 bgra[o + 1] = (byte)(int)((ny + 1f) * 127.5f);

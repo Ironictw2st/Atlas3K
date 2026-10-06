@@ -105,7 +105,8 @@ public sealed class BattleTileNormalStep : IBattleBuildStep
 
 /// <summary>
 /// ground_types.dds: per pixel the EMPIREUTILITY::GROUND_TYPE (forest 0, grass 1, mud 2, sand 3, scrub 4, rock 5, …) of the
-/// blend channel with the highest weight (first on ties), each channel's texture group (.terry texture_channel_N) mapped
+/// first blend channel whose weight is over 0.55 (≥ 141 of 255), else channel 0's: not the highest weight (the round-2
+/// painted maps, 7–11k pixels, settle it on 127/128 and 115/140 splits), each channel's texture group (.terry texture_channel_N) mapped
 /// by db ground_type_to_texture_groups; the blend TIF cropped by triangle_density on each side (1280 → 1024),
 /// uncompressed L8 with BOB's bare header. No blend data → channel 0 everywhere.
 /// </summary>
@@ -119,6 +120,9 @@ public sealed class BattleGroundTypesStep : IBattleBuildStep
         "forest", "grass", "mud", "sand", "scrub", "rock", "deep_water", "shallow_water", "road", "wooden_floor", "snow",
         "sharp_stones", "burnt", "wet_mud", "long_grass", "light_forest", "caltrops", "oil",
     ];
+
+    /// <summary>The weight a channel needs to set the pixel's ground type: over 0.55, i.e. 141 of 255.</summary>
+    public const byte DominantWeight = 141;
 
     public void Run(BattleBuildContext ctx, Action<string> log)
     {
@@ -138,7 +142,8 @@ public sealed class BattleGroundTypesStep : IBattleBuildStep
                 if (blend is { } b)
                 {
                     var o = ((y + density) * b.W + x + density) * 8;
-                    for (var c = 1; c < 8; c++) if (b.Data[o + c] > b.Data[o + best]) best = c;
+                    for (var c = 0; c < 8; c++)
+                        if (b.Data[o + c] >= DominantWeight) { best = c; break; }
                 }
                 pixels[y * size + x] = gt[best];
             }
