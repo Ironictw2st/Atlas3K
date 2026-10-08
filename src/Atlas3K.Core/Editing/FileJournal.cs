@@ -37,15 +37,18 @@ public sealed class FileJournal(string dir)
     public int Top => History() is { Count: > 0 } h ? h[^1].Seq : 0;
 
     /// <summary>Snapshots each file, then calls its save action (which writes the new content to that path, or deletes it), and
-    /// journals the batch. Returns the batch's seq.</summary>
+    /// journals the batch. Returns the batch's seq. Refuses files of a project repository that a collaborator has
+    /// locked (<see cref="Collab.LockGuard"/>).</summary>
     public int Commit(IEnumerable<(string Path, Action<string> Save)> files, string label)
     {
+        var batch = files.ToList();
+        Collab.LockGuard.Check(batch.Select(f => f.Path)); // files a collaborator has locked
         var history = History();
         var seq = history.Count == 0 ? 1 : history[^1].Seq + 1;
         var snap = Path.Combine(Dir, seq.ToString("D5"));
         Directory.CreateDirectory(snap);
         var entries = new List<HistoryFile>();
-        foreach (var (path, save) in files)
+        foreach (var (path, save) in batch)
         {
             var before = File.Exists(path) ? Hash(File.ReadAllBytes(path)) : null;
             if (before is not null) File.Copy(path, Path.Combine(snap, Path.GetFileName(path)), overwrite: true);

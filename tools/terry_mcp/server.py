@@ -1019,5 +1019,198 @@ def map_audit(map_name: str = "3k_dlc07_main_map", ak_root: str | None = None, p
     return result.get("result", result)
 
 
+# ---------------------------------------------------------------- collaboration
+# Two ways to share map work:
+# - change packages (.a3kpatch): patch_export -> send the file -> patch_import on the other side (three-way merged
+#   with the importer's own edits; conflicts listed by conflicts / resolved by resolve_conflicts; patch_undo).
+# - project repositories: the kit's map folder as a git repo (rasters in LFS, Atlas3K as merge driver), on GitHub
+#   or any remote: collab_init / collab_clone, collab_status, collab_commit, collab_pull, collab_push, branches,
+#   pull requests with map diffs (pr_*), issues pinned to map positions (map pins), and locks.
+# Merges are per entity / per pixel: only the same attribute or pixel changed differently on both sides conflicts.
+
+
+def _collab(command: str, *args: str, map_name: str | None = None, ak_root: str | None = None, timeout: int = 1800) -> dict:
+    result = _run([command, *_common(map_name, ak_root), *args], timeout=timeout)
+    return result.get("result", result)
+
+
+@mcp.tool()
+def patch_export(output: str, since: str | None = None, base_dir: str | None = None, label: str | None = None,
+                 description: str | None = None, map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """Write a change package (.a3kpatch) of map edits to send to a collaborator: either every kit file the edit
+    journals changed after `since` ("yyyy-MM-dd HH:mm"), or the map folder against `base_dir` (a copy of the map folder
+    as it was). Rasters ship only their changed 64-pixel cells."""
+    args = [output]
+    if since: args += ["--since", since]
+    if base_dir: args += ["--base", base_dir]
+    if label: args += ["--label", label]
+    if description: args += ["--description", description]
+    return _collab("patch-export", *args, map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def patch_import(package: str, dry_run: bool = True, map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """Import a change package: files still at the package's base are replaced, the rest are three-way merged with local
+    edits (per entity / per pixel). dry_run (default) only reports. One undo step (patch_undo)."""
+    return _collab("patch-import", package, *(["--dry-run"] if dry_run else []), map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def patch_undo(map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """Undo the last change-package import."""
+    return _collab("patch-undo", map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def conflicts(map_name: str | None = None, ak_root: str | None = None, from_import: bool = False) -> dict:
+    """Open merge conflicts (the repository's after a pull/merge, else the last package import's; from_import forces
+    the import's). Each has a kind (entity/attribute/header/pixels/size/binary), ours/theirs values and a location."""
+    return _collab("conflicts", *(["--import"] if from_import else []), map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def resolve_conflicts(side: str, ids: list[int] | None = None, map_name: str | None = None, ak_root: str | None = None,
+                      from_import: bool = False) -> dict:
+    """Resolve conflicts to "ours" (keep the merged file as is) or "theirs" (take the other side's entity, attribute or
+    pixels). ids = conflict indices (default all open ones). In a repository, collab_commit afterwards."""
+    args = [side]
+    if ids: args += ["--ids", ",".join(map(str, ids))]
+    if from_import: args += ["--import"]
+    return _collab("conflicts-resolve", *args, map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def collab_init(github: str | None = None, remote: str | None = None, public: bool = False,
+                map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """Make the map folder a project repository (LFS rasters, Atlas3K merge driver, first commit). github="owner/name"
+    creates that GitHub repository (private unless public) and pushes; remote=URL pushes to an existing remote.
+    Assembly-kit data is CA's: keep GitHub repositories private."""
+    args = []
+    if github: args += ["--github", github]
+    if remote: args += ["--remote", remote]
+    if public: args += ["--public"]
+    return _collab("collab-init", *args, map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def collab_clone(repository: str, ak_root: str | None = None) -> dict:
+    """Clone a project repository (URL or GitHub owner/name) into the kit as the map it holds."""
+    return _collab("collab-clone", repository, ak_root=ak_root)
+
+
+@mcp.tool()
+def collab_status(map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """Branch, ahead/behind, changed files, open conflicts, everyone's locks and a commit message suggested from the
+    edit journals."""
+    return _collab("collab-status", map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def collab_commit(message: str | None = None, force: bool = False, map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """Commit all map changes (default message from the edit journals). Refuses while conflicts are open unless force."""
+    args = []
+    if message: args += ["-m", message]
+    if force: args += ["--force"]
+    return _collab("collab-commit", *args, map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def collab_sync(action: str, target: str | None = None, map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """action: "pull" (merge others' work), "push", "merge" (target = branch, e.g. origin/main), "revert" (target =
+    commit), "switch" (target = branch), "create_branch" (target = new branch). Merges go through Atlas3K's map merge."""
+    commands = {"pull": ["collab-pull"], "push": ["collab-push"], "merge": ["collab-merge", target or ""],
+                "revert": ["collab-revert", target or ""], "switch": ["collab-branch", target or ""],
+                "create_branch": ["collab-branch", target or "", "--create"]}
+    if action not in commands:
+        return {"error": f"unknown action {action}"}
+    return _collab(*commands[action], map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def collab_history(count: int = 30, map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """Recent commits with the files each changed."""
+    return _collab("collab-log", "--count", str(count), map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def collab_diff(from_rev: str = "HEAD", to_rev: str | None = None, markdown: bool = False,
+                map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """Map-aware diff between revisions (to_rev None = uncommitted work): entities added/removed/changed (with world
+    positions and changed fields) per layer, changed pixels per raster."""
+    args = [from_rev] + ([to_rev] if to_rev else []) + (["--markdown"] if markdown else [])
+    return _collab("collab-diff", *args, map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def pull_request(action: str, number: int | None = None, title: str | None = None, body: str | None = None,
+                 base: str | None = None, draft: bool = False, review: str | None = None, method: str = "merge",
+                 state: str = "open", post: bool = False, map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """GitHub pull requests. action: "create" (title, body, base, draft; the description gets the map diff), "list"
+    (state), "view", "diff" (map diff of PR `number`; post=True comments it), "checkout", "comment" (body), "review"
+    (review = approve|request-changes|comment, body), "merge" (method merge|squash|rebase)."""
+    n = str(number) if number is not None else ""
+    if action == "create":
+        args = ["pr-create", "--title", title or ""] + (["--body", body] if body else []) + (["--base", base] if base else []) + (["--draft"] if draft else [])
+    elif action == "list":
+        args = ["pr-list", "--state", state]
+    elif action in ("view", "checkout"):
+        args = [f"pr-{action}", n]
+    elif action == "diff":
+        args = ["pr-diff", n] + (["--post"] if post else [])
+    elif action == "comment":
+        args = ["pr-comment", n, "--body", body or ""]
+    elif action == "review":
+        args = ["pr-review", n, review or "comment"] + (["--body", body] if body else [])
+    elif action == "merge":
+        args = ["pr-merge", n, "--method", method]
+    else:
+        return {"error": f"unknown action {action}"}
+    return _collab(*args, map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def map_pins(action: str = "list", number: int | None = None, title: str | None = None, body: str | None = None,
+             x: float | None = None, z: float | None = None, layer: str | None = None, entity: str | None = None,
+             assignee: str | None = None, state: str = "open", map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """Issues pinned to map positions (GitHub issues labelled map-pin; Atlas3K draws them on the map). action: "list"
+    (state), "create" (title, x, z world coords, body, layer, entity, assignee), "comment" (number, body), "close"
+    (number, body)."""
+    if action == "list":
+        args = ["pin-list", "--state", state]
+    elif action == "create":
+        args = ["pin-create", "--title", title or "", "--x", str(x), "--z", str(z)]
+        for k, v in (("--body", body), ("--layer", layer), ("--entity", entity), ("--assignee", assignee)):
+            if v: args += [k, v]
+    elif action == "comment":
+        args = ["pin-comment", str(number), "--body", body or ""]
+    elif action == "close":
+        args = ["pin-close", str(number)] + (["--body", body] if body else [])
+    else:
+        return {"error": f"unknown action {action}"}
+    return _collab(*args, map_name=map_name, ak_root=ak_root)
+
+
+@mcp.tool()
+def locks(action: str = "list", file: str | None = None, layer: str | None = None, rect: list[float] | None = None,
+          reason: str | None = None, ids: list[str] | None = None, force: bool = False,
+          map_name: str | None = None, ak_root: str | None = None) -> dict:
+    """Shared "I'm working on this" locks. action: "list", "acquire" (file = map-folder-relative path, or layer = file
+    layer name -- editors then refuse to save it for anyone else -- or rect = [x0, z0, x1, z1] world region, advisory;
+    reason), "release" (ids, default all mine; force breaks someone else's)."""
+    if action == "list":
+        return _collab("lock-list", map_name=map_name, ak_root=ak_root)
+    if action == "acquire":
+        args = ["lock-acquire"]
+        if file: args += ["--file", file]
+        if layer: args += ["--layer", layer]
+        if rect: args += ["--rect", ",".join(map(str, rect))]
+        if reason: args += ["--reason", reason]
+        return _collab(*args, map_name=map_name, ak_root=ak_root)
+    if action == "release":
+        return _collab("lock-release", *([",".join(ids)] if ids else []), *(["--force"] if force else []),
+                       map_name=map_name, ak_root=ak_root)
+    return {"error": f"unknown action {action}"}
+
+
 if __name__ == "__main__":
     mcp.run()
