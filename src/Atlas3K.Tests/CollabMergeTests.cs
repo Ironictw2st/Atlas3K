@@ -1,4 +1,6 @@
+using Atlas3K.Core;
 using Atlas3K.Core.Collab;
+using Atlas3K.Core.Editing;
 using Atlas3K.Formats.Maps;
 using Atlas3K.Formats.Terry;
 
@@ -196,5 +198,66 @@ public class CollabMergeTests
             Assert.Empty(r.Conflicts);
             Assert.Equal(Edit(o, ids[^1]), r.Text);
         });
+    }
+
+    [Fact]
+    public void Package_ExportImport_MergesOntoADivergedCopy_AndUndoes()
+    {
+        var root = Directory.CreateTempSubdirectory("a3k_patch_");
+        try
+        {
+            ProjectPaths Kit(string name) => new()
+            {
+                AssemblyKitRoot = Path.Combine(root.FullName, name),
+                OutputRoot = Path.Combine(root.FullName, name + "_out"),
+                MapName = "m",
+            };
+            void Seed(ProjectPaths p, string layer, params (int X, int Y, ushort V)[] px)
+            {
+                Directory.CreateDirectory(p.AkTerrainDir);
+                File.WriteAllText(Path.Combine(p.AkTerrainDir, "m.l1.layer"), layer);
+                var r = new Raster<ushort>(256, 256);
+                foreach (var (x, y, v) in px) r[x, y] = v;
+                TiffMap.WriteGray16(Path.Combine(p.AkTerrainDir, "m.height.1.tif"), r);
+            }
+            var baseLayer = Layer(Entity(A, "1 0 1") + Entity(B, "5 0 5"));
+            var baseCopy = Kit("base");
+            Seed(baseCopy, baseLayer);
+
+            var alice = Kit("alice");
+            Seed(alice, Layer(Entity(A, "2 0 1") + Entity(B, "5 0 5")), (10, 10, 100));
+            var package = Path.Combine(root.FullName, "alice.a3kpatch");
+            var m = PatchPackage.Export(PatchSources.FromFolder(alice, baseCopy.AkTerrainDir), package, "m", "alice's edits");
+            Assert.Equal(2, m.Files.Count);
+            Assert.Equal("cells", m.Files.Single(f => f.Path.EndsWith(".tif")).Storage);
+
+            // Bob changed other things meanwhile.
+            var bob = Kit("bob");
+            Seed(bob, Layer(Entity(A, "1 0 1") + Entity(B, "5 0 9")), (200, 200, 7));
+            var journal = new FileJournal(PatchSources.ImportDir(bob));
+            var set = new ConflictSet(Path.Combine(journal.Dir, "conflicts"));
+            var dry = PatchPackage.Import(package, bob.AssemblyKitRoot, journal, set, dryRun: true);
+            Assert.All(dry.Files, f => Assert.Equal("merged", f.Action));
+            Assert.Equal(Layer(Entity(A, "1 0 1") + Entity(B, "5 0 9")), File.ReadAllText(Path.Combine(bob.AkTerrainDir, "m.l1.layer")));
+
+            var r = PatchPackage.Import(package, bob.AssemblyKitRoot, journal, set);
+            Assert.Equal(0, r.Conflicts);
+            Assert.Equal(Layer(Entity(A, "2 0 1") + Entity(B, "5 0 9")), File.ReadAllText(Path.Combine(bob.AkTerrainDir, "m.l1.layer")));
+            var h = TiffMap.ReadGray16(Path.Combine(bob.AkTerrainDir, "m.height.1.tif"));
+            Assert.Equal(100, h[10, 10]);
+            Assert.Equal(7, h[200, 200]);
+
+            // Importing twice is a no-op; undo restores Bob's files.
+            Assert.All(PatchPackage.Import(package, bob.AssemblyKitRoot, journal, set).Files, f => Assert.Equal("already applied", f.Action));
+            journal.Undo();
+            Assert.Equal(Layer(Entity(A, "1 0 1") + Entity(B, "5 0 9")), File.ReadAllText(Path.Combine(bob.AkTerrainDir, "m.l1.layer")));
+
+            // On an unchanged base the package applies byte for byte.
+            PatchPackage.Import(package, baseCopy.AssemblyKitRoot, new FileJournal(PatchSources.ImportDir(baseCopy)),
+                new ConflictSet(Path.Combine(root.FullName, "c2")));
+            foreach (var f in new[] { "m.l1.layer", "m.height.1.tif" })
+                Assert.Equal(File.ReadAllBytes(Path.Combine(alice.AkTerrainDir, f)), File.ReadAllBytes(Path.Combine(baseCopy.AkTerrainDir, f)));
+        }
+        finally { root.Delete(true); }
     }
 }

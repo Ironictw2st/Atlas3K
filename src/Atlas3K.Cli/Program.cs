@@ -92,6 +92,8 @@ switch (command)
         return TerryCommands.Run(paths, c, args.Skip(1).ToArray());
     case var c when TileCommands.Names.Contains(c):
         return TileCommands.Run(paths, c, args.Skip(1).ToArray());
+    case var c when CollabCommands.Names.Contains(c):
+        return CollabCommands.Run(paths, c, args.Skip(1).ToArray());
     case var c when BuildCommands.Names.Contains(c):
         return BuildCommands.Run(paths, c, args.Skip(1).ToArray());
     case var c when AiPathfindingCommands.Names.Contains(c):
