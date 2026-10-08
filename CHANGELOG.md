@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **Auto-update with stable and unstable channels** (*Help › Check for updates…*, also checked at start-up):
+  - Downloads the release zip and verifies its SHA-256.
+  - Installs after Atlas3K closes, then restarts it.
+  - Keeps the previous version for *Roll back*.
+  - `tools/publish.ps1 -Channel stable|unstable -Release` publishes a release on a channel.
+- **Collaboration** (*Window › Collaboration…*, `docs/collaboration.md`):
+  - Change packages (`.a3kpatch`) to send edits to someone.
+  - Git / GitHub project repositories in which Atlas3K merges map files per entity and per pixel.
+  - Pull requests with map diffs.
+  - Map pins (GitHub issues placed on the map).
+  - Locks.
+
 ## 0.1.0-alpha.2 (2026-10-05)
 
 First public release.

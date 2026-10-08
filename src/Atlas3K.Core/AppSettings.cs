@@ -34,6 +34,13 @@ public sealed class AppSettings
     /// only the first time a window opens.</summary>
     public List<string> ToursSeen { get; set; } = [];
     public Dictionary<string, WindowPlacement> Windows { get; set; } = [];
+    /// <summary>Update channel: "stable", "unstable", or empty = the channel the install was published on.</summary>
+    public string UpdateChannel { get; set; } = "";
+    /// <summary>Look for a new version when Atlas3K starts (at most once a day).</summary>
+    public bool CheckForUpdates { get; set; } = true;
+    /// <summary>A version the user chose to skip: not offered at start-up again (Help → Check for updates still shows it).</summary>
+    public string SkippedVersion { get; set; } = "";
+    public DateTime LastUpdateCheck { get; set; }
     /// <summary>Free-form remembered UI values (last tool, last texture, ...).</summary>
     public Dictionary<string, string> Values { get; set; } = [];
 

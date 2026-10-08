@@ -70,6 +70,18 @@ CLI: `Atlas3K.Cli hlp-spd [--in dir] [--out dir] [--compare dir]`. Details: [`do
 Settings live in `%AppData%\Atlas3K\settings.json`. Change them later from **File › Settings** on the start page, the
 **Settings** tile, or **Help › Settings** / **Window › Settings** in any editor.
 
+### Updates
+
+Atlas3K checks for a new version when it starts (at most once a day) and on **Help › Check for updates…**. Pick a
+channel there:
+- **Stable**: full releases only.
+- **Unstable**: also alpha, beta and release-candidate builds. Pre-release versions such as this alpha start on
+  unstable.
+
+**Download and install** fetches the zip from the GitHub releases and checks its SHA-256. Atlas3K then closes, swaps
+in the new files and starts again. The version it replaced is kept: **Roll back** puts it back. The log and the kept
+version are in `%LocalAppData%\Atlas3K\updates`. Builds made from source never replace themselves.
+
 ### Walkthroughs
 
 The first time each window opens (start page, Settings, Scene editor, Tile map, Terrain painter, Build), a short guided

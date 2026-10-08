@@ -92,6 +92,8 @@ public static class StandardMenus
         help.Items.Add(Item("Open _log folder", () => OpenFolder(ErrorDialog.LogDir)));
         help.Items.Add(Item("Open _settings folder", () => OpenFolder(AppSettings.Folder)));
         help.Items.Add(new Separator());
+        help.Items.Add(Item("Check for _updates…", () => UpdateWindow.Show(owner),
+            tooltip: "Newer versions on your channel (stable, or unstable with alpha / beta builds); download, install, roll back"));
         help.Items.Add(Item("_About Atlas3K", () => new AboutWindow { Owner = owner }.ShowDialog()));
         return help;
     }

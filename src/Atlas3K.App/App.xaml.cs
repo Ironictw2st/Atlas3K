@@ -62,6 +62,20 @@ public partial class App : Application
             if (shotDir is not null) RunShots(window);
             return;
         }
+        // --check-updates [png]: the update window (with a png path: save a picture of it after the check, then quit)
+        if (Flag("--check-updates") >= 0)
+        {
+            var updates = UpdateWindow.Show(null);
+            MainWindow = updates;
+            if (Value(Flag("--check-updates")) is { } shot)
+                _ = Dispatcher.InvokeAsync(async () =>
+                {
+                    try { await updates.ShotAsync(Path.GetFullPath(shot)); }
+                    catch (Exception ex) { ErrorDialog.Log("Update window screenshot failed", ex); }
+                    Shutdown();
+                });
+            return;
+        }
         // --collab: the Collaboration window; --collab-shots <dir>: a PNG of each of its tabs, then quit
         if (Flag("--collab") >= 0 || Flag("--collab-shots") >= 0)
         {
@@ -93,6 +107,7 @@ public partial class App : Application
             return;
         }
         MainWindow.Show();
+        if (rest.Length == 0) MainWindow.Loaded += async (_, _) => await UpdateWindow.CheckAtStartupAsync(MainWindow); // automation never
 
         if (!AppSettings.Current.DeveloperMode || MainWindow is not Scene.SceneWindow sceneWindow) return;
         var selftest = Flag("--selftest");
