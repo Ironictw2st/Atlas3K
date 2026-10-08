@@ -40,7 +40,7 @@ static class CollabCommands
         "merge-driver", "textconv",
     ];
 
-    private static string CliExe => Environment.ProcessPath ?? throw new InvalidOperationException("cannot tell where Atlas3K.Cli is");
+    private static string CliExe => CollabRepo.FindCli();
 
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
 

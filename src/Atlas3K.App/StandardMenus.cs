@@ -49,11 +49,13 @@ public static class StandardMenus
             if (dialog.ShowDialog(owner) == true) new BattleWindow(dialog.FolderName, paths).Show();
         }));
         window.Items.Add(Item("Bu_ild", () => BuildWindow.Show(owner, paths)));
+        window.Items.Add(Item("Co_llaboration…", () => Collab.CollabWindow.ShowFor(owner, paths),
+            tooltip: "Share this map: project repository (commit, pull, push, branches), GitHub pull requests and map pins, locks, change packages"));
         window.Items.Add(Item("Se_ttings…", () => OpenSettings(owner), tooltip: SettingsTip));
         window.SubmenuOpened += (_, _) =>
         {
             // the open windows, to switch between them
-            while (window.Items.Count > 7) window.Items.RemoveAt(7);
+            while (window.Items.Count > 8) window.Items.RemoveAt(8);
             var open = Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible && w.Owner is null && !string.IsNullOrEmpty(w.Title)).ToList();
             if (open.Count < 2) return;
             window.Items.Add(new Separator());

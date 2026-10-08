@@ -434,11 +434,69 @@ public sealed class SceneView : FrameworkElement
 
     private static string CityLabel(string region) => SceneModel.RegionLabel(region);
 
+    /// <summary>A collaborator's marker: a map pin (point) or a region lock (rect [x0, z0, x1, z1]).</summary>
+    public sealed record CollabMarker(string Label, double X, double Z, double[]? Rect = null, bool Mine = false);
+
+    /// <summary>Map pins and region locks of the map's project repository, drawn over the view.</summary>
+    public IReadOnlyList<CollabMarker> CollabMarkers
+    {
+        get => _collab;
+        set
+        {
+            _collab = value;
+            InvalidateVisual();
+        }
+    }
+    private IReadOnlyList<CollabMarker> _collab = [];
+
+    private void DrawCollab(DrawingContext dc)
+    {
+        if (_collab.Count == 0) return;
+        var tf = new Typeface("Segoe UI");
+        var shade = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0));
+        foreach (var m in _collab)
+        {
+            Point at;
+            if (m.Rect is { } r)
+            {
+                var colour = m.Mine ? Color.FromRgb(90, 200, 120) : Color.FromRgb(230, 90, 70);
+                var rect = new Rect(ToScreen(r[0], r[3]), ToScreen(r[2], r[1]));
+                dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(30, colour.R, colour.G, colour.B)),
+                    new Pen(new SolidColorBrush(colour), 1.5) { DashStyle = DashStyles.Dash }, rect);
+                at = rect.TopLeft;
+            }
+            else
+            {
+                var p = ToScreen(m.X, m.Z);
+                if (p.X < -20 || p.Y < -20 || p.X > ActualWidth + 20 || p.Y > ActualHeight + 20) continue;
+                // A teardrop pin with its tip on the point.
+                var head = new Point(p.X, p.Y - 14);
+                var geometry = new StreamGeometry();
+                using (var g = geometry.Open())
+                {
+                    g.BeginFigure(p, true, true);
+                    g.LineTo(new Point(p.X - 6, head.Y + 2), true, false);
+                    g.ArcTo(new Point(p.X + 6, head.Y + 2), new Size(6, 6), 0, true, SweepDirection.Clockwise, true, false);
+                }
+                dc.DrawGeometry(new SolidColorBrush(Color.FromRgb(60, 140, 255)), new Pen(Brushes.White, 1.2), geometry);
+                dc.DrawEllipse(Brushes.White, null, head, 2.2, 2.2);
+                at = new Point(p.X + 8, p.Y - 24);
+            }
+            var text = new FormattedText(m.Label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, tf, 11, Brushes.White, 1.0);
+            dc.DrawRectangle(shade, null, new Rect(at, new Size(text.Width + 6, text.Height)));
+            dc.DrawText(text, new Point(at.X + 3, at.Y));
+        }
+    }
+
+    /// <summary>Centres the view on a world point at a close zoom.</summary>
+    public void CentreOn(double x, double z, double span = 12) => FitTo(x - span, z - span, x + span, z + span);
+
     protected override void OnRender(DrawingContext dc)
     {
         dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(32, 32, 32)), null, new Rect(RenderSize));
         if (_bitmap is not null) dc.DrawImage(_bitmap, new Rect(0, 0, ActualWidth, ActualHeight));
         DrawCities(dc);
+        DrawCollab(dc);
         if (_tool is { CursorRadius: > 0 } tool && IsMouseOver)
         {
             var radius = tool.CursorRadius / _scale / _dpi;

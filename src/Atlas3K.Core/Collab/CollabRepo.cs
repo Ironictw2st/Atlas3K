@@ -134,6 +134,23 @@ public sealed class CollabRepo
         }
     }
 
+    /// <summary>Atlas3K.Cli.exe, which git runs as the merge driver: next to the running program (the published
+    /// download has both), else a build of it in the source tree.</summary>
+    public static string FindCli()
+    {
+        if (Environment.ProcessPath is { } self && Path.GetFileNameWithoutExtension(self).Equals("Atlas3K.Cli", StringComparison.OrdinalIgnoreCase))
+            return self;
+        var beside = Path.Combine(AppContext.BaseDirectory, "Atlas3K.Cli.exe");
+        if (File.Exists(beside)) return beside;
+        for (var dir = AppContext.BaseDirectory; dir is not null; dir = Path.GetDirectoryName(dir.TrimEnd('\\', '/')))
+            foreach (var config in new[] { "Release", "Debug" })
+            {
+                var exe = Path.Combine(dir, "src", "Atlas3K.Cli", "bin", config, "net9.0", "Atlas3K.Cli.exe");
+                if (File.Exists(exe)) return exe;
+            }
+        throw new FileNotFoundException("Atlas3K.Cli.exe not found next to Atlas3K (it merges map files for git)");
+    }
+
     /// <summary>Registers Atlas3K's merge driver and raster diff in this clone's local git config, and LFS hooks.</summary>
     public void Configure(string cliExe)
     {

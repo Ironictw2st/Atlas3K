@@ -62,6 +62,20 @@ public partial class App : Application
             if (shotDir is not null) RunShots(window);
             return;
         }
+        // --collab: the Collaboration window; --collab-shots <dir>: a PNG of each of its tabs, then quit
+        if (Flag("--collab") >= 0 || Flag("--collab-shots") >= 0)
+        {
+            var collab = Collab.CollabWindow.ShowFor(null, paths);
+            MainWindow = collab;
+            if (Value(Flag("--collab-shots")) is { } collabShots)
+                _ = Dispatcher.InvokeAsync(async () =>
+                {
+                    try { await collab.ShotsAsync(Path.GetFullPath(collabShots)); }
+                    catch (Exception ex) { ErrorDialog.Log("Collaboration screenshots failed", ex); }
+                    Shutdown();
+                });
+            return;
+        }
         MainWindow = scene >= 0 ? new Scene.SceneWindow(paths, Value(scene) is { } s ? Path.GetFullPath(s) : null)
             : battle >= 0 && Value(battle) is { } b ? new BattleWindow(b, paths)
             : tiles >= 0 ? new CampaignTileWindow(paths, Value(tiles) is { } t ? Path.GetFullPath(t) : null)

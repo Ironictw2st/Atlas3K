@@ -332,7 +332,12 @@ public sealed partial class SceneWindow : Window
             }
         };
         _view.MoveRequested += MoveSelection;
-        _view.HoverChanged += p => _hover.Text = p is var (x, z) ? $"x {x:F2}  z {z:F2}" + _view3d.HoverTileText(x, z) : "";
+        _view.HoverChanged += p =>
+        {
+            _hover.Text = p is var (x, z) ? $"x {x:F2}  z {z:F2}" + _view3d.HoverTileText(x, z) : "";
+            if (p is not null) Collab.CollabWindow.LastHover = p;
+        };
+        WireCollab();
         _tree.EntitySelected += id => { SetSelection([id], SceneView.SelectMode.Replace, fromTree: true); };
         _tree.LayerSelected += n => _layerNode = n;
         _tree.StateToggled += (n, what, value) => Run($"{what} {value}", new JsonObject { ["op"] = "layer_state", ["id"] = n.TargetId, [what] = value });
@@ -382,6 +387,65 @@ public sealed partial class SceneWindow : Window
             default: return;
         }
         e.Handled = true;
+    }
+
+    // ---------------------------------------------------------------- collaboration
+
+    private string MapDir => Path.GetDirectoryName(_model.TerryPath) ?? "";
+
+    private bool IsThisMap(string dir) => Path.GetFullPath(dir).TrimEnd('\\').Equals(Path.GetFullPath(MapDir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Map pins and region locks on the top view; reload after a pull / merge / import; "Pin here"
+    /// (Ctrl+Shift+P) on the point under the mouse.</summary>
+    private void WireCollab()
+    {
+        void Files(string dir) => Dispatcher.BeginInvoke(async () =>
+        {
+            if (!IsThisMap(dir)) return;
+            await LoadAsync();
+            Status("Reloaded: map files changed by a collaboration action.");
+        });
+        void Markers(string dir) => Dispatcher.BeginInvoke(() => { if (IsThisMap(dir)) ShowCollabMarkers(); });
+        void Jump(string dir, double x, double z) => Dispatcher.BeginInvoke(() =>
+        {
+            if (!IsThisMap(dir)) return;
+            _centre.SelectedIndex = 0;
+            _view.CentreOn(x, z);
+            Activate();
+        });
+        Collab.CollabWindow.MapFilesChanged += Files;
+        Collab.CollabWindow.MarkersChanged += Markers;
+        Collab.CollabWindow.JumpRequested += Jump;
+        Closed += (_, _) =>
+        {
+            Collab.CollabWindow.MapFilesChanged -= Files;
+            Collab.CollabWindow.MarkersChanged -= Markers;
+            Collab.CollabWindow.JumpRequested -= Jump;
+        };
+        Loaded += (_, _) => ShowCollabMarkers();
+        InputBindings.Add(new KeyBinding(new RelayCommand(() =>
+        {
+            if (Collab.CollabWindow.LastHover is var (x, z)) Collab.CollabWindow.ShowFor(this, _paths).StartPin(x, z);
+        }), Key.P, ModifierKeys.Control | ModifierKeys.Shift));
+    }
+
+    /// <summary>Pins and region locks as last fetched (no network here).</summary>
+    private void ShowCollabMarkers()
+    {
+        if (!Directory.Exists(Path.Combine(MapDir, ".git"))) return;
+        var markers = new List<SceneView.CollabMarker>();
+        foreach (var pin in Atlas3K.Core.Collab.GitHubService.CachedPins(MapDir).Where(p => p.State.Equals("OPEN", StringComparison.OrdinalIgnoreCase)))
+            markers.Add(new SceneView.CollabMarker($"#{pin.Number} {pin.Title}", pin.X, pin.Z));
+        var lockCache = Path.Combine(MapDir, ".git", "atlas3k", "locks.json");
+        if (File.Exists(lockCache))
+        {
+            var me = File.Exists(Path.Combine(MapDir, ".git", "atlas3k", "user")) ? File.ReadAllText(Path.Combine(MapDir, ".git", "atlas3k", "user")).Trim() : "";
+            var locks = System.Text.Json.JsonSerializer.Deserialize<List<Atlas3K.Core.Collab.LockService.Lock>>(File.ReadAllText(lockCache),
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+            foreach (var l in locks.Where(l => l is { Kind: "region", Rect: { Length: 4 } }))
+                markers.Add(new SceneView.CollabMarker($"{l.Owner}: {l.Reason ?? "locked"}", l.Rect![0], l.Rect[1], l.Rect, l.Owner == me));
+        }
+        _view.CollabMarkers = markers;
     }
 
     // ---------------------------------------------------------------- loading
