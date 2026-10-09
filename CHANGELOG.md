@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-alpha.3 (2026-10-08)
 
 - **Auto-update with stable and unstable channels** (*Help › Check for updates…*, also checked at start-up):
   - Downloads the release zip and verifies its SHA-256.
@@ -13,6 +13,9 @@
   - Pull requests with map diffs.
   - Map pins (GitHub issues placed on the map).
   - Locks.
+- **Native battle-map build** (CLI `build-battle <kit> <map id> [--compare]`): BOB's battle export without BOB. It
+  produces height, water, blend and ground maps, tile lists, river meshes, bmd_data (siege AI nodes, forest hints),
+  procedural vegetation and grass lists, all byte-identical to BOB on the test corpus. See `docs/native_battle_build.md`.
 
 ## 0.1.0-alpha.2 (2026-10-05)
 
