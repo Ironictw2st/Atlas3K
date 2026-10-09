@@ -47,7 +47,8 @@ Write-Host ("{0}: {1:N0} MB, SHA-256 {2}" -f $zip, ((Get-Item $zip).Length / 1MB
 
 if ($Release) {
     $tag = "v$version"
-    $notes = if ($NotesFile) { Get-Content $NotesFile -Raw } else { "Atlas3K $version ($Channel channel)." }
+    # -Encoding UTF8: Windows PowerShell otherwise reads a BOM-less UTF-8 file as ANSI (mangles ›, …, →)
+    $notes = if ($NotesFile) { Get-Content $NotesFile -Raw -Encoding UTF8 } else { "Atlas3K $version ($Channel channel)." }
     $notes += "`n`nSHA-256 of the zip: ``$sha``"
     $notesPath = Join-Path $env:TEMP "atlas3k_release_notes.md"
     Set-Content -Path $notesPath -Value $notes -Encoding utf8
