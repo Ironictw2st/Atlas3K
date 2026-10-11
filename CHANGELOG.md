@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.0-alpha.4 (2026-10-11)
+
+- **Fix: blank 3D view on Chinese, Japanese and Korean Windows.** The 3D viewport failed with
+  `viewport.hlsl(142,54): error X3000: syntax error: unexpected end of file` because a non-ASCII character in the
+  shader cut its source short under those code pages.
+- **How tiles work** (scene editor, ⓘ next to *Tiles*):
+  - Explains `tile_map.png` (the source you paint, in raw_data) versus `tile_list.bin` (the compiled layout the overlay and the 3D tile meshes show).
+  - Lists every place `tile_list.bin` is looked for, in order, and which one was used.
+  - Shows where the tile database and the 3D tile meshes come from.
+  - Explains how to fix a missing file or a compiled copy left in raw_data, where it is ignored.
+- **Reference images** (terrain painter *Reference image* section; *View › Reference image…* in the tile map editor and the scene editor):
+  - Lays a picture over the map at a set opacity, stretched over the whole map, like CAIME's reference images.
+  - One image per map, shared by the three windows and remembered between sessions. View only: never exported.
+- **Terrain painter eyedropper:**
+  - Ctrl+right-click picks the ground texture under the cursor and switches to *Paint ground texture*.
+  - With a tree tool active, it picks the nearest tree's species instead.
+  - Ctrl+Shift+right-click picks the other one.
+- **Depth-shaded water in 3D:** sea, lakes and rivers are clear in the shallows and dark where deep, and fade out at the shoreline.
+
 ## 0.1.0-alpha.3 (2026-10-08)
 
 - **Auto-update with stable and unstable channels** (*Help › Check for updates…*, also checked at start-up):
