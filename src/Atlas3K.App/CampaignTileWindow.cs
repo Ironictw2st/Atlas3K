@@ -74,6 +74,9 @@ public sealed partial class CampaignTileWindow : Window
         Walkthrough.Enable(this, "tiles");
 
         _view.HoverChanged += Hover;
+        _view.Reference = ReferenceImage.For(paths.MapName);
+        _view.Reference.Changed += _view.InvalidateVisual;
+        Closed += (_, _) => _view.Reference.Changed -= _view.InvalidateVisual;
         _view.HexDown += HexDown;
         _view.HexDrag += HexDrag;
         _view.HexUp += HexUp;
@@ -99,6 +102,7 @@ public sealed partial class CampaignTileWindow : Window
         edit.Items.Add(Item("Undo last _saved batch", (_, _) => UndoSaved()));
         var view = new MenuItem { Header = "_View" };
         view.Items.Add(Item("_Fit to window", (_, _) => _view.FitToWindow()));
+        view.Items.Add(Item("_Reference image…", (_, _) => ReferenceImage.ShowWindow(this, _view.Reference!, _paths.MapName)));
         var check = new MenuItem { Header = "_Check" };
         check.Items.Add(Item("_Simulate BOB Tilemap (whole map, 1-3 min)", (_, _) => Simulate()));
         check.Items.Add(Item("_Clear simulation marks", (_, _) => { _simHexes = []; _simInEdits = []; RefreshOverlay(); RefreshIssues(); }));

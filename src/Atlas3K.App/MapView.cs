@@ -11,8 +11,8 @@ namespace Atlas3K.App;
 
 /// <summary>
 /// Pan/zoom map canvas. Renders the terrain (and overlays) for the visible area into a WriteableBitmap
-/// sized to the control in device pixels. Right/middle drag pans, wheel zooms around the cursor, and
-/// left drag applies the active brush.
+/// sized to the control in device pixels. Right/middle drag pans, wheel zooms around the cursor, left drag applies
+/// the active brush, and Ctrl+right-click picks what is under the cursor (<see cref="Picked"/>).
 /// </summary>
 public sealed class MapView : FrameworkElement
 {
@@ -30,12 +30,16 @@ public sealed class MapView : FrameworkElement
     public TreeOverlay? Trees { get; set; }
     public TerrainBrush? ActiveBrush { get; set; }
     public UndoStack Undo { get; } = new();
+    /// <summary>Picture drawn over the map at its own opacity (view only).</summary>
+    public ReferenceImage? Reference { get; set; }
 
     public Viewport View { get; private set; } = new(0, 0, 4);
 
     /// <summary>Raised with the map pixel under the cursor (or null when outside the map).</summary>
     public event Action<(double X, double Y)?>? HoverChanged;
     public event Action? Edited;
+    /// <summary>Ctrl+right-click on the map: the map pixel and whether Shift was held.</summary>
+    public event Action<(double X, double Y), bool>? Picked;
 
     public MapView()
     {
@@ -103,6 +107,8 @@ public sealed class MapView : FrameworkElement
         dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(32, 32, 32)), null, new Rect(RenderSize));
         if (_bitmap != null)
             dc.DrawImage(_bitmap, new Rect(0, 0, ActualWidth, ActualHeight));
+        if (Terrain != null)
+            Reference?.Draw(dc, new Rect(ToScreen(0, 0), ToScreen(Terrain.Width, Terrain.HeightPx)));
 
         // Brush outline.
         if (ActiveBrush != null && Terrain != null && IsMouseOver)
@@ -135,7 +141,14 @@ public sealed class MapView : FrameworkElement
     {
         Focus();
         var p = e.GetPosition(this);
-        if (e.ChangedButton is MouseButton.Right or MouseButton.Middle)
+        if (e.ChangedButton == MouseButton.Right && Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && Terrain != null)
+        {
+            var (mx, my) = ToMap(p);
+            if (mx >= 0 && my >= 0 && mx < Terrain.Width && my < Terrain.HeightPx)
+                Picked?.Invoke((mx, my), Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+            e.Handled = true;
+        }
+        else if (e.ChangedButton is MouseButton.Right or MouseButton.Middle)
         {
             _panStart = p;
             _panOrigin = View;

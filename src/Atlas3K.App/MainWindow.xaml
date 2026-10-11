@@ -64,6 +64,8 @@
                             <RadioButton x:Name="ToolTreePlace" Content="Trees: place (click / drag)" Checked="Tool_Changed"/>
                             <RadioButton x:Name="ToolTreeScatter" Content="Trees: scatter forest" Checked="Tool_Changed"/>
                             <RadioButton x:Name="ToolTreeErase" Content="Trees: erase" Checked="Tool_Changed"/>
+                            <TextBlock Text="Ctrl+right-click picks from the map: the ground texture under the cursor, or with a tree tool the nearest tree's species. Ctrl+Shift+right-click picks the other one."
+                                       Foreground="{StaticResource DimText}" TextWrapping="Wrap" FontSize="11" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Expander>
 
@@ -104,6 +106,10 @@
                             <CheckBox x:Name="ShowTrees" Content="Trees" IsChecked="True" Click="Layers_Changed"/>
                             <ComboBox x:Name="SeasonCombo" Margin="0,4" SelectionChanged="Layers_Changed"/>
                         </StackPanel>
+                    </Expander>
+
+                    <Expander Header="Reference image" local:Walkthrough.Spot="painter.reference">
+                        <ContentControl x:Name="ReferenceHost" Margin="4,4,0,6"/>
                     </Expander>
 
                     <Expander Header="Tree species" local:Walkthrough.Spot="painter.species">

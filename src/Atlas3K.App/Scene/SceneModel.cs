@@ -59,6 +59,16 @@ public sealed class SceneModel
     /// <summary>The compiled tile layout (what BOB or the native build placed), empty when there is none.</summary>
     public IReadOnlyList<TilePlacement> Tiles { get; private set; } = [];
     public string? TilesNote { get; private set; }
+
+    /// <summary>One place a compiled map file was looked for; the first one found is used.</summary>
+    public sealed record SourceCheck(string Where, string Path, bool Found);
+
+    /// <summary>Where tile_list.bin was looked for, in lookup order (the first found is used).</summary>
+    public IReadOnlyList<SourceCheck> TileListChecks { get; private set; } = [];
+    /// <summary>Where the campaign tile database (tile sizes, tile sets) was read from.</summary>
+    public string? TileDatabaseSource { get; private set; }
+    /// <summary>A tile_list.bin in the kit's raw_data, where nothing reads it (compiled files belong in working_data).</summary>
+    public string? MisplacedTileList { get; private set; }
     /// <summary>Tile-map grid size (cells across and down) and the world size of one cell.</summary>
     public (int W, int H, double CellX, double CellZ) TileGrid { get; private set; }
     private int[]? _tileIndex;   // per cell: index of the top placement (features over base tiles), -1 none
@@ -120,19 +130,38 @@ public sealed class SceneModel
         {
             var map = Project.MapName;
             var relative = $"terrain/campaigns/{map}/tile_list.bin";
+            var local = relative.Replace('/', Path.DirectorySeparatorChar);
+            var rawCopy = Path.Combine(_paths.AssemblyKitRoot, "raw_data", local);
+            MisplacedTileList = File.Exists(rawCopy) ? rawCopy : null;
+            var checks = new List<SourceCheck>();
+            foreach (var pack in Models.Source.ExtraPacks)
+                checks.Add(new("linked mod pack", $"{pack.SourcePath} → {relative}", pack.Contains(relative)));
+            var working = Path.Combine(_paths.AkWorkingDir, local);
+            checks.Add(new("assembly kit working_data", working, File.Exists(working)));
+            var vanilla = Path.Combine(_paths.VanillaRoot, local);
+            checks.Add(new("compiled vanilla folder", vanilla, File.Exists(vanilla)));
+            var owner = Models.Source.Vanilla.FindOwner(relative);
+            checks.Add(new("game packs", owner is null ? $"{_paths.GameDataDir} → {relative}" : $"{owner.SourcePath} → {relative}", owner is not null));
+            TileListChecks = checks;
+
             Atlas3K.Formats.Maps.TileList? list = null;
             string? source = null;
             if (FromModPacks(relative) is var (modBytes, modPack)) { list = Atlas3K.Formats.Maps.TileList.Read(modBytes); source = modPack; }
             if (list is null)
-                foreach (var candidate in new[]
-                         {
-                             Path.Combine(_paths.AkWorkingDir, relative.Replace('/', Path.DirectorySeparatorChar)),
-                             Path.Combine(_paths.VanillaRoot, relative.Replace('/', Path.DirectorySeparatorChar)),
-                         })
+                foreach (var candidate in new[] { working, vanilla })
                     if (File.Exists(candidate)) { list = Atlas3K.Formats.Maps.TileList.Read(candidate); source = candidate; break; }
             if (list is null && Models.Source.TryRead(relative) is { } packed) { list = Atlas3K.Formats.Maps.TileList.Read(packed); source = Models.Source.Locate(relative); }
-            if (list is null) { TilesNote = "no tile_list.bin (build the map: Build > tile_list)"; return; }
+            if (list is null)
+            {
+                TilesNote = MisplacedTileList is not null
+                    ? "tile_list.bin is in raw_data, which holds sources only: move it to working_data (Tiles ⓘ for details)"
+                    : "no tile_list.bin found (Tiles ⓘ shows where it is looked for)";
+                return;
+            }
 
+            var dbDir = Atlas3K.Core.Campaign.TileMapCheck.TileMapValidator.DefaultDatabaseDir(_paths);
+            TileDatabaseSource = File.Exists(Path.Combine(dbDir, "_settings.bin")) ? dbDir
+                : $"game packs ({_paths.GameDataDir} → {Atlas3K.Formats.Maps.CampaignTileDatabase.PackFolder})";
             var db = Atlas3K.Core.Campaign.TileMapCheck.TileMapValidator.LoadDatabase(_paths);
             static string Key(string p) => p.Replace('\\', '/').Trim('/').ToLowerInvariant();
             var byFolder = new Dictionary<string, Atlas3K.Formats.Maps.CampaignTile>();

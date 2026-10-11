@@ -145,7 +145,7 @@ public sealed class Renderer3D : IDisposable
         {
             float4x4 w = float4x4(i.r0, i.r1, i.r2, i.r3);
             float4 wp = mul(float4(i.pos, 1), w);
-            // LF-offset mountains (rigid_detail_map_terrain_blend_with_LF_offset): + adjust × lf height at this vertex.
+            // LF-offset mountains (rigid_detail_map_terrain_blend_with_LF_offset): + adjust * lf height at this vertex.
             if (flags.z != 0 && drawTerrain.x > 0)
                 wp.y += flags.z * (terrainHeight.SampleLevel(samp, float2(wp.x / drawTerrain.x, 1 - wp.z / drawTerrain.y), 0) * drawTerrain.z + drawTerrain.w);
             MeshOut o;
@@ -307,7 +307,10 @@ public sealed class Renderer3D : IDisposable
         using (var adapter = dxgi.GetAdapter())
             AdapterName = adapter.Description.Description;
 
-        ReadOnlyMemory<byte> Compile(string entry, string profile) => Compiler.Compile(Hlsl, entry, "viewport.hlsl", profile);
+        // Vortice marshals the source through the ANSI code page but passes the UTF-16 length, so a non-ASCII
+        // character (2 bytes on GBK and other CJK code pages) truncates the shader: "unexpected end of file".
+        string hlsl = string.Create(Hlsl.Length, Hlsl, (span, src) => { for (int k = 0; k < src.Length; k++) span[k] = src[k] < 128 ? src[k] : ' '; });
+        ReadOnlyMemory<byte> Compile(string entry, string profile) => Compiler.Compile(hlsl, entry, "viewport.hlsl", profile);
         var meshVs = Compile("MeshVS", "vs_5_0");
         var terrainVs = Compile("TerrainVS", "vs_5_0");
         var lineVs = Compile("LineVS", "vs_5_0");

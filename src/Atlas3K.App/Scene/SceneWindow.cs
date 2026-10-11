@@ -94,7 +94,9 @@ public sealed partial class SceneWindow : Window
             ("_Fit all", () => { if (Is3D) _view3d.FrameAll(); else _view.FitToContent(); }, "Home"),
             ("Frame _selection", () => { if (Is3D) _view3d.FrameSelection(); else _view.FrameSelection(); }, "F"),
             ("_Top view (2D)", () => _centre.SelectedIndex = 0, "Ctrl+1"),
-            ("_3D view", () => _centre.SelectedIndex = 1, "Ctrl+2")).Spot("scene.viewMenu"));
+            ("_3D view", () => _centre.SelectedIndex = 1, "Ctrl+2"),
+            (null, null, null),
+            ("_Reference image (top view)…", () => ReferenceImage.ShowWindow(this, _view.Reference!, _paths.MapName), "")).Spot("scene.viewMenu"));
         StandardMenus.AddTo(menu, this, _paths);
         DockPanel.SetDock(menu, Dock.Top);
         dock.Children.Add(menu);
@@ -219,6 +221,13 @@ public sealed partial class SceneWindow : Window
             Status(_model.TilesNote ?? "");
         };
         bar.Children.Add(tiles);
+        var tilesHelp = new Button
+        {
+            Content = Theme.Icon(Theme.Glyph.Info, 14, Theme.Brush("DimText")), Padding = new Thickness(4, 1, 4, 1), Margin = new Thickness(2),
+            ToolTip = "How tiles work: tile_map.png vs tile_list.bin, where each file is read from, and how to fix a missing one",
+        };
+        tilesHelp.Click += (_, _) => new TileSourcesWindow(_model, _paths) { Owner = this }.Show();
+        bar.Children.Add(tilesHelp);
         var legend = new WrapPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
         foreach (var (label, set) in new[] { ("road", "roads"), ("imperial road", "roads_imperial"), ("river", "river"), ("crossing", "river_crossing"),
                      ("canal", "canals"), ("coast", "sea_coast"), ("mountains", "mountains_temperate"), ("cliff", "blockout_cliff"), ("lake", "lakes") })
@@ -308,6 +317,9 @@ public sealed partial class SceneWindow : Window
     private void Wire()
     {
         _view.SelectionRequested += SetSelection;
+        _view.Reference = ReferenceImage.For(_paths.MapName);
+        _view.Reference.Changed += _view.InvalidateVisual;
+        Closed += (_, _) => _view.Reference.Changed -= _view.InvalidateVisual;
         _view3d.SelectionRequested += SetSelection;
         _view3d.TransformsCommitted += CommitTransforms;
         _view3d.HoverText += t => _hover.Text = t;

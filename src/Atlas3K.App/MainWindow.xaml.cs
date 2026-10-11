@@ -45,6 +45,11 @@ public partial class MainWindow : Window
         CommandBindings.Add(new CommandBinding(UndoCommand, (_, _) => Map.Undo.Undo(), (_, e) => e.CanExecute = Map.Undo.CanUndo));
         CommandBindings.Add(new CommandBinding(RedoCommand, (_, _) => Map.Undo.Redo(), (_, e) => e.CanExecute = Map.Undo.CanRedo));
         Map.HoverChanged += UpdateStatus;
+        Map.Picked += Pick;
+        Map.Reference = ReferenceImage.For(paths.MapName);
+        Map.Reference.Changed += Map.InvalidateVisual;
+        Closed += (_, _) => Map.Reference.Changed -= Map.InvalidateVisual;
+        ReferenceHost.Content = ReferenceImage.Panel(Map.Reference, this);
         Loaded += async (_, _) => await LoadAsync();
     }
 
@@ -408,12 +413,51 @@ public partial class MainWindow : Window
             Map.Undo.Push(undo);
     }
 
+    /// <summary>Ctrl+right-click eyedropper: with a tree tool the species of the nearest tree, otherwise the ground
+    /// texture under the cursor (switching to Paint ground texture); Ctrl+Shift picks the other one.</summary>
+    private void Pick((double X, double Y) p, bool other)
+    {
+        if (_terrain == null) return;
+        var treeTool = ToolTreePlace.IsChecked == true || ToolTreeScatter.IsChecked == true || ToolTreeErase.IsChecked == true;
+        if (treeTool != other)
+        {
+            if (NearestTree(p.X, p.Y, 16) is not var (species, _))
+            {
+                StatusText.Text = "Pick: no visible tree near the cursor.";
+                return;
+            }
+            SpeciesCombo.SelectedItem = species;
+            if (!treeTool) ToolTreePlace.IsChecked = true;
+            StatusText.Text = $"Picked tree species {species}.";
+        }
+        else
+        {
+            var group = _terrain.BlendGroup[(int)p.X, (int)p.Y];
+            var row = TextureList.Items.OfType<StackPanel>().FirstOrDefault(r => r.Tag is int g && g == group);
+            if (row == null) return;
+            TextureList.SelectedItem = row;
+            TextureList.ScrollIntoView(row);
+            if (ToolPaint.IsChecked != true) ToolPaint.IsChecked = true;
+            StatusText.Text = $"Picked ground texture {group} {_terrain.TextureArrays.Groups[group].Name}.";
+        }
+    }
+
     /// <summary>Nearest tree to a map pixel within a few screen pixels, for the status bar.</summary>
     private string? NearestTreeInfo(double mx, double my)
     {
-        if (_trees == null || _terrain == null || _treeOverlay is not { Visible: true }) return null;
+        if (_treeOverlay is not { Visible: true } || NearestTree(mx, my, 6) is not var (name, f)) return null;
+        var seasons = f.Seasons.Length == 1 && f.Seasons[0] == CampaignTreeList.NoSeason
+            ? "no seasons"
+            : string.Join(",", f.Seasons.Select(s => s < TreeDatabase.SeasonNames.Length ? TreeDatabase.SeasonNames[s] : s.ToString()));
+        return $"tree {name} v{f.Variant} ({seasons})";
+    }
+
+    /// <summary>The nearest shown tree within <paramref name="screenPx"/> screen pixels of a map pixel.</summary>
+    private (string Name, TreeInstance Tree)? NearestTree(double mx, double my, double screenPx)
+    {
+        if (_trees == null || _terrain == null || _treeOverlay == null) return null;
         var (wx, wz) = _terrain.Coords.ToWorld(mx, my, _terrain.Width, _terrain.HeightPx);
-        var maxDist = 6 * Map.View.Scale * _terrain.Coords.WorldWidth / _terrain.Width;
+        var maxDist = screenPx * Map.View.Scale * _terrain.Coords.WorldWidth / _terrain.Width;
         var best = maxDist * maxDist;
         TreeInstance? found = null;
         string? name = null;
@@ -426,10 +470,6 @@ public partial class MainWindow : Window
                 if (d < best) { best = d; found = t; name = type.Name; }
             }
         }
-        if (found is not { } f) return null;
-        var seasons = f.Seasons.Length == 1 && f.Seasons[0] == CampaignTreeList.NoSeason
-            ? "no seasons"
-            : string.Join(",", f.Seasons.Select(s => s < TreeDatabase.SeasonNames.Length ? TreeDatabase.SeasonNames[s] : s.ToString()));
-        return $"tree {name} v{f.Variant} ({seasons})";
+        return found is { } f ? (name!, f) : null;
     }
 }

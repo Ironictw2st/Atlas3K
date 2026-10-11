@@ -24,6 +24,9 @@ public sealed class CampaignTileView : FrameworkElement
     private Point _lastMouse;
     private double _dpiScale = 1;
 
+    /// <summary>Picture drawn over the tile map at its own opacity (view only).</summary>
+    public ReferenceImage? Reference { get; set; }
+
     public HexTileMap? Map { get; private set; }
     /// <summary>Per-hex overlay code [row * W + col].</summary>
     public byte[] Overlay { get; private set; } = [];
@@ -178,6 +181,12 @@ public sealed class CampaignTileView : FrameworkElement
         dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(32, 32, 32)), null, new Rect(RenderSize));
         if (_bitmap != null) dc.DrawImage(_bitmap, new Rect(0, 0, ActualWidth, ActualHeight));
         if (Map == null) return;
+        if (Reference != null)
+        {
+            var (x0, y0) = View.MapToScreen(0, 0);
+            var (x1, y1) = View.MapToScreen(Map.PixelWidth, Map.PixelHeight);
+            Reference.Draw(dc, new Rect(new Point(x0 / _dpiScale, y0 / _dpiScale), new Point(x1 / _dpiScale, y1 / _dpiScale)));
+        }
         if (LinePoints.Count > 0)
         {
             var pen = new Pen(Brushes.Cyan, 2) { DashStyle = DashStyles.Dash };

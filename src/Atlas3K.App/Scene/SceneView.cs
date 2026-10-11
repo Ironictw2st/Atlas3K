@@ -161,6 +161,9 @@ public sealed class SceneView : FrameworkElement
     }
 
     /// <summary>Screen (DIP) → world.</summary>
+    /// <summary>Picture drawn over the campaign map at its own opacity (view only).</summary>
+    public ReferenceImage? Reference { get; set; }
+
     public (double X, double Z) ToWorld(Point p) => (_ox + p.X * _dpi * _scale, _oz - p.Y * _dpi * _scale);
 
     /// <summary>World → screen (DIP).</summary>
@@ -495,6 +498,8 @@ public sealed class SceneView : FrameworkElement
     {
         dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(32, 32, 32)), null, new Rect(RenderSize));
         if (_bitmap is not null) dc.DrawImage(_bitmap, new Rect(0, 0, ActualWidth, ActualHeight));
+        if (Reference is not null && _model?.Terrain is var (_, worldW, worldH))
+            Reference.Draw(dc, new Rect(ToScreen(0, worldH), ToScreen(worldW, 0)));
         DrawCities(dc);
         DrawCollab(dc);
         if (_tool is { CursorRadius: > 0 } tool && IsMouseOver)
