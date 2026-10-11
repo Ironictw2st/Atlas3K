@@ -18,9 +18,12 @@ public sealed class GpuMesh : IDisposable
     public bool AlphaTest { get; init; }
     /// <summary>Share of the terrain height the vertex shader adds to each vertex (the LF-offset mountains).</summary>
     public float TerrainOffset { get; init; }
-    /// <summary>Water surface (shaders/campaign_water: lake discs and lake meshes): drawn in a flat water colour, since
-    /// its only colour texture (sea_colour.dds) is a lookup, not an albedo.</summary>
+    /// <summary>Water surface (shaders/campaign_water: lake discs and lake meshes): drawn in the water pass, depth
+    /// shaded (its only colour texture, sea_colour.dds, is a lookup, not an albedo).</summary>
     public bool Water { get; init; }
+    /// <summary>Highest model-space y of a water mesh (its surface): the level its depth shading measures from, also
+    /// on the rim skirt hanging below it.</summary>
+    public float WaterTop { get; init; }
 
     public void Dispose()
     {
@@ -35,6 +38,8 @@ public sealed class GpuTexture : IDisposable
     public required ID3D11Texture2D Texture { get; init; }
     public required ID3D11ShaderResourceView View { get; init; }
     public bool MipsGenerated { get; set; }
+    /// <summary>Level 0 has been uploaded (on the render thread), so its mips can be generated.</summary>
+    public bool Uploaded { get; set; }
 
     public void Dispose()
     {
@@ -95,6 +100,8 @@ public sealed class Renderer3D : IDisposable
         public Matrix4x4 ViewProj;
         public Vector4 LightDir;
         public Vector4 CameraPos;
+        public Matrix4x4 InvViewProj;
+        public Vector4 Viewport;  // target width, height
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -123,7 +130,7 @@ public sealed class Renderer3D : IDisposable
     }
 
     private const string Hlsl = """
-        cbuffer Frame : register(b0) { row_major float4x4 viewProj; float4 lightDir; float4 cameraPos; };
+        cbuffer Frame : register(b0) { row_major float4x4 viewProj; float4 lightDir; float4 cameraPos; row_major float4x4 invViewProj; float4 viewport; };
         cbuffer Draw : register(b1) { float4 flags; float4 colour; float4 drawTerrain; };
         Texture2D<float> terrainHeight : register(t8);
         cbuffer Ground : register(b2) { float4 groundWorld; float4 groundTex; float4 groundSnow; };
@@ -136,11 +143,42 @@ public sealed class Renderer3D : IDisposable
         Texture2DArray groundColours : register(t2);
         cbuffer Tile : register(b3) { int4 tileLayers; };
         Texture2D tileBlend : register(t3);
+        Texture2D<float> sceneDepth : register(t9);
         SamplerState samp : register(s0);
+
+        // campaign_water look: the water's colour and opacity follow its depth over the ground below (the opaque
+        // scene's depth buffer, reconstructed to world space at this pixel). Shallow water is a clear green-blue
+        // film over the bed, deep water dark and opaque; the opacity also grows with the view ray's path through
+        // the water (grazing views read darker) and fades out over the last hundredths at the waterline.
+        // waterY: the water level the depth is measured from (the pixel's own height, except on a lake mesh's rim).
+        float4 WaterShade(float3 wpos, float2 px, float minDepth, float waterY)
+        {
+            float zs = sceneDepth.Load(int3(px, 0));
+            float depth = 60, ray = 60;
+            if (zs < 1)
+            {
+                float2 ndc = float2(px.x / viewport.x * 2 - 1, 1 - px.y / viewport.y * 2);
+                float4 g = mul(float4(ndc, zs, 1), invViewProj);
+                g.xyz /= g.w;
+                depth = waterY - g.y;
+                ray = distance(wpos, g.xyz);
+            }
+            depth = max(depth, minDepth);
+            ray = max(ray, minDepth);
+            clip(depth);
+            float thick = min(ray, depth * 2.5);
+            float deep = 1 - exp(-depth * 1.6);
+            float3 c = lerp(float3(0.20, 0.30, 0.24), float3(0.065, 0.105, 0.16), deep);
+            float a = 1 - 0.82 * exp(-thick * 2.0);
+            a *= saturate(depth / 0.12);
+            float3 v = normalize(cameraPos.xyz - wpos);
+            c = lerp(c, float3(0.30, 0.36, 0.42), pow(1 - saturate(v.y), 5) * 0.35); // faint sky sheen at grazing views
+            return float4(c, saturate(a));
+        }
 
         struct MeshIn { float3 pos : POSITION; float3 nrm : NORMAL; float2 uv : TEXCOORD0;
                         float4 r0 : WORLD0; float4 r1 : WORLD1; float4 r2 : WORLD2; float4 r3 : WORLD3; float4 tint : TINT; };
-        struct MeshOut { float4 pos : SV_POSITION; float3 nrm : NORMAL; float2 uv : TEXCOORD0; float4 tint : TINT; };
+        struct MeshOut { float4 pos : SV_POSITION; float3 nrm : NORMAL; float2 uv : TEXCOORD0; float4 tint : TINT; float3 wpos : TEXCOORD1; float waterY : TEXCOORD2; };
         MeshOut MeshVS(MeshIn i)
         {
             float4x4 w = float4x4(i.r0, i.r1, i.r2, i.r3);
@@ -153,7 +191,18 @@ public sealed class Renderer3D : IDisposable
             o.nrm = mul(float4(i.nrm, 0), w).xyz;
             o.uv = i.uv;
             o.tint = i.tint;
+            o.wpos = wp.xyz;
+            // Water meshes: the world height of the mesh's surface (model y = colour.x) straight above this vertex.
+            o.waterY = wp.y + (colour.x - i.pos.y) * i.r1.y;
             return o;
+        }
+        // Water meshes (lake props), depth shaded. The rim skirt hanging below the surface (vanilla's lake meshes and
+        // lake-build's dip 0.7 into the bank) is shaded by the depth under the surface level, not its own height:
+        // over ground above the water it vanishes, over the bed it reads as the water surface would.
+        float4 WaterMeshPS(MeshOut i) : SV_TARGET
+        {
+            float4 c = WaterShade(i.wpos, i.pos.xy, 0, i.waterY);
+            return float4(lerp(c.rgb, i.tint.rgb, i.tint.a), c.a);
         }
         float4 MeshPS(MeshOut i) : SV_TARGET
         {
@@ -265,14 +314,19 @@ public sealed class Renderer3D : IDisposable
         struct LineOut { float4 pos : SV_POSITION; float4 col : COLOR; };
         LineOut LineVS(LineIn i) { LineOut o; o.pos = mul(float4(i.pos, 1), viewProj); o.col = i.col; return o; }
         float4 LinePS(LineOut i) : SV_TARGET { return i.col; }
+
+        // Water in the coloured-mesh format (sea surface, river water): depth shaded; colour.y = minimum depth.
+        struct WaterOut { float4 pos : SV_POSITION; float3 wpos : TEXCOORD0; };
+        WaterOut WaterVS(LineIn i) { WaterOut o; o.pos = mul(float4(i.pos, 1), viewProj); o.wpos = i.pos; return o; }
+        float4 WaterPS(WaterOut i) : SV_TARGET { return WaterShade(i.wpos, i.pos.xy, colour.y, i.wpos.y); }
         """;
 
     public ID3D11Device Device { get; }
     public ID3D11DeviceContext Context { get; }
     public string AdapterName { get; }
 
-    private readonly ID3D11VertexShader _meshVs, _terrainVs, _lineVs, _tileVs, _spriteVs;
-    private readonly ID3D11PixelShader _meshPs, _terrainPs, _linePs, _tilePs, _spritePs;
+    private readonly ID3D11VertexShader _meshVs, _terrainVs, _lineVs, _tileVs, _spriteVs, _waterVs;
+    private readonly ID3D11PixelShader _meshPs, _terrainPs, _linePs, _tilePs, _spritePs, _waterPs, _waterMeshPs;
     private readonly ID3D11InputLayout _meshLayout, _terrainLayout, _lineLayout, _tileLayout, _spriteLayout;
     private ID3D11Buffer? _spriteBuffer;
     private int _spriteCapacity;
@@ -331,6 +385,9 @@ public sealed class Renderer3D : IDisposable
         _meshPs = Device.CreatePixelShader(Compile("MeshPS", "ps_5_0").Span);
         _terrainPs = Device.CreatePixelShader(Compile("TerrainPS", "ps_5_0").Span);
         _linePs = Device.CreatePixelShader(Compile("LinePS", "ps_5_0").Span);
+        _waterVs = Device.CreateVertexShader(Compile("WaterVS", "vs_5_0").Span);
+        _waterPs = Device.CreatePixelShader(Compile("WaterPS", "ps_5_0").Span);
+        _waterMeshPs = Device.CreatePixelShader(Compile("WaterMeshPS", "ps_5_0").Span);
 
         _meshLayout = Device.CreateInputLayout(
         [
@@ -398,6 +455,9 @@ public sealed class Renderer3D : IDisposable
                 vertices[i * 8 + 7] = uvs[i * 2 + 1];
             }
         }
+        var top = float.MinValue;
+        if (water)
+            for (var i = 1; i < positions.Length; i += 3) top = Math.Max(top, positions[i]);
         // Index buffers need an even byte count for some drivers; pad with a degenerate index.
         var idx = indices.Length % 2 == 0 ? indices : [.. indices, 0];
         return new GpuMesh
@@ -409,6 +469,7 @@ public sealed class Renderer3D : IDisposable
             AlphaTest = alphaTest,
             TerrainOffset = terrainOffset,
             Water = water,
+            WaterTop = water && top > float.MinValue ? top : 0,
         };
     }
 
@@ -422,12 +483,17 @@ public sealed class Renderer3D : IDisposable
             BindFlags = BindFlags.ShaderResource | BindFlags.RenderTarget, MiscFlags = ResourceOptionFlags.GenerateMips,
         };
         var texture = Device.CreateTexture2D(desc);
+        var gpu = new GpuTexture { Texture = texture, View = Device.CreateShaderResourceView(texture) };
         // Level 0 is filled on the render thread (UpdateSubresource is a context call): keep the pixels until then.
+        // Its mips are generated only after that (a texture created mid-frame and drawn before its upload kept
+        // mips made from the empty level 0: black models at a distance).
+        _awaitingUpload[texture] = gpu;
         _pendingUploads.Enqueue((texture, 0, rgba, width * 4));
-        return new GpuTexture { Texture = texture, View = Device.CreateShaderResourceView(texture) };
+        return gpu;
     }
 
     private readonly System.Collections.Concurrent.ConcurrentQueue<(ID3D11Texture2D Texture, uint Subresource, byte[] Data, int RowPitch)> _pendingUploads = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<ID3D11Texture2D, GpuTexture> _awaitingUpload = new();
 
     /// <summary>
     /// Ground for the terrain shader: group indices (width × height bytes, row 0 = north) and one 512×512 RGBA image
@@ -492,6 +558,60 @@ public sealed class Renderer3D : IDisposable
         Context.DrawIndexed((uint)indexCount, 0, 0);
     }
 
+    /// <summary>
+    /// Draws a static coloured mesh as depth-shaded water (after <see cref="BeginWater"/>; vertex colours unused).
+    /// <paramref name="minDepth"/> floors the depth, for water draped just above the ground (the viewer's rivers).
+    /// </summary>
+    public void DrawWater(ID3D11Buffer vertices, ID3D11Buffer indices, int indexCount, float minDepth = 0)
+    {
+        Write(_drawCb, new DrawConstants { Colour = new Vector4(0, minDepth, 0, 0) });
+        Context.PSSetConstantBuffer(1, _drawCb);
+        Context.OMSetDepthStencilState(_depthReadOnly);
+        Context.OMSetBlendState(_alpha);
+        Context.IASetInputLayout(_lineLayout);
+        Context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        Context.IASetVertexBuffer(0, vertices, (uint)Marshal.SizeOf<LineVertex>());
+        Context.IASetIndexBuffer(indices, Format.R32_UInt, 0);
+        Context.VSSetShader(_waterVs);
+        Context.PSSetShader(_waterPs);
+        Context.DrawIndexed((uint)indexCount, 0, 0);
+    }
+
+    /// <summary>
+    /// Starts the water pass: copies the depth of the opaque scene drawn so far into a texture the water shaders
+    /// read (to shade by the depth of the ground below). Draw water after this, with <see cref="DrawWater"/> and the
+    /// water meshes of <see cref="DrawInstanceRange"/>.
+    /// </summary>
+    public void BeginWater()
+    {
+        if (_activeDsv is null || _viewW < 1 || _viewH < 1) return;
+        if (_sceneDepth is null || _sceneDepthSize != (_viewW, _viewH))
+        {
+            _sceneDepthView?.Dispose();
+            _sceneDepth?.Dispose();
+            _sceneDepth = Device.CreateTexture2D(new Texture2DDescription
+            {
+                Width = (uint)_viewW, Height = (uint)_viewH, MipLevels = 1, ArraySize = 1, Format = Format.R32_Typeless,
+                SampleDescription = new SampleDescription(1, 0), BindFlags = BindFlags.ShaderResource,
+            });
+            _sceneDepthView = Device.CreateShaderResourceView(_sceneDepth,
+                new ShaderResourceViewDescription(_sceneDepth, ShaderResourceViewDimension.Texture2D, Format.R32_Float));
+            _sceneDepthSize = (_viewW, _viewH);
+        }
+        using var source = _activeDsv.Resource;
+        using var tex = source.QueryInterface<ID3D11Texture2D>();
+        var d = tex.Description;
+        if (d.Width != (uint)_viewW || d.Height != (uint)_viewH || d.Format != Format.R32_Typeless) return;
+        Context.CopyResource(_sceneDepth, tex);
+        Context.PSSetShaderResource(9, _sceneDepthView!);
+    }
+
+    private ID3D11DepthStencilView? _activeDsv;
+    private int _viewW, _viewH;
+    private ID3D11Texture2D? _sceneDepth;
+    private ID3D11ShaderResourceView? _sceneDepthView;
+    private (int W, int H) _sceneDepthSize;
+
     public (ID3D11Buffer Vertices, ID3D11Buffer Indices, int IndexCount) CreateTerrain(float[] vertices, uint[] indices) =>
         (Device.CreateBuffer(vertices, BindFlags.VertexBuffer), Device.CreateBuffer(indices, BindFlags.IndexBuffer), indices.Length);
 
@@ -537,10 +657,11 @@ public sealed class Renderer3D : IDisposable
     {
         var depth = Device.CreateTexture2D(new Texture2DDescription
         {
-            Width = (uint)width, Height = (uint)height, MipLevels = 1, ArraySize = 1, Format = Format.D32_Float,
-            SampleDescription = new SampleDescription(1, 0), BindFlags = BindFlags.DepthStencil,
+            // Typeless, so the water pass can copy it into a readable R32_Float texture (see BeginWater).
+            Width = (uint)width, Height = (uint)height, MipLevels = 1, ArraySize = 1, Format = Format.R32_Typeless,
+            SampleDescription = new SampleDescription(1, 0), BindFlags = BindFlags.DepthStencil | BindFlags.ShaderResource,
         });
-        return (depth, Device.CreateDepthStencilView(depth));
+        return (depth, Device.CreateDepthStencilView(depth, new DepthStencilViewDescription(DepthStencilViewDimension.Texture2D, Format.D32_Float)));
     }
 
     // ---------------------------------------------------------------- frame
@@ -550,7 +671,10 @@ public sealed class Renderer3D : IDisposable
                       ID3D11DepthStencilView? depth = null, int width = 0, int height = 0, bool clear = true)
     {
         while (_pendingUploads.TryDequeue(out var up))
+        {
             Context.UpdateSubresource(up.Data, up.Texture, up.Subresource, (uint)up.RowPitch);
+            if (_awaitingUpload.TryRemove(up.Texture, out var owner)) owner.Uploaded = true;
+        }
         var rtv = target ?? _backBuffer!;
         var dsv = depth ?? _depthView!;
         Context.OMSetRenderTargets(rtv, dsv);
@@ -559,11 +683,19 @@ public sealed class Renderer3D : IDisposable
             Context.ClearRenderTargetView(rtv, new Color4(clearColour.X, clearColour.Y, clearColour.Z, clearColour.W));
             Context.ClearDepthStencilView(dsv, DepthStencilClearFlags.Depth, 1, 0);
         }
-        Context.RSSetViewport(0, 0, width > 0 ? width : Width, height > 0 ? height : Height);
+        _activeDsv = dsv;
+        (_viewW, _viewH) = (width > 0 ? width : Width, height > 0 ? height : Height);
+        Context.PSSetShaderResource(9, null!);
+        Context.RSSetViewport(0, 0, _viewW, _viewH);
         Context.RSSetState(_solid);
         Context.PSSetSampler(0, _sampler);
         var light = Vector3.Normalize(new Vector3(0.35f, -0.8f, 0.45f));
-        Write(_frameCb, new FrameConstants { ViewProj = viewProj, LightDir = new Vector4(light, 0), CameraPos = new Vector4(cameraPos, 1) });
+        Matrix4x4.Invert(viewProj, out var inverse);
+        Write(_frameCb, new FrameConstants
+        {
+            ViewProj = viewProj, LightDir = new Vector4(light, 0), CameraPos = new Vector4(cameraPos, 1),
+            InvViewProj = inverse, Viewport = new Vector4(_viewW, _viewH, 0, 0),
+        });
         Context.VSSetConstantBuffer(0, _frameCb);
         Context.PSSetConstantBuffer(0, _frameCb);
         Context.VSSetConstantBuffer(1, _drawCb);
@@ -584,7 +716,7 @@ public sealed class Renderer3D : IDisposable
     private void BindSnow()
     {
         foreach (var t in new[] { _snowMask, _snowColour, _overlay })
-            if (t is { MipsGenerated: false })
+            if (t is { MipsGenerated: false, Uploaded: true })
             {
                 Context.GenerateMips(t.View);
                 t.MipsGenerated = true;
@@ -643,7 +775,7 @@ public sealed class Renderer3D : IDisposable
     {
         normal ??= _flatNormal!;
         foreach (var t in new[] { blend, normal })
-            if (!t.MipsGenerated)
+            if (!t.MipsGenerated && t.Uploaded)
             {
                 Context.GenerateMips(t.View);
                 t.MipsGenerated = true;
@@ -716,23 +848,29 @@ public sealed class Renderer3D : IDisposable
     public void DrawInstanceRange(GpuMesh mesh, int start, int count)
     {
         if (count == 0 || mesh.IndexCount == 0) return;
-        if (mesh.Texture is { MipsGenerated: false } t)
+        if (mesh.Texture is { MipsGenerated: false, Uploaded: true } t)
         {
             Context.GenerateMips(t.View);
             t.MipsGenerated = true;
         }
-        Write(_drawCb, new DrawConstants { Flags = new Vector4(mesh.Texture is null ? 0 : 1, mesh.AlphaTest ? 1 : 0, mesh.TerrainOffset, mesh.Water ? 1 : 0), Terrain = _terrainConstants });
+        Write(_drawCb, new DrawConstants
+        {
+            Flags = new Vector4(mesh.Texture is null ? 0 : 1, mesh.AlphaTest ? 1 : 0, mesh.TerrainOffset, mesh.Water ? 1 : 0),
+            Colour = new Vector4(mesh.WaterTop, 0, 0, 0), Terrain = _terrainConstants,
+        });
         Context.VSSetConstantBuffer(1, _drawCb);
+        Context.PSSetConstantBuffer(1, _drawCb);
         if (_terrainHeight is not null) Context.VSSetShaderResource(8, _terrainHeight);
         Context.VSSetSampler(0, _sampler);
-        Context.OMSetDepthStencilState(_depthOn);
-        Context.OMSetBlendState(_opaque);
+        // Water meshes belong to the water pass (after BeginWater): blended, depth tested but not written.
+        Context.OMSetDepthStencilState(mesh.Water ? _depthReadOnly : _depthOn);
+        Context.OMSetBlendState(mesh.Water ? _alpha : _opaque);
         Context.IASetInputLayout(_meshLayout);
         Context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         Context.IASetVertexBuffers(0, 2, [mesh.Vertices, _instanceBuffer!], [32u, (uint)Marshal.SizeOf<InstanceData>()], [0u, 0u]);
         Context.IASetIndexBuffer(mesh.Indices, Format.R16_UInt, 0);
         Context.VSSetShader(_meshVs);
-        Context.PSSetShader(_meshPs);
+        Context.PSSetShader(mesh.Water ? _waterMeshPs : _meshPs);
         Context.PSSetShaderResource(0, mesh.Texture?.View!);
         Context.DrawIndexedInstanced((uint)mesh.IndexCount, (uint)count, 0, 0, (uint)start);
     }
@@ -749,7 +887,7 @@ public sealed class Renderer3D : IDisposable
                 Buffer.MemoryCopy(src, (void*)map.DataPointer, (long)_instanceCapacity * sizeof(InstanceData), (long)instances.Length * sizeof(InstanceData));
         }
         Context.Unmap(_instanceBuffer!, 0);
-        if (mesh.Texture is { MipsGenerated: false } t)
+        if (mesh.Texture is { MipsGenerated: false, Uploaded: true } t)
         {
             Context.GenerateMips(t.View);
             t.MipsGenerated = true;
@@ -873,7 +1011,9 @@ public sealed class Renderer3D : IDisposable
         _swapChain?.Dispose();
         _instanceBuffer?.Dispose();
         _lineBuffer?.Dispose();
-        foreach (var d in new IDisposable[] { _meshVs, _terrainVs, _lineVs, _meshPs, _terrainPs, _linePs, _meshLayout, _terrainLayout, _lineLayout,
+        _sceneDepthView?.Dispose();
+        _sceneDepth?.Dispose();
+        foreach (var d in new IDisposable[] { _meshVs, _terrainVs, _lineVs, _meshPs, _terrainPs, _linePs, _waterVs, _waterPs, _waterMeshPs, _meshLayout, _terrainLayout, _lineLayout,
                                                _frameCb, _drawCb, _groundCb, _solid, _depthOn, _depthOff, _depthReadOnly, _opaque, _alpha, _sampler })
             d.Dispose();
         Context.Dispose();

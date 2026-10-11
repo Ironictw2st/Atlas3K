@@ -38,6 +38,10 @@ public sealed class Viewport3DControl : Grid
         public float TerrainOffset { get; init; }
     }
 
+    /// <summary>Floor depth (world units) for the viewer's river water, which is draped just above the lf ground
+    /// rather than over a carved channel: shaded as water this deep.</summary>
+    private const float RiverDepth = 0.5f;
+
     private static bool IsWater(RenderMesh m) => m.Shader.Contains("campaign_water", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>How far the GPU lifts an item's model at its origin (LF-offset mountains: offset × ground height).</summary>
@@ -1321,18 +1325,24 @@ public sealed class Viewport3DControl : Grid
             }
         r.UploadInstances(all);
         foreach (var (g, lod, start, count) in ranges)
-            foreach (var mesh in g.Lods[lod]) r.DrawInstanceRange(mesh, start, count);
+            foreach (var mesh in g.Lods[lod])
+                if (!mesh.Water) r.DrawInstanceRange(mesh, start, count);
 
         var tAfterDraw = frameClock.Elapsed.TotalMilliseconds;
         FrameBreakdown = $"setup {tItems:F1}, entities {tTrees - tItems:F1}, trees {tDraw - tTrees:F1}, draws {tAfterDraw - tDraw:F1} ({ranges.Count} ranges, {total} instances)";
 
-        // Water (campaign sea level), markers, shapes, selection.
-        if (ShowWater && _water is { } wm) r.DrawColoured(wm.V, wm.I, wm.Count);
+        // Water last (campaign_water look): blended over the opaque scene, shaded by the depth of the ground below
+        // read from the scene depth buffer. Sea surface, lake meshes, then river water (draped just above the ground,
+        // so given a floor depth of RiverDepth).
         EnsureRivers();
         EnsureTileMesh();
-        if (_tileMesh is { } tm2 && _model.TilesShown != SceneModel.TileOverlay.Off) r.DrawColoured(tm2.V, tm2.I, tm2.Count);
-        if (ShowWater && ShowTileMeshes && _tileRivers is { } trv) r.DrawColoured(trv.V, trv.I, trv.Count);
-        if (ShowWater && _rivers is { } rv) r.DrawColoured(rv.V, rv.I, rv.Count);
+        r.BeginWater();
+        if (ShowWater && _water is { } wm) r.DrawWater(wm.V, wm.I, wm.Count);
+        foreach (var (g, lod, start, count) in ranges)
+            foreach (var mesh in g.Lods[lod])
+                if (mesh.Water) r.DrawInstanceRange(mesh, start, count);
+        if (ShowWater && ShowTileMeshes && _tileRivers is { } trv) r.DrawWater(trv.V, trv.I, trv.Count, RiverDepth);
+        if (ShowWater && _rivers is { } rv) r.DrawWater(rv.V, rv.I, rv.Count, RiverDepth);
         else if (ShowWater && _model.Terrain is var (_, ww, wh) && _model.SeaHeight is null)
         {
             var c = new Vector4(0.09f, 0.22f, 0.34f, 0.78f); // deep enough to read as sea over the textured seabed
@@ -1343,6 +1353,8 @@ public sealed class Viewport3DControl : Grid
                 new(new(0, y, 0), c), new(new(sx, y, sz), c), new(new(0, y, sz), c),
             }, triangles: true);
         }
+        // Markers, shapes, selection.
+        if (_tileMesh is { } tm2 && _model.TilesShown != SceneModel.TileOverlay.Off) r.DrawColoured(tm2.V, tm2.I, tm2.Count);
         foreach (var item in placeholders)
         {
             var isSelected = Selection.Contains(item.Id);
